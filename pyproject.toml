@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secure-code-agent"
+version = "0.1.0"
+description = "Deterministic security gate + bounded AI remediation prompt generator. NIST SSDF / OWASP ASVS / CWE Top 25 anchored."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Marshall Guillory" }
+]
+keywords = [
+  "security", "appsec", "sast", "sca", "secret-scanning",
+  "owasp", "asvs", "cwe", "nist-ssdf", "sarif",
+  "ai-code-review", "ai-guardrail", "remediation-prompt",
+  "ci", "audit"
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Information Technology",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+  "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+  # Stdlib-only at runtime. Scanners are invoked as subprocesses so
+  # the tool has no hard dependency on their Python packages.
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=4.0",
+  "ruff>=0.5",
+]
+
+[project.scripts]
+secure-code-agent = "secure_code_audit.cli:main"
+secure-code-audit = "secure_code_audit.cli:main"
+
+[project.urls]
+Homepage      = "https://github.com/marshallguillory86/secure-code-agent"
+Repository    = "https://github.com/marshallguillory86/secure-code-agent"
+Documentation = "https://github.com/marshallguillory86/secure-code-agent/tree/main/docs"
+Issues        = "https://github.com/marshallguillory86/secure-code-agent/issues"
+Changelog     = "https://github.com/marshallguillory86/secure-code-agent/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+secure_code_audit = ["data/*.json", "data/*.yaml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "C4"]
+ignore = ["E501"]  # let line-length be a soft guide; long log strings are fine
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+
+[tool.coverage.run]
+source = ["secure_code_audit"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 85
+exclude_lines = [
+  "pragma: no cover",
+  "if __name__ == .__main__.:",
+  "raise NotImplementedError",
+]

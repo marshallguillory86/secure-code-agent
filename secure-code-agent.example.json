@@ -1,0 +1,46 @@
+{
+  "$schema": "./secure-code-agent.schema.json",
+  "version": 1,
+  "paths": {
+    "include_extensions": [".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".java", ".rb", ".sh", ".yaml", ".yml", ".tf", ".json", "Dockerfile"],
+    "exclude_patterns":   [
+      ".git/", "node_modules/", ".venv/", "venv/", "dist/", "build/",
+      "**/__pycache__/", "**/*.min.js", "**/*.lock", "vendor/", "tests/fixtures/"
+    ]
+  },
+  "asvs_level": 2,
+  "scanners": {
+    "bandit":       { "enabled": true,  "timeout_seconds": 600 },
+    "semgrep":      { "enabled": true,  "timeout_seconds": 900, "online": false },
+    "pip_audit":    { "enabled": true,  "timeout_seconds": 300 },
+    "npm_audit":    { "enabled": true,  "timeout_seconds": 300 },
+    "gitleaks":     { "enabled": true,  "timeout_seconds": 300 },
+    "trufflehog":   { "enabled": false, "timeout_seconds": 600 },
+    "eslint_security": { "enabled": true, "timeout_seconds": 300 },
+    "builtin_rules":   { "enabled": true }
+  },
+  "severity_overrides": {
+    "B101": "low"
+  },
+  "gates": {
+    "fail_on_severity": ["critical", "high"],
+    "fail_on_category": ["secrets", "auth_authz"],
+    "fail_on_new":      true,
+    "min_score":        4.0,
+    "require_scanners": ["bandit", "gitleaks"],
+    "max_unsuppressed": {
+      "critical": 0,
+      "high":     0,
+      "medium":   10
+    }
+  },
+  "outputs": {
+    "markdown_path": "secure-code-report.md",
+    "json_path":     "secure-code-report.json",
+    "sarif_path":    "secure-code.sarif",
+    "comment_path":  "secure-code-pr-comment.md",
+    "prompt_path":   "secure-code-remediation-prompt.md",
+    "baseline_path": "secure-code-baseline.json"
+  },
+  "suppressions_file": ".scignore.yaml"
+}

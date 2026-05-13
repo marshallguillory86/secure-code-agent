@@ -1,0 +1,106 @@
+name: 'secure-code-agent'
+description: 'Deterministic security gate + bounded AI remediation prompts. NIST SSDF / OWASP ASVS / CWE Top 25 anchored.'
+author: 'Marshall Guillory'
+branding:
+  icon:  'shield'
+  color: 'red'
+
+inputs:
+  config:
+    description: 'Path to secure-code-agent config (JSON).'
+    required:    false
+    default:     'secure-code-agent.json'
+  paths:
+    description: 'Paths to scan (default: current directory).'
+    required:    false
+    default:     '.'
+  changed-only:
+    description: 'Audit only files changed since REF (e.g. main...HEAD).'
+    required:    false
+    default:     ''
+  fail-on-gate:
+    description: 'Exit nonzero if any configured gate trips.'
+    required:    false
+    default:     'true'
+  fail-on-new:
+    description: 'Exit nonzero on findings not in baseline.'
+    required:    false
+    default:     'false'
+  sarif-output:
+    description: 'Path to write SARIF 2.1.0 output.'
+    required:    false
+    default:     'secure-code.sarif'
+  upload-sarif:
+    description: 'Upload SARIF to GitHub Code Scanning.'
+    required:    false
+    default:     'true'
+
+outputs:
+  sarif-path:
+    description: 'Path to the emitted SARIF file.'
+    value:       ${{ steps.run.outputs.sarif-path }}
+  passed:
+    description: 'Whether all gates passed.'
+    value:       ${{ steps.run.outputs.passed }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install secure-code-agent
+      shell: bash
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install secure-code-agent
+
+    - name: Run audit
+      id: run
+      shell: bash
+      run: |
+        ARGS=(--config "${{ inputs.config }}")
+        if [ -n "${{ inputs.changed-only }}" ]; then
+          ARGS+=(--changed-only "${{ inputs.changed-only }}")
+        fi
+        if [ "${{ inputs.fail-on-gate }}" = "true" ]; then
+          ARGS+=(--fail-on-gate)
+        fi
+        if [ "${{ inputs.fail-on-new }}" = "true" ]; then
+          ARGS+=(--fail-on-new)
+        fi
+        ARGS+=(--sarif-output "${{ inputs.sarif-output }}")
+        ARGS+=(--output secure-code-report.md)
+        ARGS+=(--prompt-output secure-code-remediation-prompt.md)
+        ARGS+=(--comment-output secure-code-pr-comment.md)
+        ARGS+=("${{ inputs.paths }}")
+
+        set +e
+        secure-code-agent "${ARGS[@]}"
+        EC=$?
+        set -e
+
+        echo "sarif-path=${{ inputs.sarif-output }}" >> "$GITHUB_OUTPUT"
+        if [ "$EC" -eq 0 ]; then
+          echo "passed=true"  >> "$GITHUB_OUTPUT"
+        else
+          echo "passed=false" >> "$GITHUB_OUTPUT"
+          exit "$EC"
+        fi
+
+    - name: Upload SARIF
+      if: ${{ always() && inputs.upload-sarif == 'true' && hashFiles(inputs.sarif-output) != '' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.sarif-output }}
+        category:   secure-code-agent
+
+    - name: Upload report artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: secure-code-agent-report
+        path: |
+          secure-code-report.md
+          secure-code-report.json
+          secure-code-pr-comment.md
+          secure-code-remediation-prompt.md
+          ${{ inputs.sarif-output }}
+        if-no-files-found: ignore

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Secure-Code Agent"
+  short_description: "Run security audits and apply bounded remediation."
+  default_prompt: "Use secure-code-agent to audit this repo, read the generated report and remediation prompt, then make only bounded security fixes."

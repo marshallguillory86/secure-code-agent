@@ -1,0 +1,16 @@
+# pre-commit config — runs the secret-scanning subset on every commit.
+# Full audit + SARIF emit happen in CI; locally we just want to block
+# new secrets before they hit git history.
+#
+# Install:
+#   pip install pre-commit
+#   pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: secure-code-agent-secrets
+        name: secure-code-agent (secrets only)
+        entry: secure-code-agent --only-scanners gitleaks --severity-threshold high --fail-on-gate
+        language: system
+        types:    [text]
+        pass_filenames: false
