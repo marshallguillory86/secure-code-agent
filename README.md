@@ -119,12 +119,13 @@ When Semgrep, CodeQL, and Bandit fire on the same SQL-injection sink with three 
         ├── pip-audit         (Python SCA)
         ├── npm audit         (Node SCA)
         ├── Gitleaks          (secret scanning, history-aware)
-        ├── TruffleHog        (secret scanning, entropy + verifiers) [v0.2]
-        ├── Trivy             (containers / IaC / k8s)               [v0.2]
-        ├── Checkov           (Terraform / CloudFormation / Helm)    [v0.2]
-        ├── Hadolint          (Dockerfile lint)                      [v0.2]
-        ├── eslint-plugin-security  (JS/TS SAST)                     [v0.2]
-        ├── OpenSSF Scorecard (repo hygiene + supply chain)          [v0.2]
+        ├── TruffleHog        (verified secret scanning)
+        ├── Trivy             (containers / IaC / k8s / vuln / secret)
+        ├── Checkov           (Terraform / CloudFormation / Helm / k8s)
+        ├── Hadolint          (Dockerfile lint)
+        ├── OSV-Scanner       (multi-ecosystem SCA via osv.dev)
+        ├── OpenSSF Scorecard (repo hygiene + supply chain)
+        ├── eslint-plugin-security  (JS/TS SAST)                     [v0.3]
         ├── CodeQL SARIF      (ingest GitHub-hosted analysis)
         └── Built-in regex rules (high-confidence, low-FP)
 ```
