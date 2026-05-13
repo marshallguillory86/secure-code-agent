@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/marshallguillory86/secure-code-agent/main/secure-code-agent.schema.json",
+  "title": "secure-code-agent config",
+  "description": "Configuration schema for secure-code-agent. See docs/design.md for semantics.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version":     { "type": "integer", "enum": [1] },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include_extensions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "File extensions to consider in scope (e.g. '.py', '.ts')."
+        },
+        "exclude_patterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns to exclude. Tested against POSIX-normalized relative paths."
+        }
+      }
+    },
+    "asvs_level": {
+      "type": "integer",
+      "enum": [1, 2, 3],
+      "default": 2,
+      "description": "OWASP ASVS verification level. Findings that only violate higher levels are downgraded to LOW."
+    },
+    "scanners": {
+      "type": "object",
+      "description": "Per-scanner configuration. Unknown scanner names are ignored.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled":         { "type": "boolean", "default": true },
+          "timeout_seconds": { "type": "integer", "minimum": 1, "default": 600 },
+          "online":          { "type": "boolean", "default": false },
+          "extra_args":      { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "severity_overrides": {
+      "type": "object",
+      "description": "Override scanner-emitted severity per rule id.",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["critical", "high", "medium", "low", "informational"]
+      }
+    },
+    "category_overrides": {
+      "type": "object",
+      "description": "Override category mapping per rule id.",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "secrets",
+          "dependencies",
+          "code_vulnerabilities",
+          "auth_authz",
+          "crypto",
+          "supply_chain",
+          "config_iac",
+          "logging_observability",
+          "policy_docs"
+        ]
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fail_on_severity": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["critical", "high", "medium", "low"] }
+        },
+        "fail_on_category": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "secrets",
+              "dependencies",
+              "code_vulnerabilities",
+              "auth_authz",
+              "crypto",
+              "supply_chain",
+              "config_iac",
+              "logging_observability",
+              "policy_docs"
+            ]
+          }
+        },
+        "fail_on_new":      { "type": "boolean", "default": true },
+        "min_score":        { "type": "number", "minimum": 0, "maximum": 5 },
+        "require_scanners": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "max_unsuppressed": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "critical": { "type": "integer", "minimum": 0 },
+            "high":     { "type": "integer", "minimum": 0 },
+            "medium":   { "type": "integer", "minimum": 0 },
+            "low":      { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "markdown_path":      { "type": "string", "default": "secure-code-report.md" },
+        "json_path":          { "type": "string", "default": "secure-code-report.json" },
+        "sarif_path":         { "type": "string", "default": "secure-code.sarif" },
+        "comment_path":       { "type": "string", "default": "secure-code-pr-comment.md" },
+        "prompt_path":        { "type": "string", "default": "secure-code-remediation-prompt.md" },
+        "baseline_path":      { "type": "string", "default": "secure-code-baseline.json" }
+      }
+    },
+    "suppressions_file": {
+      "type": "string",
+      "default": ".scignore.yaml",
+      "description": "Path to the suppressions file. Per design.md §10."
+    },
+    "loc_for_scoring": {
+      "type": "object",
+      "description": "Override the auto-computed LOC count (rare).",
+      "additionalProperties": false,
+      "properties": {
+        "value":  { "type": "integer", "minimum": 1 },
+        "reason": { "type": "string" }
+      },
+      "required": ["value", "reason"]
+    }
+  }
+}

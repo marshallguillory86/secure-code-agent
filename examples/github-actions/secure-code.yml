@@ -1,0 +1,53 @@
+# Drop this in .github/workflows/ of the repo you want to audit.
+#
+# Behavior:
+#   · On pull_request → audit changed files only, post a comment with the gate result.
+#   · On push to main/master → full audit, upload SARIF to Code Scanning.
+
+name: secure-code
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+permissions:
+  contents:        read
+  security-events: write    # SARIF upload to Code Scanning
+  pull-requests:   write    # PR-comment post
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # full history for git diff + Gitleaks history scan
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run secure-code-agent (changed-only on PR; full on push)
+        id: audit
+        uses: marshallguillory86/secure-code-agent@v0.1.0
+        with:
+          config:       secure-code-agent.json
+          changed-only: ${{ github.event_name == 'pull_request' && format('{0}...HEAD', github.base_ref) || '' }}
+          fail-on-gate: true
+          fail-on-new:  ${{ github.event_name == 'pull_request' }}
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request' && hashFiles('secure-code-pr-comment.md') != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('secure-code-pr-comment.md', 'utf8');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              body,
+            });

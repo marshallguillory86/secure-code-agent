@@ -1,0 +1,48 @@
+{
+  "folders": [
+    { "name": "secure-code-agent",          "path": "." },
+    { "name": "src — secure_code_audit",    "path": "src/secure_code_audit" },
+    { "name": "docs",                       "path": "docs" },
+    { "name": "tests",                      "path": "tests" },
+    { "name": "skills",                     "path": "skills/secure-code-agent" },
+    { "name": "examples",                   "path": "examples" }
+  ],
+  "settings": {
+    "python.testing.pytestEnabled":     true,
+    "python.testing.unittestEnabled":   false,
+    "python.testing.pytestArgs":        ["tests"],
+    "python.analysis.typeCheckingMode": "basic",
+    "editor.rulers":                    [100],
+    "editor.tabSize":                   4,
+    "[python]": {
+      "editor.defaultFormatter":        "charliermarsh.ruff",
+      "editor.formatOnSave":            true,
+      "editor.codeActionsOnSave": {
+        "source.organizeImports.ruff":  "explicit",
+        "source.fixAll.ruff":           "explicit"
+      }
+    },
+    "[markdown]": {
+      "editor.wordWrap":                "on",
+      "editor.rulers":                  [],
+      "files.trimTrailingWhitespace":   false
+    },
+    "files.exclude": {
+      "**/__pycache__":                 true,
+      "**/.pytest_cache":               true,
+      "**/.ruff_cache":                 true,
+      "**/*.egg-info":                  true,
+      ".venv":                          true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "charliermarsh.ruff",
+      "tamasfe.even-better-toml",
+      "redhat.vscode-yaml",
+      "yzhang.markdown-all-in-one",
+      "github.vscode-github-actions"
+    ]
+  }
+}

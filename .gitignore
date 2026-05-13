@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.eggs/
+*.egg-info/
+*.egg
+build/
+dist/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# Editor
+.vscode/*
+!.vscode/settings.json.example
+.idea/
+*.swp
+.DS_Store
+
+# Tool outputs that the agent itself writes (committed report should be explicit, not transient)
+secure-code-report.md
+secure-code-remediation-prompt.md
+secure-code-pr-comment.md
+secure-code.sarif
+secure-code-baseline.tmp.json
+
+# Scanner caches
+.semgrepignore.local
+.bandit.local

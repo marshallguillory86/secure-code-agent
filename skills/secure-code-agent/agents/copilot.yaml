@@ -1,0 +1,12 @@
+interface:
+  display_name: "Secure-Code Agent"
+  short_description: "Run security audits and apply bounded remediation."
+  default_prompt: "Use secure-code-agent to audit this repo, read the generated report and remediation prompt, then make only bounded security fixes."
+install:
+  # GitHub Copilot Chat (VS Code) reads prompt files from this path.
+  prompt_file_source:      "skills/secure-code-agent/copilot/secure-code-agent.prompt.md"
+  prompt_file_destination: ".github/prompts/secure-code-agent.prompt.md"
+  invocation:              "/secure-code-agent in Copilot Chat (VS Code)"
+  notes:
+    - "Prompt files are a VS Code Copilot Chat feature; not yet available in JetBrains Copilot."
+    - "For always-on guidance, use --init-agent-standards --target copilot to write .github/copilot-instructions.md."
