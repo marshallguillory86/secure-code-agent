@@ -18,17 +18,32 @@ All Tier-1 scanners are wired and emit canonical findings.
 | **Built-in regex rules** | `multiple`           | Internal — no subprocess                                         | (in-proc)   | CWE-798, CWE-89, CWE-78, CWE-22, CWE-918          |
 | **SARIF import**      | `multiple`             | `--sarif-import path/to/file.sarif`                              | SARIF       | Whatever the upstream emitted                     |
 
-## Tier 2 — interface defined, implementation tracked for v0.2
+## Tier 2 — shipped in v0.2
 
-Scanner protocol stubs exist; full implementation is pending v0.2. Calling `--only-scanners trivy` today emits a `tool_unavailable` informational finding.
+All Tier-2 scanners are wired and emit canonical findings.
 
-| Scanner                | Category                  | Why deferred                                                     |
-|------------------------|---------------------------|------------------------------------------------------------------|
-| **Trivy**              | `config_iac`, `dependencies` | Container + IaC support is wide; needs careful invocation matrix |
-| **Checkov**            | `config_iac`              | Terraform / CloudFormation / Helm / k8s — extensive ruleset      |
-| **Hadolint**           | `config_iac`              | Dockerfile-only; small surface but needs its own renderer        |
-| **OSV-Scanner**        | `dependencies`            | Multi-ecosystem (overlaps pip-audit/npm-audit) — needs dedupe    |
-| **OpenSSF Scorecard**  | `supply_chain`            | Runs against a remote repo — special case in the runner          |
+| Scanner                | Category                                  | Binary / Invocation                                                | Output     | Standards covered                                       |
+|------------------------|-------------------------------------------|--------------------------------------------------------------------|------------|---------------------------------------------------------|
+| **Trivy**              | `dependencies`, `config_iac`, `secrets`   | `trivy fs --format sarif --scanners vuln,secret,misconfig <target>`| SARIF      | CWE-1104 (vuln), CWE-1188 (misconfig), CWE-798 (secret) |
+| **Checkov**            | `config_iac`                              | `checkov -d <target> --output sarif --soft-fail`                   | SARIF      | CWE-1188, OWASP A05                                     |
+| **Hadolint**           | `config_iac`                              | `hadolint --no-fail --format json <Dockerfile>`                    | JSON       | CWE-250 (USER root), CWE-78 (shell-form CMD)            |
+| **OSV-Scanner**        | `dependencies`                            | `osv-scanner --format=json --recursive <target>`                   | JSON       | CWE-1104, OWASP A06                                     |
+| **TruffleHog**         | `secrets`                                 | `trufflehog filesystem --json --only-verified <target>`            | JSON Lines | CWE-798, OWASP A07                                      |
+| **OpenSSF Scorecard**  | `supply_chain`, `policy_docs`             | `scorecard --repo=<github-url> --format=json --show-details`       | JSON       | CWE-732, CWE-345, CWE-829, CWE-272 (per-check)          |
+
+### Per-scanner caveats (Tier 2)
+
+**Trivy** — routes findings into `dependencies` / `config_iac` / `secrets` by rule-id prefix (`CVE-`/`GHSA-` → deps, `AVD-` / contains `MISCONFIG` → IaC, contains `SECRET` / `AWS` / `PRIVATE-KEY` → secrets). Secret findings are bumped to CRITICAL.
+
+**Checkov** — `--soft-fail` so the tool always exits 0; gate logic is our concern, not Checkov's. Writes `results_sarif.sarif` (or legacy `results.sarif`) into the output directory.
+
+**Hadolint** — twelve security-relevant rule ids carry specific severities (`DL3002` USER root → HIGH; `DL3025` shell-form CMD → MEDIUM; `SC2086` unquoted variable → MEDIUM; etc.). Style-only rules (`DL3007` latest tag, `DL3008` unpinned apt) → LOW.
+
+**OSV-Scanner** — overlaps `pip_audit` + `npm_audit` by design. Dedupe is handled by the canonical fingerprint (`canonical_cwe` + `file_path` + `code_snippet`), so running all three together does not double-count.
+
+**TruffleHog** — defaults to `--only-verified` (high-precision matches confirmed live by upstream services). Verified secrets are CRITICAL; if operators opt into unverified findings via `scanners.trufflehog.extra_args: ["--no-only-verified"]`, those land as HIGH.
+
+**OpenSSF Scorecard** — special-cased. Operates against a remote GitHub URL inferred via `git remote get-url origin`. Needs `GH_TOKEN` (or equivalent) in the environment to query GitHub APIs. Score → severity mapping: `<0 → INFORMATIONAL` (inconclusive), `<3 → HIGH`, `<7 → MEDIUM`, `<10 → LOW`, `==10` → no finding emitted (passed cleanly).
 
 ## Tier 3 — documented, no code yet
 

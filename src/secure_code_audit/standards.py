@@ -230,6 +230,124 @@ _MAP: dict[tuple[str, str], StandardsEntry] = {
         short_desc="curl | sh / wget | bash — opaque remote-script execution.",
         fix_hint="Pin a checksum or use a package manager. If you must download a script, verify a SHA before executing.",
     ),
+
+    # ----- Trivy ----------------------------------------------------------
+    # Trivy emits per-CVE rule ids (CVE-/GHSA-/AVD-). The per-rule CWE is
+    # carried inside the SARIF properties; this wildcard covers what the
+    # SARIF doesn't.
+    ("trivy", "*"): StandardsEntry(
+        canonical_cwe="CWE-1104", owasp_top10="A06", asvs_section="V14.2.1",
+        nist_ssdf="PW.4.4", category=Category.DEPENDENCIES,
+        severity=Severity.HIGH, confidence=Confidence.HIGH,
+        short_desc="Trivy finding (vuln / misconfig / secret).",
+        fix_hint="Trivy routes vuln/misconfig/secret into different categories — see the finding's category field for the specific guidance.",
+    ),
+
+    # ----- Checkov --------------------------------------------------------
+    # Checkov rule ids are like CKV_AWS_xxx, CKV_K8S_xxx, CKV_DOCKER_xxx.
+    # All map to config_iac with OWASP A05 (Security Misconfiguration).
+    ("checkov", "*"): StandardsEntry(
+        canonical_cwe="CWE-1188", owasp_top10="A05", asvs_section="V14.1.1",
+        nist_ssdf="PW.6.1", category=Category.CONFIG_IAC,
+        severity=Severity.MEDIUM, confidence=Confidence.HIGH,
+        short_desc="IaC misconfiguration detected by Checkov.",
+        fix_hint="Follow Checkov's documentation link in the finding message. Misconfigs are typically a one-property addition (encryption, public-access blockers, etc.).",
+    ),
+
+    # ----- Hadolint -------------------------------------------------------
+    # Most-flagged security-relevant rules. Style rules fall through to the
+    # wildcard.
+    ("hadolint", "hadolint.DL3002"): StandardsEntry(
+        canonical_cwe="CWE-250", owasp_top10="A05", asvs_section="V14.2.5",
+        nist_ssdf="PW.6.1", category=Category.CONFIG_IAC,
+        severity=Severity.HIGH, confidence=Confidence.HIGH,
+        short_desc="Dockerfile sets USER root — privileged container.",
+        fix_hint="Add `USER <non-root-uid>` near the end of the Dockerfile. Or run with `--user` at the container runtime.",
+    ),
+    ("hadolint", "hadolint.DL3025"): StandardsEntry(
+        canonical_cwe="CWE-78", owasp_top10="A03", asvs_section="V5.3.8",
+        nist_ssdf="PW.5.1", category=Category.CONFIG_IAC,
+        severity=Severity.MEDIUM, confidence=Confidence.HIGH,
+        short_desc="Dockerfile CMD/ENTRYPOINT in shell form — argv injection surface.",
+        fix_hint="Use JSON-array form: `CMD [\"node\", \"server.js\"]`. Avoids the shell wrapper that interprets metacharacters.",
+    ),
+    ("hadolint", "*"): StandardsEntry(
+        canonical_cwe="CWE-1188", owasp_top10="A05", asvs_section="V14.1.1",
+        nist_ssdf="PW.6.1", category=Category.CONFIG_IAC,
+        severity=Severity.LOW, confidence=Confidence.HIGH,
+        short_desc="Dockerfile lint finding.",
+        fix_hint="See https://github.com/hadolint/hadolint/wiki for the specific rule.",
+    ),
+
+    # ----- OSV-Scanner ----------------------------------------------------
+    ("osv_scanner", "*"): StandardsEntry(
+        canonical_cwe="CWE-1104", owasp_top10="A06", asvs_section="V14.2.1",
+        nist_ssdf="PW.4.4", category=Category.DEPENDENCIES,
+        severity=Severity.HIGH, confidence=Confidence.HIGH,
+        short_desc="Vulnerable dependency reported by osv.dev.",
+        fix_hint="Bump to the fixed version per the advisory. If no fix exists, document the residual risk in `.scignore.yaml`.",
+    ),
+
+    # ----- TruffleHog -----------------------------------------------------
+    ("trufflehog", "*"): StandardsEntry(
+        canonical_cwe="CWE-798", owasp_top10="A07", asvs_section="V2.10.1",
+        nist_ssdf="PS.1.1", category=Category.SECRETS,
+        severity=Severity.CRITICAL, confidence=Confidence.HIGH,
+        short_desc="Verified secret detected by TruffleHog.",
+        fix_hint="Rotate the secret immediately. Move to an env var / secret manager. Scrub history with `git filter-repo` if the leak reached a public branch.",
+    ),
+
+    # ----- OpenSSF Scorecard ----------------------------------------------
+    # Scorecard's check names are stable — map each to its standards refs.
+    ("scorecard", "scorecard.Branch-Protection"): StandardsEntry(
+        canonical_cwe="CWE-732", owasp_top10="A05", asvs_section="V14.1.4",
+        nist_ssdf="PO.5.1", category=Category.SUPPLY_CHAIN,
+        severity=Severity.HIGH, confidence=Confidence.HIGH,
+        short_desc="Branch protection insufficient on the default branch.",
+        fix_hint="Enable required PR reviews, required status checks, and prevent force-pushes on the default branch.",
+    ),
+    ("scorecard", "scorecard.Signed-Releases"): StandardsEntry(
+        canonical_cwe="CWE-345", owasp_top10="A08", asvs_section="V10.3.2",
+        nist_ssdf="PS.2.1", category=Category.SUPPLY_CHAIN,
+        severity=Severity.MEDIUM, confidence=Confidence.HIGH,
+        short_desc="Releases are not signed with Sigstore/cosign.",
+        fix_hint="Sign releases via Sigstore/cosign. Publish provenance with `slsa-github-generator` or equivalent.",
+    ),
+    ("scorecard", "scorecard.Pinned-Dependencies"): StandardsEntry(
+        canonical_cwe="CWE-829", owasp_top10="A08", asvs_section="V14.2.2",
+        nist_ssdf="PW.4.4", category=Category.SUPPLY_CHAIN,
+        severity=Severity.MEDIUM, confidence=Confidence.HIGH,
+        short_desc="Dependencies (esp. GitHub Actions) are not pinned by SHA.",
+        fix_hint="Pin third-party Actions to a commit SHA, not a tag. Pin Docker base images by digest.",
+    ),
+    ("scorecard", "scorecard.Token-Permissions"): StandardsEntry(
+        canonical_cwe="CWE-272", owasp_top10="A01", asvs_section="V4.1.5",
+        nist_ssdf="PO.5.2", category=Category.SUPPLY_CHAIN,
+        severity=Severity.HIGH, confidence=Confidence.HIGH,
+        short_desc="GitHub workflow tokens granted excess permissions.",
+        fix_hint="Add `permissions: contents: read` at workflow root; elevate per-job only as needed.",
+    ),
+    ("scorecard", "scorecard.Security-Policy"): StandardsEntry(
+        canonical_cwe="CWE-1059", owasp_top10="A09", asvs_section="V0.2.1",
+        nist_ssdf="PO.4.1", category=Category.POLICY_DOCS,
+        severity=Severity.LOW, confidence=Confidence.HIGH,
+        short_desc="Repository is missing SECURITY.md.",
+        fix_hint="Add SECURITY.md with a vulnerability disclosure path. Use `github.com/<repo>/security/advisories/new` for the form.",
+    ),
+    ("scorecard", "scorecard.Dangerous-Workflow"): StandardsEntry(
+        canonical_cwe="CWE-94", owasp_top10="A03", asvs_section="V5.2.4",
+        nist_ssdf="PW.5.1", category=Category.SUPPLY_CHAIN,
+        severity=Severity.HIGH, confidence=Confidence.HIGH,
+        short_desc="Workflow uses untrusted input in a dangerous context.",
+        fix_hint="Avoid `${{ github.event.pull_request.title }}` in `run:` blocks. Use env vars instead.",
+    ),
+    ("scorecard", "*"): StandardsEntry(
+        canonical_cwe=None, owasp_top10="A08", asvs_section=None,
+        nist_ssdf="PO.5.1", category=Category.SUPPLY_CHAIN,
+        severity=Severity.MEDIUM, confidence=Confidence.MEDIUM,
+        short_desc="OpenSSF Scorecard check failed.",
+        fix_hint="See the documentation link in the finding message.",
+    ),
 }
 
 
@@ -256,8 +374,15 @@ def cwe_url(canonical_cwe: str) -> str:
 
 
 def owasp_url(owasp_id: str) -> str:
-    """OWASP Top 10 bucket id → URL."""
-    return OWASP_TOP10_2021_URL
+    """OWASP Top 10 bucket id → deep-link URL. Falls back to the index
+    when the id doesn't map to a known bucket (e.g. legacy 2017 ids)."""
+    bucket = owasp_id.split(":", 1)[0] if ":" in owasp_id else owasp_id
+    label  = OWASP_TOP10_2021.get(bucket)
+    if not label:
+        return OWASP_TOP10_2021_URL
+    # 'A03:2021-Injection' → 'A03_2021-Injection' for the URL slug.
+    slug = label.replace(":", "_").replace(" ", "_")
+    return f"{OWASP_TOP10_2021_URL}{slug}/"
 
 
 def owasp_label(owasp_id: str) -> str:
