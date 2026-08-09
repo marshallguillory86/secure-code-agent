@@ -10,6 +10,7 @@ Schema:
 Wildcard rule (rule_id: "*") requires `file` or `paths` so an operator can't
 disable a rule globally. Past-expiry entries become CRITICAL findings.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -26,11 +27,11 @@ _MAX_TTL_DAYS = 365
 
 @dataclass(frozen=True)
 class SuppressionRule:
-    rule_id:     str
-    reason:      str
-    expires:     datetime.date
-    file:        str | None         = None
-    paths:       tuple[str, ...]    = field(default_factory=tuple)
+    rule_id: str
+    reason: str
+    expires: datetime.date
+    file: str | None = None
+    paths: tuple[str, ...] = field(default_factory=tuple)
 
     def matches(self, finding: Finding) -> bool:
         if self.rule_id != "*" and self.rule_id != finding.rule_id:
@@ -38,10 +39,7 @@ class SuppressionRule:
         rel = finding.file_path.as_posix()
         if self.file is not None and self.file != rel and not rel.endswith(self.file):
             return False
-        if self.paths:
-            if not any(fnmatch.fnmatch(rel, p) for p in self.paths):
-                return False
-        return True
+        return not self.paths or any(fnmatch.fnmatch(rel, p) for p in self.paths)
 
     @property
     def expired(self) -> bool:
@@ -53,7 +51,7 @@ def load(path: Path) -> tuple[list[SuppressionRule], list[str]]:
     if not path.exists():
         return [], []
     try:
-        import yaml   # pyyaml — only imported when a suppressions file is present
+        import yaml  # pyyaml — only imported when a suppressions file is present
     except ImportError:
         return [], [f"{path}: pyyaml not installed — `pip install pyyaml` to use .scignore.yaml"]
 
@@ -100,18 +98,18 @@ def load(path: Path) -> tuple[list[SuppressionRule], list[str]]:
         file_v = entry.get("file")
         paths_v = entry.get("paths") or []
         if rule_id == "*" and not file_v and not paths_v:
-            errors.append(
-                f"{path}: entry #{i}: rule_id='*' requires `file` or `paths`."
-            )
+            errors.append(f"{path}: entry #{i}: rule_id='*' requires `file` or `paths`.")
             continue
 
-        rules.append(SuppressionRule(
-            rule_id=rule_id,
-            reason=reason,
-            expires=expires,
-            file=str(file_v) if file_v else None,
-            paths=tuple(str(p) for p in paths_v) if paths_v else (),
-        ))
+        rules.append(
+            SuppressionRule(
+                rule_id=rule_id,
+                reason=reason,
+                expires=expires,
+                file=str(file_v) if file_v else None,
+                paths=tuple(str(p) for p in paths_v) if paths_v else (),
+            )
+        )
 
     return rules, errors
 
@@ -121,15 +119,18 @@ def apply(findings: list[Finding], rules: list[SuppressionRule]) -> list[Finding
     Expired rules do NOT suppress — but generate their own findings via
     `expired_findings()`. Returns a new list (frozen dataclass replace)."""
     from dataclasses import replace
+
     out: list[Finding] = []
     for f in findings:
         active = next((r for r in rules if not r.expired and r.matches(f)), None)
         if active is not None:
-            out.append(replace(
-                f,
-                suppressed=True,
-                suppression_note=f"{active.reason} (expires {active.expires.isoformat()})",
-            ))
+            out.append(
+                replace(
+                    f,
+                    suppressed=True,
+                    suppression_note=f"{active.reason} (expires {active.expires.isoformat()})",
+                )
+            )
         else:
             out.append(f)
     return out
@@ -144,32 +145,34 @@ def expired_findings(rules: list[SuppressionRule], path: Path) -> list[Finding]:
             continue
         rid = f"suppressions.expired.{r.rule_id}"
         snippet = f"rule_id: {r.rule_id}; expired {r.expires.isoformat()}; reason: {r.reason}"
-        out.append(Finding(
-            rule_id=rid,
-            scanner="suppressions",
-            fingerprint=Finding.make_fingerprint(
-                canonical_cwe=None,
+        out.append(
+            Finding(
                 rule_id=rid,
+                scanner="suppressions",
+                fingerprint=Finding.make_fingerprint(
+                    canonical_cwe=None,
+                    rule_id=rid,
+                    file_path=path,
+                    code_snippet=snippet,
+                ),
+                canonical_cwe=None,
+                owasp_top10=None,
+                asvs_section=None,
+                nist_ssdf="PO.4.1",
+                category=Category.POLICY_DOCS,
+                severity=Severity.CRITICAL,
+                confidence=Confidence.HIGH,
                 file_path=path,
+                line_start=0,
+                line_end=None,
                 code_snippet=snippet,
-            ),
-            canonical_cwe=None,
-            owasp_top10=None,
-            asvs_section=None,
-            nist_ssdf="PO.4.1",
-            category=Category.POLICY_DOCS,
-            severity=Severity.CRITICAL,
-            confidence=Confidence.HIGH,
-            file_path=path,
-            line_start=0,
-            line_end=None,
-            code_snippet=snippet,
-            message=(
-                f"Suppression for rule `{r.rule_id}` expired on "
-                f"{r.expires.isoformat()}: \"{r.reason}\". Either fix the "
-                "underlying issue or extend `expires` with a fresh reason."
-            ),
-            short_desc="Expired suppression entry.",
-            fix_hint="Address the original finding, or extend the suppression with operator approval.",
-        ))
+                message=(
+                    f"Suppression for rule `{r.rule_id}` expired on "
+                    f'{r.expires.isoformat()}: "{r.reason}". Either fix the '
+                    "underlying issue or extend `expires` with a fresh reason."
+                ),
+                short_desc="Expired suppression entry.",
+                fix_hint="Address the original finding, or extend the suppression with operator approval.",
+            )
+        )
     return out

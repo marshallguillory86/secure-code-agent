@@ -7,6 +7,7 @@ Invocation:
 gate logic to drive exit codes, not checkov's. SARIF goes through the
 canonical ingest.
 """
+
 from __future__ import annotations
 
 import tempfile
@@ -20,8 +21,9 @@ from secure_code_audit.scanners.base import Scanner
 
 
 class CheckovScanner(Scanner):
-    name   = "checkov"
+    name = "checkov"
     binary = "checkov"
+    python_module = "checkov"
     default_category = Category.CONFIG_IAC
 
     def run(self, target: Path, config: Config) -> list[Finding]:
@@ -34,22 +36,47 @@ class CheckovScanner(Scanner):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             args = [
-                self.binary, "-d", str(target),
-                "--output", "sarif",
-                "--output-file-path", str(tmpdir_path),
-                "--quiet", "--soft-fail",
+                *self.command,
+                "-d",
+                str(target),
+                "--output",
+                "sarif",
+                "--output-file-path",
+                str(tmpdir_path),
+                "--quiet",
+                "--soft-fail",
             ]
             args.extend(sc_cfg.extra_args)
 
-            r = self._exec(args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds,
-                           allowed_exits=(0, 1, 2))
+            r = self._exec(
+                args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1, 2)
+            )
             if r.returncode == 124:
-                return [self._make_finding(
-                    rule_id=f"{self.name}.tool_timeout",
-                    message=f"checkov timed out: {r.stderr[:200]}",
-                    file_path=target, line_start=0, line_end=None, code_snippet=None,
-                    severity=Severity.INFORMATIONAL, confidence=Confidence.HIGH,
-                )]
+                return [
+                    self._make_finding(
+                        rule_id=f"{self.name}.tool_timeout",
+                        message=f"checkov timed out: {r.stderr[:200]}",
+                        file_path=target,
+                        line_start=0,
+                        line_end=None,
+                        code_snippet=None,
+                        severity=Severity.INFORMATIONAL,
+                        confidence=Confidence.HIGH,
+                    )
+                ]
+            if r.returncode not in (0, 1, 2):
+                return [
+                    self._make_finding(
+                        rule_id=f"{self.name}.tool_error",
+                        message=f"checkov failed: {r.stderr[:300]}",
+                        file_path=target,
+                        line_start=0,
+                        line_end=None,
+                        code_snippet=None,
+                        severity=Severity.INFORMATIONAL,
+                        confidence=Confidence.HIGH,
+                    )
+                ]
 
             # Checkov writes results.sarif into the output directory.
             sarif_path = tmpdir_path / "results_sarif.sarif"
@@ -58,12 +85,20 @@ class CheckovScanner(Scanner):
                 alt = tmpdir_path / "results.sarif"
                 sarif_path = alt if alt.exists() else sarif_path
             if not sarif_path.exists():
-                return []
+                return [
+                    self._make_finding(
+                        rule_id=f"{self.name}.tool_error",
+                        message="checkov emitted no SARIF output",
+                        file_path=target,
+                        line_start=0,
+                        line_end=None,
+                        code_snippet=None,
+                        severity=Severity.INFORMATIONAL,
+                        confidence=Confidence.HIGH,
+                    )
+                ]
 
             ingested = sarif_ingest(sarif_path, default_scanner="checkov")
-            # All checkov findings are config_iac by rule family. Pin
-            # the scanner field for cross-scanner dedupe clarity.
-            return [
-                replace(f, scanner="checkov", category=Category.CONFIG_IAC)
-                for f in ingested
-            ]
+            # All Checkov findings are config_iac by rule family. Preserve
+            # the adapter identity after generic SARIF normalization.
+            return [replace(f, scanner="checkov", category=Category.CONFIG_IAC) for f in ingested]

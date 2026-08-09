@@ -4,6 +4,56 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.3.0 — 2026-08-09
+
+Coverage-integrity release. A clean finding set and successful scanner
+coverage are now reported and gated separately.
+
+### Added
+
+- Enforced `gates.require_scanners`. Required scanners now fail coverage when
+  unavailable, timed out, failed, emitted invalid output, were not applicable,
+  or were excluded from the selected scan.
+- Structured scanner provenance in Markdown and JSON reports: outcome,
+  resolved command, reported version, finding count, and failure reason.
+- Explicit per-scanner `command` configuration with safe `shell=False`
+  execution, relative-path resolution from the target, `PATH` lookup, and
+  Python module fallback for Bandit, pip-audit, Semgrep, and Checkov.
+- pip-audit input modes for recursively discovered or explicit requirements,
+  `pyproject.toml` projects, locked projects, and configured environments.
+- Focused regression tests for coverage gates, CLI exit behavior, executable
+  resolution, pyproject auditing, lock mode, and invalid scanner output.
+- PyYAML as an explicit bounded runtime dependency so the advertised
+  `.scignore.yaml` security control works in clean installations.
+- A pinned `required-scanners` extra and composite-action installation path
+  for Bandit 1.9.4 and pip-audit 2.10.1.
+- A minimal pinned self-audit input for the package's supported runtime
+  dependency floor, isolated from unrelated CI and development tools.
+- Tag releases re-run lint, formatting, branch coverage, and required scanner
+  coverage before attestation or publication.
+
+### Fixed
+
+- Scanner timeouts, unexpected exits, missing output, and parse failures no
+  longer silently look like successful clean scans in the updated adapters.
+- CLI `--fail-on-new` now ignores informational control findings consistently
+  with configured `gates.fail_on_new`.
+- Unknown configured or required scanner names fail configuration validation.
+- The composite GitHub Action installs its own checked-out source instead of
+  an unrelated latest PyPI release and now emits its advertised JSON report.
+- `--changed-only` now fails explicitly instead of silently running an
+  unscoped audit; safe changed-file orchestration remains future work.
+- Multiple positional scan roots now fail explicitly instead of scanning only
+  the first root and overstating coverage.
+- The inert `asvs_level` setting is now rejected and removed from the schema;
+  this release does not claim an ASVS-level gate.
+
+### Documentation
+
+- Corrected pip-audit project invocation, baseline approval, scanner network,
+  cross-scanner deduplication, report escaping, and release-provenance claims
+  so documented guarantees match executable behavior.
+
 ## 0.2.0 — 2026-05-13
 
 The Tier-2 release. Six new scanners ship as full adapters with standards
@@ -21,8 +71,8 @@ mappings and mocked-subprocess test coverage.
   rule ids (DL3002 `USER root` → HIGH, DL3025 shell-form CMD → MEDIUM, etc.)
   get specific severities; the remaining DL/SC rules fall through to LOW.
 - **OSV-Scanner** (`osv_scanner`) — multi-ecosystem SCA via osv.dev. Overlaps
-  pip-audit + npm-audit by design; the fingerprint dedupe across
-  `(canonical_cwe, file_path, code_snippet)` prevents double-counting.
+  pip-audit + npm-audit by design; stable fingerprints support baseline
+  matching, but this release did not yet deduplicate scores across scanners.
 - **TruffleHog** (`trufflehog`) — verified secret scanning. Defaults to
   `--only-verified` so we ship live-confirmed matches at CRITICAL only;
   operators can opt into unverified via `extra_args: ["--no-only-verified"]`.
@@ -65,9 +115,10 @@ Initial public release.
 ### Added
 - Deterministic CLI gate over six Tier-1 scanners: Bandit, Semgrep, pip-audit,
   npm audit, Gitleaks, and a built-in regex rule pack.
-- SARIF 2.1.0 emit + ingest. External SARIF (CodeQL, Snyk, Trivy, etc.) merges
-  with locally-run findings via fingerprint dedupe.
-- Standards taxonomy: every finding maps to a CWE id (dedupe key), OWASP Top
+- SARIF 2.1.0 emit + ingest. External SARIF (CodeQL, Snyk, Trivy, etc.) is
+  combined with locally-run findings; identical findings are not collapsed.
+- Standards taxonomy: mapped findings include a CWE id used in stable
+  fingerprints, plus an OWASP Top
   10 bucket, OWASP ASVS section, and NIST SSDF practice. Top-25 CWEs get a
   1.25× scoring boost.
 - Nine canonical audit categories: `secrets`, `dependencies`,

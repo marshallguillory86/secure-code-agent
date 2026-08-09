@@ -123,16 +123,18 @@ will review.
 - It does not include test code templates. The fix-and-test approach varies by finding type; templating it would produce brittle tests.
 - It does not run the LLM for the operator. This is a generated artifact you choose to hand to your agent (Claude Code, Codex, Cursor, Copilot, custom SDK).
 
-## Empirical validation
+## Intended remediation boundaries
 
-The template was iterated against four canned test cases (see `tests/integration/test_remediation_template.py`):
+The template is designed around these representative cases:
 
 1. **SQL injection** (CWE-89, HIGH) — agent must parameterize, not rewrite the query builder.
 2. **Hardcoded API key** (CWE-798, CRITICAL) — agent must move to env var, not invent a "secrets manager" abstraction.
 3. **`pickle.loads` on untrusted input** (CWE-502, HIGH) — agent must switch to JSON or signed payloads, NOT add a try/except around pickle.
 4. **Missing CSRF on POST endpoint** (CWE-352, MEDIUM) — agent must add the existing middleware, NOT rewrite the routing.
 
-Each test case includes the pre-fix code, the prompt the agent would receive, and the expected fix shape. Failures here mean the prompt template needs tightening.
+Unit tests verify that the generated prompt retains its hard constraints and
+finding evidence. The repository does not claim that these examples constitute
+empirical LLM-behavior validation; agent outcomes still require human review.
 
 ## Per-agent skill bundles
 

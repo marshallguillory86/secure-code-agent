@@ -4,7 +4,7 @@
 
 ## Inputs
 
-For each canonical `Finding` after dedupe by `canonical_cwe`:
+For each unsuppressed canonical `Finding`:
 
 | Input         | Source                                                                  |
 |---------------|-------------------------------------------------------------------------|
@@ -153,4 +153,6 @@ A future config option will allow `score_mode: "average"` for teams who prefer i
 
 ## Drift testing
 
-Every release ships with a fixture-based regression test that pins example repos to their expected scores so changes to the weighting model are visible in the diff. See `tests/integration/test_scoring_drift.py`.
+`tests/unit/test_scoring.py` locks the scoring arithmetic and gate semantics.
+The repository does not yet ship a fixture-based, example-repository drift
+suite; changes in scanner output distributions still require release review.

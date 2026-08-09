@@ -1,0 +1,17 @@
+- rule_id: B404
+  paths:
+    - "*/src/secure_code_audit/baseline.py"
+    - "*/src/secure_code_audit/git_tools.py"
+    - "*/src/secure_code_audit/scanners/base.py"
+    - "*/src/secure_code_audit/scanners/scorecard_scanner.py"
+  reason: "Reviewed subprocess imports are required for Git metadata and external scanner adapters; every invocation uses an argument array with shell=False."
+  expires: "2027-08-01"
+
+- rule_id: B603
+  paths:
+    - "*/src/secure_code_audit/baseline.py"
+    - "*/src/secure_code_audit/git_tools.py"
+    - "*/src/secure_code_audit/scanners/base.py"
+    - "*/src/secure_code_audit/scanners/scorecard_scanner.py"
+  reason: "Reviewed subprocess calls use resolved executables or configured argument arrays, sanitized inputs where applicable, and never invoke a shell."
+  expires: "2027-08-01"

@@ -13,20 +13,20 @@
       │
 ┌─────▼──────────────────────────────────────────┐
 │ secure-code-agent CLI (trusted — our code)     │
-│   · stdlib only at runtime                     │
+│   · PyYAML for safe suppression parsing        │
 │   · subprocess scanners with bounded env       │
 └─────┬──────────────────────────────────────────┘
       │
 ┌─────▼──────────────────────────────────────────┐
-│ Scanner binaries (semi-trusted — vendored)     │
-│   · MIT/Apache-2.0; pinned versions in CI      │
+│ Scanner binaries (semi-trusted — external)     │
+│   · Operator-installed; versions reported      │
 │   · Run with cwd=target, shell=False           │
 └─────┬──────────────────────────────────────────┘
       │
 ┌─────▼──────────────────────────────────────────┐
 │ Repo content (UNTRUSTED — may be malicious)    │
-│   · Filenames, file contents, .scignore.yaml   │
-│   · Never eval'd, never exec'd, never imported │
+│   · Filenames, manifests, config, source       │
+│   · Passed to semi-trusted external scanners   │
 └────────────────────────────────────────────────┘
 ```
 
@@ -38,20 +38,18 @@
 
 **Mitigations:**
 - All scanner invocations are `subprocess.run(args=[...], shell=False, cwd=target, env=_sanitized_env())`.
-- We never `eval()`, `exec()`, `pickle.load()`, `yaml.load()` (only `yaml.safe_load`), or `import` repo content.
+- The orchestrator does not `eval()`, `exec()`, `pickle.load()`, or import target source. `.scignore.yaml` uses `yaml.safe_load`; PyYAML is a bounded runtime dependency.
 - File paths are passed via argv, never via shell interpolation.
 - `.scignore.yaml` is parsed with `yaml.safe_load`; deserializing it cannot construct arbitrary Python objects.
-- The agent reads source files in text mode with UTF-8 decoding and explicit `errors='replace'` — a malicious binary file can't crash the parser.
+- Built-in rules read source files as UTF-8 with decoding errors ignored. External scanners have their own parsers and trust models; project dependency resolution may process package metadata and access configured indexes. Run audits of untrusted repositories in an isolated runner.
 
 ### T2 — Output injection (report or PR-comment)
 
 **Threat:** A finding's code snippet or message contains characters that escape the report formatting and inject content into operator-visible UIs.
 
-**Mitigations:**
-- Markdown report renders code snippets inside fenced code blocks (` ``` `) — markdown does not interpret inside fences.
-- PR-comment output applies GitHub-flavored markdown escaping for `<`, `>`, `|`, backticks in non-code spans.
-- SARIF output JSON-encodes all strings; the SARIF spec is interpreted by consumers, not us.
-- We never emit raw HTML in any output format.
+**Current controls and limitation:**
+- JSON and SARIF serializers JSON-encode strings.
+- Markdown uses fenced code blocks, but scanner-controlled backticks and other Markdown constructs are not comprehensively escaped in this release. Treat generated Markdown and PR-comment artifacts as untrusted text and do not render them in privileged HTML contexts.
 
 ### T3 — Scanner output deception
 
@@ -78,9 +76,7 @@
 
 **Mitigations:**
 - Baseline is a checked-in JSON artifact with operator-attributable git diffs. Reviewers must approve baseline changes in PR.
-- `--bump-baseline` records the operator's git config `user.email` in a `bumped_by` field per fingerprint.
-- Bumping a CRITICAL or HIGH finding requires `--bump-baseline --i-acknowledge-risk` (extra flag).
-- The report includes a "baseline drift" section showing how many findings were acknowledged in the last N runs.
+- Baseline entries record the best-effort local Git email, but this release does not add an interactive acknowledgment or cryptographic identity. Repository review and branch protection are the approval boundary.
 
 ### T6 — Cleartext secret in report
 
@@ -89,17 +85,17 @@
 **Mitigations:**
 - Secret-scanning scanners (Gitleaks, TruffleHog) are configured with `--redact` (Gitleaks) and `--only-verified --concurrency=1` (TruffleHog) by default.
 - The Markdown report renders only the redacted match.
-- Fingerprints are computed from a hash of the raw secret so dedupe still works, but the raw secret never reaches the report file.
-- SARIF output redacts secret matches via `secrets_redaction` mode (configurable; default: redact).
+- Fingerprints use the redacted evidence supplied to the normalized finding; the orchestrator does not retain the raw secret for deduplication.
+- SARIF serializes the normalized finding. It does not perform a second redaction pass, so adapter redaction is part of the scanner contract and must be regression-tested.
 
 ### T7 — Exfiltration via scanner network calls
 
 **Threat:** A scanner makes outbound network calls that leak repo content (filenames, snippets).
 
 **Mitigations:**
-- Default scanner configuration uses **offline modes** where supported (`semgrep --no-rewrite-rule-ids`, `bandit` is local-only, `pip-audit --disable-pip` to skip live PyPI, `osv-scanner --offline` for local DB).
-- Operators who want online scans (e.g. Semgrep Pro registry) opt in via config (`scanners.semgrep.online: true`).
-- The CLI does not phone home. No telemetry, no version-check pings.
+- The CLI itself has no telemetry or version-check request. External scanners may access registries, advisory services, GitHub, or package indexes depending on their arguments and local caches.
+- Bandit and built-in rules are local-only. Dependency resolution and registry-backed scanners must be treated as network-capable unless the operator has independently configured and verified an offline mode.
+- `scanners.<name>.online` only changes adapters that explicitly implement it. It is not a global network sandbox.
 
 ### T8 — Resource exhaustion
 
@@ -107,18 +103,17 @@
 
 **Mitigations:**
 - Each scanner runs under a wall-clock timeout (`scanners.<name>.timeout_seconds`, default 600).
-- On timeout we kill the process group, emit a `tool_timeout` informational finding, and continue the audit.
-- The agent itself uses bounded memory; we stream scanner JSON output rather than loading entire SARIF files into memory.
+- On timeout `subprocess.run` terminates the child, a `tool_timeout` finding is emitted, and required coverage fails. Child-created process trees may require runner-level isolation.
+- Scanner output is captured in memory and SARIF is loaded as JSON. CI runners should enforce repository-size, memory, and process limits.
 
 ### T9 — Supply-chain attack on the agent itself
 
 **Threat:** A compromised release of `secure-code-agent` injects malicious behavior into a security-critical step.
 
 **Mitigations:**
-- PyPI releases are signed (via Sigstore/cosign).
 - GitHub Action references should be pinned to a SHA (`uses: marshallguillory86/secure-code-agent@<sha>`), not a tag.
-- Releases publish a CycloneDX SBOM as a release asset.
-- We dogfood the agent against itself in CI (`secure-code-agent` runs against its own source on every PR).
+- GitHub CI tests the package and dogfoods selected scanners against the repository. Scanner versions are pinned in that workflow.
+- Release signing, provenance attestations, and SBOM publication are release-process goals and must not be assumed unless the corresponding release artifacts are present.
 
 ## Out of scope
 

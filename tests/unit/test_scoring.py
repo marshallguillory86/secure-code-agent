@@ -1,4 +1,5 @@
 """Scoring + gate evaluation."""
+
 from pathlib import Path
 
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
@@ -10,15 +11,34 @@ from secure_code_audit.scoring import (
 )
 
 
-def _f(severity, category, *, cwe_top25=False, suppressed=False, is_new=True, confidence=Confidence.HIGH):
+def _f(
+    severity,
+    category,
+    *,
+    cwe_top25=False,
+    suppressed=False,
+    is_new=True,
+    confidence=Confidence.HIGH,
+):
     return Finding(
-        rule_id="r", scanner="t", fingerprint="abc123",
+        rule_id="r",
+        scanner="t",
+        fingerprint="abc123",
         canonical_cwe="CWE-89" if cwe_top25 else "CWE-1234",
-        owasp_top10=None, asvs_section=None, nist_ssdf=None,
-        category=category, severity=severity, confidence=confidence,
-        file_path=Path("x.py"), line_start=1, line_end=None,
-        code_snippet=None, message="m",
-        suppressed=suppressed, is_new=is_new, cwe_top25=cwe_top25,
+        owasp_top10=None,
+        asvs_section=None,
+        nist_ssdf=None,
+        category=category,
+        severity=severity,
+        confidence=confidence,
+        file_path=Path("x.py"),
+        line_start=1,
+        line_end=None,
+        code_snippet=None,
+        message="m",
+        suppressed=suppressed,
+        is_new=is_new,
+        cwe_top25=cwe_top25,
     )
 
 
@@ -26,9 +46,9 @@ def test_letter_grade_boundaries():
     assert letter_grade(5.0) == "A+"
     assert letter_grade(4.85) == "A+"
     assert letter_grade(4.84) == "A"
-    assert letter_grade(4.0)  == "A-"
-    assert letter_grade(3.0)  == "B"
-    assert letter_grade(0.0)  == "F"
+    assert letter_grade(4.0) == "A-"
+    assert letter_grade(3.0) == "B"
+    assert letter_grade(0.0) == "F"
 
 
 def test_clean_repo_scores_aplus():
@@ -49,7 +69,7 @@ def test_one_high_sqli_drops_grade():
 def test_suppressed_findings_dont_score():
     findings = [
         _f(Severity.CRITICAL, Category.SECRETS, suppressed=True),
-        _f(Severity.LOW,      Category.LOGGING_OBSERVABILITY, suppressed=False),
+        _f(Severity.LOW, Category.LOGGING_OBSERVABILITY, suppressed=False),
     ]
     r = score(findings, loc_scanned=10_000)
     # Suppressed CRITICAL ignored; LOW logging finding is the worst.
@@ -58,7 +78,7 @@ def test_suppressed_findings_dont_score():
 
 def test_worst_category_drives_overall():
     findings = [
-        _f(Severity.LOW,      Category.LOGGING_OBSERVABILITY),
+        _f(Severity.LOW, Category.LOGGING_OBSERVABILITY),
         _f(Severity.CRITICAL, Category.SECRETS),
     ]
     r = score(findings, loc_scanned=10_000)

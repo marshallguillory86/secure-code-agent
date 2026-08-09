@@ -1,6 +1,7 @@
 """Bounded remediation prompt — the differentiator. Verify every documented
 hard constraint appears verbatim, and that finding context is properly
 injected."""
+
 from pathlib import Path
 
 from secure_code_audit.findings import (
@@ -14,12 +15,19 @@ from secure_code_audit.remediation import generate
 
 def _f(severity=Severity.HIGH, rule_id="B608"):
     return Finding(
-        rule_id=rule_id, scanner="bandit", fingerprint="x",
-        canonical_cwe="CWE-89", owasp_top10="A03",
-        asvs_section="V5.3.5", nist_ssdf="PW.5.1",
+        rule_id=rule_id,
+        scanner="bandit",
+        fingerprint="x",
+        canonical_cwe="CWE-89",
+        owasp_top10="A03",
+        asvs_section="V5.3.5",
+        nist_ssdf="PW.5.1",
         category=Category.CODE_VULNERABILITIES,
-        severity=severity, confidence=Confidence.HIGH,
-        file_path=Path("dashboard/api.py"), line_start=42, line_end=44,
+        severity=severity,
+        confidence=Confidence.HIGH,
+        file_path=Path("dashboard/api.py"),
+        line_start=42,
+        line_end=44,
         code_snippet="cursor.execute(f'SELECT * FROM u WHERE id = {uid}')",
         message="String-built SQL — possible injection.",
         short_desc="String-built SQL — possible injection.",
@@ -85,6 +93,7 @@ def test_prompt_omits_informational_findings():
 
 def test_prompt_omits_suppressed_findings():
     from dataclasses import replace
+
     f = _f()
     f = replace(f, suppressed=True, suppression_note="acknowledged")
     prompt = generate([f])

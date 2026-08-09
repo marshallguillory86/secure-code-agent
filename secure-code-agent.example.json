@@ -8,15 +8,13 @@
       "**/__pycache__/", "**/*.min.js", "**/*.lock", "vendor/", "tests/fixtures/"
     ]
   },
-  "asvs_level": 2,
   "scanners": {
     "bandit":       { "enabled": true,  "timeout_seconds": 600 },
     "semgrep":      { "enabled": true,  "timeout_seconds": 900, "online": false },
-    "pip_audit":    { "enabled": true,  "timeout_seconds": 300 },
+    "pip_audit":    { "enabled": true,  "timeout_seconds": 300, "mode": "auto" },
     "npm_audit":    { "enabled": true,  "timeout_seconds": 300 },
     "gitleaks":     { "enabled": true,  "timeout_seconds": 300 },
     "trufflehog":   { "enabled": false, "timeout_seconds": 600 },
-    "eslint_security": { "enabled": true, "timeout_seconds": 300 },
     "builtin_rules":   { "enabled": true }
   },
   "severity_overrides": {

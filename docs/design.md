@@ -15,7 +15,7 @@ That gap is what this tool fills. It is the security sibling of [`maintainabilit
 2. **Bounded scope.** The remediation prompt explicitly forbids touching crypto, auth, validation, logging, and tests unless a finding names them as the defect.
 3. **Standards-anchored.** Findings map to a canonical taxonomy: CWE id, OWASP Top 10 category, OWASP ASVS section, NIST SSDF practice. Operators see *which standard is failing*, not just *which scanner shouted*.
 4. **Scanner-agnostic orchestration.** SARIF 2.1.0 in, SARIF 2.1.0 out. The tool is a scoring + remediation layer; we don't write yet another SAST engine.
-5. **CWE-deduped scoring.** When Semgrep, CodeQL, and Bandit all fire on the same SQL-injection sink with three different rule IDs, the scorer counts one underlying weakness — not three.
+5. **Stable finding identity.** Canonical CWE, normalized path, and normalized evidence form the baseline fingerprint. Cross-scanner findings remain separate in scoring in the current release.
 6. **No vendor lock-in.** Markdown, JSON, SARIF, PR-comment, baseline — all plain files. Pair with mature scanners; don't replace them.
 7. **CI-first, local-first.** Same binary in local pre-commit, local CI, GitHub Actions, GitLab, Buildkite. No SaaS round-trip required.
 
@@ -91,14 +91,13 @@ Every scanner implements:
 
 ```python
 class Scanner(Protocol):
-    name:        str
-    category:    Category      # which audit bucket findings land in
-    binary:      str           # the command we exec
-    available:   bool          # set by ProbeForBinary at startup
-    def run(self, config: Config, target: Path) -> list[Finding]: ...
+    name: str
+    binary: str
+    def configure(self, target: Path, config: Config) -> None: ...
+    def run(self, target: Path, config: Config) -> list[Finding]: ...
 ```
 
-Missing binaries don't crash the audit — they emit a single `informational` finding (`tool_unavailable`) and the scanner is skipped. The report tells the operator which tools were skipped so they know what coverage they DON'T have. Hard gates can require specific scanners (`require_scanners: ["bandit", "gitleaks"]`).
+Missing binaries don't crash the audit — they emit a single `informational` finding (`tool_unavailable`) and the scanner is skipped. Scanner execution is reported separately from security findings as `COMPLETE`, `PARTIAL`, or `FAILED` coverage. Hard gates can require specific scanners (`require_scanners: ["bandit", "gitleaks"]`); required scanners must complete successfully, so unavailable, timed-out, failed, invalid-output, and not-applicable outcomes fail the gate.
 
 ### 4.3 Finding normalization
 
@@ -108,7 +107,7 @@ Every scanner output is converted to a canonical `Finding`:
 @dataclass(frozen=True)
 class Finding:
     rule_id:          str             # scanner-local id (B608, generic.python.sql.tainted-sql-string)
-    canonical_cwe:    str | None      # e.g. "CWE-89" — the dedupe key
+    canonical_cwe:    str | None      # e.g. "CWE-89" — a fingerprint input when mapped
     owasp_top10:      str | None      # e.g. "A03:2021-Injection"
     asvs_section:    str | None       # e.g. "V5.3"
     nist_ssdf:       str | None       # e.g. "PW.5.1"
@@ -121,12 +120,12 @@ class Finding:
     line_end:         int | None
     code_snippet:     str | None
     scanner:          str             # which tool emitted it
-    fingerprint:      str             # for baseline + dedupe
+    fingerprint:      str             # for baseline identity
     suppressed:       bool            # acknowledged via .scignore.yaml
     suppression_note: str | None
 ```
 
-`fingerprint` is `sha256(canonical_cwe + file_path + nearby_code_hash)[:16]` — stable across reformat-only edits, distinct across files. `canonical_cwe` is the **dedup key** during scoring.
+`fingerprint` is `sha256((canonical_cwe or rule_id) + file_path + normalized_code)[:16]` — stable across whitespace-only edits and distinct across files. It supports baseline identity; the current scorer does not deduplicate findings.
 
 ## 5. Standards taxonomy
 
@@ -137,10 +136,13 @@ We anchor to five public standards, all reproduced under [`standards.md`](standa
 | **NIST SSDF SP 800-218**        | Process-level mapping (which SSDF practice does this finding violate?) |
 | **OWASP Top 10 (2021)**         | Web-app risk bucket — operator-friendly                                |
 | **OWASP ASVS 5.0**              | Verification requirement (L1/L2/L3) per finding                        |
-| **MITRE CWE Top 25 (2025)**     | Canonical weakness id — the dedupe key                                 |
+| **MITRE CWE Top 25 (2025)**     | Canonical weakness id used in stable fingerprints                      |
 | **OpenSSF Scorecard checks**    | Repo hygiene + supply-chain integrity score                            |
 
-A built-in mapping table (`src/secure_code_audit/standards/`) translates every scanner rule id we ingest into a `(CWE, OWASP Top 10, ASVS, SSDF)` tuple. The mapping is data-driven JSON — no code change required to add a rule.
+The reviewed mapping table in `src/secure_code_audit/standards.py` translates
+known scanner rule ids into available CWE, OWASP Top 10, ASVS, and SSDF fields.
+Unmapped findings remain valid with null standards fields; adding a mapping is
+a code and test change.
 
 ## 6. Audit categories
 
@@ -238,7 +240,7 @@ The prompt also injects the standards mapping for each finding so the agent can 
 ## 13. CLI surface (locked)
 
 ```text
-secure-code-agent [paths...]
+secure-code-agent [path]
   --config FILE                  Config file (default: secure-code-agent.json)
   --output FILE                  Markdown report path
   --json-output FILE             Canonical JSON path
@@ -249,7 +251,7 @@ secure-code-agent [paths...]
   --bump-baseline                Rewrite baseline from current findings
   --fail-on-gate                 Exit nonzero if any gate trips
   --fail-on-new                  Exit nonzero on findings not in baseline
-  --changed-only REF             Audit only files changed since REF (e.g. main...HEAD)
+  --changed-only REF             Reserved; currently fails explicitly because safe scoped execution is not implemented
   --target codex|claude-code|cursor|copilot|windsurf|generic
                                  Init agent standards file for that host
   --instructions-output-dir DIR  Where to write the agent standards file

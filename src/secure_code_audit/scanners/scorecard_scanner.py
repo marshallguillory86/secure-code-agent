@@ -19,9 +19,11 @@ documentation-style checks). Score → severity mapping:
   · score < 10      → LOW           (acceptable but not perfect)
   · score == 10     → no finding emitted (passed cleanly)
 """
+
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -29,14 +31,13 @@ from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanners.base import Scanner
 
-
 # Checks whose semantics are "documentation present" rather than
 # supply-chain integrity.
 _POLICY_DOCS_CHECKS = {"Security-Policy", "License", "CII-Best-Practices"}
 
 
 class ScorecardScanner(Scanner):
-    name   = "scorecard"
+    name = "scorecard"
     binary = "scorecard"
     default_category = Category.SUPPLY_CHAIN
 
@@ -46,38 +47,87 @@ class ScorecardScanner(Scanner):
 
         repo_url = self._infer_repo_url(target)
         if repo_url is None:
-            return [self._make_finding(
-                rule_id=f"{self.name}.no_remote",
-                message="Scorecard requires a remote GitHub URL (origin remote not found).",
-                file_path=target, line_start=0, line_end=None, code_snippet=None,
-                severity=Severity.INFORMATIONAL, confidence=Confidence.HIGH,
-                category=Category.SUPPLY_CHAIN,
-            )]
+            return [
+                self._make_finding(
+                    rule_id=f"{self.name}.no_remote",
+                    message="Scorecard requires a remote GitHub URL (origin remote not found).",
+                    file_path=target,
+                    line_start=0,
+                    line_end=None,
+                    code_snippet=None,
+                    severity=Severity.INFORMATIONAL,
+                    confidence=Confidence.HIGH,
+                    category=Category.SUPPLY_CHAIN,
+                )
+            ]
 
         sc_cfg = self.cfg(config)
         args = [
-            self.binary,
+            *self.command,
             f"--repo={repo_url}",
-            "--format=json", "--show-details",
+            "--format=json",
+            "--show-details",
         ]
         args.extend(sc_cfg.extra_args)
 
-        r = self._exec(args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds,
-                       allowed_exits=(0, 1, 2))
+        r = self._exec(
+            args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1, 2)
+        )
         if r.returncode == 124:
-            return [self._make_finding(
-                rule_id=f"{self.name}.tool_timeout",
-                message=f"scorecard timed out: {r.stderr[:200]}",
-                file_path=target, line_start=0, line_end=None, code_snippet=None,
-                severity=Severity.INFORMATIONAL, confidence=Confidence.HIGH,
-            )]
+            return [
+                self._make_finding(
+                    rule_id=f"{self.name}.tool_timeout",
+                    message=f"scorecard timed out: {r.stderr[:200]}",
+                    file_path=target,
+                    line_start=0,
+                    line_end=None,
+                    code_snippet=None,
+                    severity=Severity.INFORMATIONAL,
+                    confidence=Confidence.HIGH,
+                )
+            ]
+        if r.returncode not in (0, 1, 2):
+            return [
+                self._make_finding(
+                    rule_id=f"{self.name}.tool_error",
+                    message=f"scorecard failed: {r.stderr[:300]}",
+                    file_path=target,
+                    line_start=0,
+                    line_end=None,
+                    code_snippet=None,
+                    severity=Severity.INFORMATIONAL,
+                    confidence=Confidence.HIGH,
+                )
+            ]
         if not r.stdout.strip():
-            return []
+            return [
+                self._make_finding(
+                    rule_id=f"{self.name}.tool_error",
+                    message="scorecard emitted no JSON",
+                    file_path=target,
+                    line_start=0,
+                    line_end=None,
+                    code_snippet=None,
+                    severity=Severity.INFORMATIONAL,
+                    confidence=Confidence.HIGH,
+                )
+            ]
 
         try:
             payload = json.loads(r.stdout)
-        except json.JSONDecodeError:
-            return []
+        except json.JSONDecodeError as exc:
+            return [
+                self._make_finding(
+                    rule_id=f"{self.name}.parse_error",
+                    message=f"scorecard JSON parse failure: {exc}",
+                    file_path=target,
+                    line_start=0,
+                    line_end=None,
+                    code_snippet=None,
+                    severity=Severity.INFORMATIONAL,
+                    confidence=Confidence.HIGH,
+                )
+            ]
 
         return self._parse(payload, target)
 
@@ -85,11 +135,17 @@ class ScorecardScanner(Scanner):
         """Run `git remote get-url origin` in target. Returns the URL
         normalized to https://github.com/<owner>/<repo> form, or None
         if no GitHub origin is present."""
+        git = shutil.which("git")
+        if git is None:
+            return None
         try:
             r = subprocess.run(
-                ["git", "remote", "get-url", "origin"],
+                [git, "remote", "get-url", "origin"],
                 cwd=str(target),
-                check=False, capture_output=True, text=True, timeout=5,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return None
@@ -98,7 +154,7 @@ class ScorecardScanner(Scanner):
             return None
         # Normalize SSH form to HTTPS form so scorecard accepts it.
         if url.startswith("git@github.com:"):
-            url = "https://github.com/" + url[len("git@github.com:"):]
+            url = "https://github.com/" + url[len("git@github.com:") :]
         if url.endswith(".git"):
             url = url[:-4]
         if not url.startswith("https://github.com/"):
@@ -108,33 +164,35 @@ class ScorecardScanner(Scanner):
     def _parse(self, payload: dict, target: Path) -> list[Finding]:
         out: list[Finding] = []
         for check in payload.get("checks", []):
-            name   = str(check.get("name") or "Unknown")
-            score  = check.get("score")
+            name = str(check.get("name") or "Unknown")
+            score = check.get("score")
             reason = (check.get("reason") or "").strip()
-            doc    = (check.get("documentation") or {}).get("url") or ""
+            doc = (check.get("documentation") or {}).get("url") or ""
 
             severity = self._score_to_severity(score)
             if severity is None:
                 continue  # passed cleanly, no finding
 
-            category = (Category.POLICY_DOCS
-                        if name in _POLICY_DOCS_CHECKS
-                        else Category.SUPPLY_CHAIN)
+            category = (
+                Category.POLICY_DOCS if name in _POLICY_DOCS_CHECKS else Category.SUPPLY_CHAIN
+            )
             msg = f"OpenSSF Scorecard `{name}` scored {score}/10: {reason}"
             if doc:
                 msg = f"{msg} [{doc}]"
 
-            out.append(self._make_finding(
-                rule_id=f"scorecard.{name}",
-                message=msg,
-                file_path=target,
-                line_start=0,
-                line_end=None,
-                code_snippet=None,
-                severity=severity,
-                confidence=Confidence.HIGH,
-                category=category,
-            ))
+            out.append(
+                self._make_finding(
+                    rule_id=f"scorecard.{name}",
+                    message=msg,
+                    file_path=target,
+                    line_start=0,
+                    line_end=None,
+                    code_snippet=None,
+                    severity=severity,
+                    confidence=Confidence.HIGH,
+                    category=category,
+                )
+            )
         return out
 
     @staticmethod

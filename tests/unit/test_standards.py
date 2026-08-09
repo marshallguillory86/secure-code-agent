@@ -8,9 +8,9 @@ from secure_code_audit.standards import (
 
 
 def test_top25_set_contains_known_entries():
-    assert "CWE-89"  in CWE_TOP25_2025   # SQL injection
-    assert "CWE-79"  in CWE_TOP25_2025   # XSS
-    assert "CWE-798" in CWE_TOP25_2025   # hardcoded creds
+    assert "CWE-89" in CWE_TOP25_2025  # SQL injection
+    assert "CWE-79" in CWE_TOP25_2025  # XSS
+    assert "CWE-798" in CWE_TOP25_2025  # hardcoded creds
 
 
 def test_is_top25_handles_none():

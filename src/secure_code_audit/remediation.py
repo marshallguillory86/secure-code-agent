@@ -5,14 +5,14 @@ guardrails against the documented failure modes for AI security fixes.
 
 See docs/remediation.md for the full template + rationale.
 """
+
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from secure_code_audit.findings import Finding, Severity
 from secure_code_audit.standards import cwe_url, owasp_label
-
 
 _HARD_CONSTRAINTS = """\
 ## Hard constraints (MUST NOT violate)

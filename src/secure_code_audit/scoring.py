@@ -7,40 +7,42 @@ Implements the model documented in docs/scoring.md:
   · category_grade = clamp(5.0 - (normalized × 0.5), 0, 5)
   · overall = min(category_grades)
 """
+
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.scanner_status import CoverageReport, CoverageStatus
 
 # --- weights ---------------------------------------------------------------
 
 SEVERITY_WEIGHT: dict[Severity, float] = {
-    Severity.CRITICAL:      10.0,
-    Severity.HIGH:           4.0,
-    Severity.MEDIUM:         1.5,
-    Severity.LOW:            0.5,
-    Severity.INFORMATIONAL:  0.0,
+    Severity.CRITICAL: 10.0,
+    Severity.HIGH: 4.0,
+    Severity.MEDIUM: 1.5,
+    Severity.LOW: 0.5,
+    Severity.INFORMATIONAL: 0.0,
 }
 
 CONFIDENCE_WEIGHT: dict[Confidence, float] = {
-    Confidence.HIGH:   1.00,
+    Confidence.HIGH: 1.00,
     Confidence.MEDIUM: 0.75,
-    Confidence.LOW:    0.50,
+    Confidence.LOW: 0.50,
 }
 
 CATEGORY_WEIGHT: dict[Category, float] = {
-    Category.SECRETS:               1.5,
-    Category.CODE_VULNERABILITIES:  1.5,
-    Category.AUTH_AUTHZ:            1.5,
-    Category.CRYPTO:                1.5,
-    Category.DEPENDENCIES:          1.0,
-    Category.CONFIG_IAC:            1.0,
-    Category.SUPPLY_CHAIN:          0.8,
+    Category.SECRETS: 1.5,
+    Category.CODE_VULNERABILITIES: 1.5,
+    Category.AUTH_AUTHZ: 1.5,
+    Category.CRYPTO: 1.5,
+    Category.DEPENDENCIES: 1.0,
+    Category.CONFIG_IAC: 1.0,
+    Category.SUPPLY_CHAIN: 0.8,
     Category.LOGGING_OBSERVABILITY: 0.8,
-    Category.POLICY_DOCS:           0.5,
+    Category.POLICY_DOCS: 0.5,
 }
 
 CWE_TOP25_BONUS = 1.25
@@ -69,6 +71,7 @@ def letter_grade(score: float) -> str:
 
 # --- per-finding score -----------------------------------------------------
 
+
 def finding_score(f: Finding) -> float:
     """Score one finding per the documented formula. Suppressed findings
     score 0 (they're excluded by the caller before this normally fires,
@@ -76,9 +79,7 @@ def finding_score(f: Finding) -> float:
     if f.suppressed:
         return 0.0
     base = (
-        SEVERITY_WEIGHT[f.severity]
-        * CONFIDENCE_WEIGHT[f.confidence]
-        * CATEGORY_WEIGHT[f.category]
+        SEVERITY_WEIGHT[f.severity] * CONFIDENCE_WEIGHT[f.confidence] * CATEGORY_WEIGHT[f.category]
     )
     if f.cwe_top25:
         base *= CWE_TOP25_BONUS
@@ -87,10 +88,9 @@ def finding_score(f: Finding) -> float:
 
 # --- per-category aggregation ---------------------------------------------
 
+
 def category_subtotal(findings: Iterable[Finding], category: Category) -> float:
-    return sum(
-        finding_score(f) for f in findings if f.category == category and not f.suppressed
-    )
+    return sum(finding_score(f) for f in findings if f.category == category and not f.suppressed)
 
 
 def normalize(subtotal: float, loc_scanned: int) -> float:
@@ -106,17 +106,18 @@ def category_grade(normalized: float) -> float:
 
 # --- overall score ---------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class ScoreReport:
     """Per-category + overall score breakdown. Renderers consume this directly."""
 
-    per_category:        dict[Category, float]   # category → 0.0-5.0 grade
-    per_category_count:  dict[Category, int]     # category → unsuppressed finding count
-    per_severity_count:  dict[Severity, int]     # severity → unsuppressed finding count
-    overall:             float                   # 0.0-5.0
-    letter:              str                     # A+, A, A-, B+, ...
-    worst_category:      Category | None         # which category drove the grade
-    loc_scanned:         int                     # for the report header
+    per_category: dict[Category, float]  # category → 0.0-5.0 grade
+    per_category_count: dict[Category, int]  # category → unsuppressed finding count
+    per_severity_count: dict[Severity, int]  # severity → unsuppressed finding count
+    overall: float  # 0.0-5.0
+    letter: str  # A+, A, A-, B+, ...
+    worst_category: Category | None  # which category drove the grade
+    loc_scanned: int  # for the report header
 
     def as_table(self) -> list[tuple[str, str, float, int]]:
         """[(category_name, grade_letter, grade_score, finding_count), ...]
@@ -126,7 +127,7 @@ class ScoreReport:
             grade = self.per_category.get(cat, 5.0)
             count = self.per_category_count.get(cat, 0)
             rows.append((cat.value, letter_grade(grade), grade, count))
-        rows.sort(key=lambda r: r[2])   # worst first
+        rows.sort(key=lambda r: r[2])  # worst first
         return rows
 
 
@@ -140,18 +141,13 @@ def score(findings: Iterable[Finding], loc_scanned: int) -> ScoreReport:
         subtotal = category_subtotal(findings, cat)
         normalized = normalize(subtotal, loc_scanned)
         per_category[cat] = category_grade(normalized)
-        per_category_count[cat] = sum(
-            1 for f in findings if f.category == cat and not f.suppressed
-        )
+        per_category_count[cat] = sum(1 for f in findings if f.category == cat and not f.suppressed)
 
     for f in findings:
         if not f.suppressed:
             per_severity_count[f.severity] += 1
 
-    if findings:
-        worst_category = min(per_category.items(), key=lambda kv: kv[1])[0]
-    else:
-        worst_category = None
+    worst_category = min(per_category.items(), key=lambda kv: kv[1])[0] if findings else None
 
     overall = min(per_category.values()) if per_category else 5.0
     return ScoreReport(
@@ -167,17 +163,19 @@ def score(findings: Iterable[Finding], loc_scanned: int) -> ScoreReport:
 
 # --- gate evaluation -------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class GateResult:
-    passed:    bool
-    reasons:   tuple[str, ...]                    # human-readable trip reasons
-    tripped:   tuple[str, ...] = field(default_factory=tuple)
+    passed: bool
+    reasons: tuple[str, ...]  # human-readable trip reasons
+    tripped: tuple[str, ...] = field(default_factory=tuple)
 
 
 def evaluate_gates(
-    findings:    list[Finding],
-    report:      ScoreReport,
+    findings: list[Finding],
+    report: ScoreReport,
     gate_config: dict,
+    coverage: CoverageReport | None = None,
 ) -> GateResult:
     """Apply the configured gates. Any tripped gate → passed=False.
 
@@ -197,6 +195,10 @@ def evaluate_gates(
     ):
         check(findings, report, gate_config, tripped, reasons)
 
+    if coverage is not None and coverage.status is CoverageStatus.FAILED:
+        tripped.append("require_scanners")
+        reasons.append("; ".join(coverage.failures))
+
     return GateResult(
         passed=not tripped,
         reasons=tuple(reasons),
@@ -209,9 +211,13 @@ def evaluate_gates(
 # keeps evaluate_gates() at cognitive complexity <= 15 (we ship the
 # maintainability standard and dogfood it here).
 
+
 def _gate_fail_on_severity(
-    findings: list[Finding], report: ScoreReport, gate_config: dict,
-    tripped: list[str], reasons: list[str],
+    findings: list[Finding],
+    report: ScoreReport,
+    gate_config: dict,
+    tripped: list[str],
+    reasons: list[str],
 ) -> None:
     fail_on = {s.lower() for s in gate_config.get("fail_on_severity", [])}
     if not fail_on:
@@ -223,8 +229,11 @@ def _gate_fail_on_severity(
 
 
 def _gate_fail_on_category(
-    findings: list[Finding], report: ScoreReport, gate_config: dict,
-    tripped: list[str], reasons: list[str],
+    findings: list[Finding],
+    report: ScoreReport,
+    gate_config: dict,
+    tripped: list[str],
+    reasons: list[str],
 ) -> None:
     fail_cats = {c.lower() for c in gate_config.get("fail_on_category", [])}
     if not fail_cats:
@@ -236,15 +245,19 @@ def _gate_fail_on_category(
 
 
 def _gate_fail_on_new(
-    findings: list[Finding], report: ScoreReport, gate_config: dict,
-    tripped: list[str], reasons: list[str],
+    findings: list[Finding],
+    report: ScoreReport,
+    gate_config: dict,
+    tripped: list[str],
+    reasons: list[str],
 ) -> None:
     # Informational findings (tool_unavailable, parse errors, etc.) never
     # trip the gate — they're awareness signals, not security defects.
     if not gate_config.get("fail_on_new"):
         return
     new_findings = [
-        f for f in findings
+        f
+        for f in findings
         if f.is_new and not f.suppressed and f.severity is not Severity.INFORMATIONAL
     ]
     if new_findings:
@@ -253,21 +266,25 @@ def _gate_fail_on_new(
 
 
 def _gate_min_score(
-    findings: list[Finding], report: ScoreReport, gate_config: dict,
-    tripped: list[str], reasons: list[str],
+    findings: list[Finding],
+    report: ScoreReport,
+    gate_config: dict,
+    tripped: list[str],
+    reasons: list[str],
 ) -> None:
     min_score = gate_config.get("min_score")
     if min_score is None or report.overall >= min_score:
         return
     tripped.append("min_score")
-    reasons.append(
-        f"overall score {report.overall:.2f} below required minimum {min_score}"
-    )
+    reasons.append(f"overall score {report.overall:.2f} below required minimum {min_score}")
 
 
 def _gate_max_unsuppressed(
-    findings: list[Finding], report: ScoreReport, gate_config: dict,
-    tripped: list[str], reasons: list[str],
+    findings: list[Finding],
+    report: ScoreReport,
+    gate_config: dict,
+    tripped: list[str],
+    reasons: list[str],
 ) -> None:
     caps = gate_config.get("max_unsuppressed", {})
     for sev_str, cap in caps.items():
@@ -275,6 +292,4 @@ def _gate_max_unsuppressed(
         count = report.per_severity_count.get(sev, 0)
         if count > cap:
             tripped.append(f"max_unsuppressed.{sev_str}")
-            reasons.append(
-                f"{count} unsuppressed {sev.value} finding(s) exceeds cap {cap}"
-            )
+            reasons.append(f"{count} unsuppressed {sev.value} finding(s) exceeds cap {cap}")
