@@ -1,6 +1,8 @@
 # Standards anchors
 
-`secure-code-agent` does not invent a new taxonomy. Every finding maps to five widely-cited public standards. Operators see *which standard is failing*, not just *which scanner shouted*.
+`secure-code-agent` does not invent a new taxonomy. Known rules map to fields
+from widely-cited public standards. Unmapped or control findings may have null
+fields; reports preserve the scanner rule rather than inventing a mapping.
 
 ## NIST SSDF — SP 800-218
 
@@ -13,7 +15,9 @@
 | **PW** | Produce Well-Secured Software  | Threat modeling, secure design, secure code review, code analysis, defect fixing              |
 | **RV** | Respond to Vulnerabilities     | Vulnerability identification, fix, disclosure                                                 |
 
-This tool primarily exercises **PW** (well-secured production) and **RV** (response). Each finding carries an SSDF practice id (e.g. `PW.5.1 — Configure compilation and build processes to use compiler-generated warnings and errors`). The map lives in `src/secure_code_audit/data/standards_ssdf.json`.
+This tool primarily exercises **PW** (well-secured production) and **RV**
+(response). Mapped findings carry an SSDF practice id. The reviewed mappings
+live in `src/secure_code_audit/standards.py`.
 
 ## OWASP Top 10 (2021)
 
@@ -32,7 +36,7 @@ This tool primarily exercises **PW** (well-secured production) and **RV** (respo
 | A09  | Security Logging and Monitoring Failures     |
 | A10  | Server-Side Request Forgery (SSRF)           |
 
-We will refresh the mapping table the day OWASP publishes the 2024-cycle update.
+Mappings are versioned with the package and require an explicit reviewed update.
 
 ## OWASP ASVS 5.0
 
@@ -42,11 +46,13 @@ We will refresh the mapping table the day OWASP publishes the 2024-cycle update.
 - **L2** — apps handling sensitive data (the Trovik baseline)
 - **L3** — apps requiring the highest trust
 
-Each finding carries the ASVS section it violates (e.g. `V5.3 — Output Encoding and Injection Prevention`). Operators can require **L2 minimum** via config; findings that only violate L3 are downgraded to LOW.
+Mapped findings carry the applicable ASVS section (for example `V5.3`). The
+current release does not implement an ASVS-level gate or severity adjustment;
+configuration that claims one is rejected rather than silently ignored.
 
 ## MITRE CWE Top 25 (2025)
 
-[Source](https://cwe.mitre.org/top25/). The canonical weakness id is the **dedupe key** for cross-scanner findings. When Semgrep, CodeQL, and Bandit all fire on the same SQL-injection sink with three different rule ids, they all map to `CWE-89` and the scorer counts one underlying weakness.
+[Source](https://cwe.mitre.org/top25/). The canonical weakness id contributes to the stable finding fingerprint and standards mapping. The current scorer preserves separate scanner findings rather than collapsing cross-scanner evidence.
 
 The Top 25 list as of 2025-cycle (subject to MITRE's annual refresh):
 
@@ -82,7 +88,7 @@ Findings hitting a Top-25 CWE are weighted **1.25×** in the scoring model. Full
 
 ## OpenSSF Scorecard
 
-[Source](https://openssf.org/projects/scorecard/). 18 repo-hygiene checks scored 0-10:
+[Source](https://openssf.org/projects/scorecard/). Upstream repo-hygiene checks are scored 0-10:
 
 - **Critical**: `Code-Review`, `Token-Permissions`, `Branch-Protection`, `Signed-Releases`, `Pinned-Dependencies`
 - **High**: `Maintained`, `License`, `Dangerous-Workflow`, `SAST`, `Vulnerabilities`
@@ -98,17 +104,19 @@ We import Scorecard's JSON output and map each check into the `supply_chain` and
 - **Ingest** SARIF from CodeQL, Semgrep, Snyk, and any tool that emits compliant SARIF (`--sarif-import path/to/file.sarif`).
 - **Emit** SARIF 2.1.0 for the merged + normalized findings so downstream tools (GitHub Code Scanning, IDE extensions, Sonar) can ingest the merged view.
 
-We emit OASIS-conformant SARIF, validated against the official schema in CI.
+We emit SARIF 2.1.0-shaped JSON and unit-test required structure plus a local
+round trip. The current CI does not validate every artifact against the full
+OASIS JSON schema, so strict downstream compatibility remains a release check.
 
 ---
 
 ## Mapping table
 
-The full mapping `rule_id → (CWE, OWASP Top 10, ASVS, SSDF, category, severity, confidence)` lives in `src/secure_code_audit/data/rule_map.json`. PRs adding new mappings need:
+The mapping `rule_id → (CWE, OWASP Top 10, ASVS, SSDF, category, severity, confidence)` lives in `src/secure_code_audit/standards.py`. PRs adding new mappings need:
 
 1. A citation (URL to the scanner's docs page for the rule).
-2. The CWE id the rule targets (mandatory — this is the dedupe key).
+2. The CWE id the rule targets when a defensible mapping exists; it becomes a stable fingerprint input.
 3. The ASVS section (mandatory if a section applies; null otherwise).
 4. The default category + severity (use the scanner's default unless overriding with justification).
 
-The map is reviewed quarterly against OWASP, CWE, and NIST publication cycles.
+Mapping updates require source review and focused tests; no automatic refresh is claimed.

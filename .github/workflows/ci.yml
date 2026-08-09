@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install project
+        run: python -m pip install --disable-pip-version-check -e ".[dev]"
+
+      - name: Lint
+        run: python -m ruff check .
+
+      - name: Check formatting
+        run: python -m ruff format --check .
+
+      - name: Test with branch coverage
+        run: >-
+          python -m pytest
+          -o cache_dir=.pytest-cache-ci
+          --cov=secure_code_audit
+          --cov-branch
+          --cov-report=term-missing
+          --cov-fail-under=85
+
+      - name: Build wheel through pip
+        run: python -m pip wheel . --no-deps --wheel-dir wheelhouse
+
+  security:
+    name: Required scanner coverage
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project and pinned required scanners
+        run: python -m pip install --disable-pip-version-check -e ".[dev,required-scanners]"
+
+      - name: Run required security coverage
+        run: >-
+          secure-code-agent
+          --config secure-code-agent.json
+          --fail-on-gate
+          --output secure-code-report.md
+          --json-output secure-code-report.json
+          --sarif-output secure-code.sarif
+          --prompt-output secure-code-remediation-prompt.md
+          --comment-output secure-code-pr-comment.md
+
+      - name: Upload SARIF to code scanning
+        if: >-
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        with:
+          sarif_file: secure-code.sarif
+          category: secure-code-agent-self-audit
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: secure-code-agent-audit
+          if-no-files-found: error
+          path: |
+            secure-code-report.md
+            secure-code-report.json
+            secure-code.sarif
+            secure-code-remediation-prompt.md
+            secure-code-pr-comment.md

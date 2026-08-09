@@ -1,4 +1,5 @@
 """SARIF emit → ingest roundtrip — the schema we promise to consumers."""
+
 import json
 from pathlib import Path
 
@@ -13,16 +14,24 @@ from secure_code_audit.findings import (
 
 def _f(rule_id="bandit.B608", severity=Severity.HIGH):
     return Finding(
-        rule_id=rule_id, scanner="bandit",
+        rule_id=rule_id,
+        scanner="bandit",
         fingerprint=Finding.make_fingerprint(
-            canonical_cwe="CWE-89", rule_id=rule_id,
-            file_path=Path("a.py"), code_snippet="select * from x",
+            canonical_cwe="CWE-89",
+            rule_id=rule_id,
+            file_path=Path("a.py"),
+            code_snippet="select * from x",
         ),
         canonical_cwe="CWE-89",
-        owasp_top10="A03", asvs_section="V5.3.5", nist_ssdf="PW.5.1",
+        owasp_top10="A03",
+        asvs_section="V5.3.5",
+        nist_ssdf="PW.5.1",
         category=Category.CODE_VULNERABILITIES,
-        severity=severity, confidence=Confidence.HIGH,
-        file_path=Path("a.py"), line_start=5, line_end=5,
+        severity=severity,
+        confidence=Confidence.HIGH,
+        file_path=Path("a.py"),
+        line_start=5,
+        line_end=5,
         code_snippet="select * from x",
         message="possible SQLi",
         cwe_top25=True,

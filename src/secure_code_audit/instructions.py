@@ -5,19 +5,23 @@ emit a standing-instructions file that tells the agent how to behave when
 asked to fix security findings in this repo. Additive to repo-specific rules
 in AGENTS.md / CLAUDE.md.
 """
+
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 # Map target → (filename, friendly_label)
 _TARGETS: dict[str, tuple[str, str]] = {
-    "codex":         ("AGENTS.md",                                "Codex (AGENTS.md)"),
-    "claude-code":   ("CLAUDE.md",                                "Claude Code (CLAUDE.md)"),
-    "cursor":        (".cursor/rules/security.mdc",               "Cursor (.cursor/rules/security.mdc)"),
-    "copilot":       (".github/copilot-instructions.md",          "GitHub Copilot (.github/copilot-instructions.md)"),
-    "windsurf":      (".windsurf/rules/security.md",              "Windsurf (.windsurf/rules/security.md)"),
-    "generic":       ("AI-SECURITY-STANDARDS.md",                 "Generic agent (AI-SECURITY-STANDARDS.md)"),
+    "codex": ("AGENTS.md", "Codex (AGENTS.md)"),
+    "claude-code": ("CLAUDE.md", "Claude Code (CLAUDE.md)"),
+    "cursor": (".cursor/rules/security.mdc", "Cursor (.cursor/rules/security.mdc)"),
+    "copilot": (
+        ".github/copilot-instructions.md",
+        "GitHub Copilot (.github/copilot-instructions.md)",
+    ),
+    "windsurf": (".windsurf/rules/security.md", "Windsurf (.windsurf/rules/security.md)"),
+    "generic": ("AI-SECURITY-STANDARDS.md", "Generic agent (AI-SECURITY-STANDARDS.md)"),
 }
 
 
@@ -99,9 +103,7 @@ def render() -> str:
 
 def write_for_target(target: str, output_dir: Path) -> Path:
     if target not in _TARGETS:
-        raise ValueError(
-            f"Unknown target {target!r}. Known: {', '.join(sorted(_TARGETS))}."
-        )
+        raise ValueError(f"Unknown target {target!r}. Known: {', '.join(sorted(_TARGETS))}.")
     rel_path, _ = _TARGETS[target]
     out = output_dir / rel_path
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -111,22 +113,19 @@ def write_for_target(target: str, output_dir: Path) -> Path:
     # operator's existing content is preserved.
     if out.exists():
         existing = out.read_text(encoding="utf-8")
-        marker   = "<!-- secure-code-agent:standards -->"
+        marker = "<!-- secure-code-agent:standards -->"
         if marker in existing:
             # Already initialized; refresh between markers.
-            before, _, rest    = existing.partition(marker)
-            _, _, after_close  = rest.partition("<!-- /secure-code-agent:standards -->")
+            before, _, rest = existing.partition(marker)
+            _, _, after_close = rest.partition("<!-- /secure-code-agent:standards -->")
             new = f"{before}{marker}\n{body}\n<!-- /secure-code-agent:standards -->{after_close}"
         else:
             new = (
-                f"{existing.rstrip()}\n\n"
-                f"{marker}\n{body}\n<!-- /secure-code-agent:standards -->\n"
+                f"{existing.rstrip()}\n\n{marker}\n{body}\n<!-- /secure-code-agent:standards -->\n"
             )
     else:
         new = (
-            "<!-- secure-code-agent:standards -->\n"
-            f"{body}\n"
-            "<!-- /secure-code-agent:standards -->\n"
+            f"<!-- secure-code-agent:standards -->\n{body}\n<!-- /secure-code-agent:standards -->\n"
         )
 
     out.write_text(new, encoding="utf-8")

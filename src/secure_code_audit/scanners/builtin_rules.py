@@ -9,6 +9,7 @@ Semgrep. Each rule:
   · is covered by at least one true-positive and one false-positive fixture
     in tests/fixtures/builtin_rules/
 """
+
 from __future__ import annotations
 
 import re
@@ -22,9 +23,9 @@ from secure_code_audit.scanners.base import Scanner
 
 
 class _Rule(NamedTuple):
-    rule_id:     str
-    pattern:     re.Pattern[str]
-    file_globs:  tuple[str, ...]   # restrict to certain languages (e.g. ".py")
+    rule_id: str
+    pattern: re.Pattern[str]
+    file_globs: tuple[str, ...]  # restrict to certain languages (e.g. ".py")
     description: str
 
 
@@ -126,14 +127,15 @@ _RULES: tuple[_Rule, ...] = (
 
 
 class BuiltinRulesScanner(Scanner):
-    name   = "builtin_rules"
-    binary = ""   # in-process scanner
+    name = "builtin_rules"
+    binary = ""  # in-process scanner
 
     def is_available(self) -> bool:
-        return True   # no external binary needed
+        return True  # no external binary needed
 
     def binary_version(self) -> str | None:
         from secure_code_audit import __version__
+
         return f"builtin/{__version__}"
 
     def run(self, target: Path, config: Config) -> list[Finding]:
@@ -148,18 +150,20 @@ class BuiltinRulesScanner(Scanner):
                     continue
                 for m in rule.pattern.finditer(text):
                     line_start = text.count("\n", 0, m.start()) + 1
-                    line_end   = text.count("\n", 0, m.end()) + 1
-                    snippet    = m.group(0)[:200]
-                    findings.append(self._make_finding(
-                        rule_id=rule.rule_id,
-                        message=rule.description,
-                        file_path=path,
-                        line_start=line_start,
-                        line_end=line_end if line_end != line_start else None,
-                        code_snippet=snippet,
-                        severity=Severity.HIGH,
-                        confidence=Confidence.MEDIUM,
-                    ))
+                    line_end = text.count("\n", 0, m.end()) + 1
+                    snippet = m.group(0)[:200]
+                    findings.append(
+                        self._make_finding(
+                            rule_id=rule.rule_id,
+                            message=rule.description,
+                            file_path=path,
+                            line_start=line_start,
+                            line_end=line_end if line_end != line_start else None,
+                            code_snippet=snippet,
+                            severity=Severity.HIGH,
+                            confidence=Confidence.MEDIUM,
+                        )
+                    )
         return findings
 
     def _applies_to(self, path: Path, rule: _Rule) -> bool:

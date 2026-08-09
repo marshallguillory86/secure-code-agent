@@ -15,15 +15,24 @@
       "docs/"
     ]
   },
-  "asvs_level": 2,
   "scanners": {
     "bandit":          { "enabled": true,  "timeout_seconds": 600 },
     "semgrep":         { "enabled": false },
-    "pip_audit":       { "enabled": true,  "timeout_seconds": 300 },
+    "pip_audit":       {
+      "enabled": true,
+      "timeout_seconds": 300,
+      "mode": "requirements",
+      "inputs": ["requirements-audit.txt"],
+      "extra_args": ["--no-deps"]
+    },
     "npm_audit":       { "enabled": false },
-    "gitleaks":        { "enabled": true,  "timeout_seconds": 300 },
+    "gitleaks":        { "enabled": false },
+    "checkov":         { "enabled": false },
+    "hadolint":        { "enabled": false },
+    "osv_scanner":     { "enabled": false },
+    "scorecard":       { "enabled": false },
+    "trivy":           { "enabled": false },
     "trufflehog":      { "enabled": false },
-    "eslint_security": { "enabled": false },
     "builtin_rules":   { "enabled": true }
   },
   "gates": {
@@ -31,6 +40,7 @@
     "fail_on_category": ["secrets"],
     "fail_on_new":      true,
     "min_score":        4.0,
+    "require_scanners": ["builtin_rules", "bandit", "pip_audit"],
     "max_unsuppressed": {
       "critical": 0,
       "high":     0

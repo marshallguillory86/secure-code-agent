@@ -1,4 +1,5 @@
 """Suppressions loader + apply + expired-rule findings."""
+
 import datetime
 from pathlib import Path
 
@@ -8,11 +9,20 @@ from secure_code_audit.suppressions import apply, expired_findings, load
 
 def _f(rule_id="B608", file_path=Path("a.py")):
     return Finding(
-        rule_id=rule_id, scanner="bandit", fingerprint="x",
-        canonical_cwe="CWE-89", owasp_top10="A03", asvs_section=None, nist_ssdf=None,
+        rule_id=rule_id,
+        scanner="bandit",
+        fingerprint="x",
+        canonical_cwe="CWE-89",
+        owasp_top10="A03",
+        asvs_section=None,
+        nist_ssdf=None,
         category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH, confidence=Confidence.HIGH,
-        file_path=file_path, line_start=1, line_end=None, code_snippet=None,
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        file_path=file_path,
+        line_start=1,
+        line_end=None,
+        code_snippet=None,
         message="m",
     )
 
