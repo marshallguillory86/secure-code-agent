@@ -4,7 +4,7 @@
 > Anchored to NIST SSDF · OWASP ASVS · OWASP Top 10 · MITRE CWE Top 25 · OpenSSF Scorecard · SARIF 2.1.0.
 
 ```bash
-pip install secure-code-agent
+pip install 'secure-code-agent[required-scanners]'
 
 secure-code-agent --fail-on-gate \
     --output secure-code-report.md \
@@ -81,18 +81,21 @@ Hand the prompt to Claude Code, Codex, Cursor, Copilot, or any agent. The agent 
 
 ## Standards anchored, not invented
 
-Every finding maps to five public standards. Operators see *which standard is failing*, not just *which scanner shouted*.
+Known rules map to fields from five public standards. Unmapped and scanner-control
+findings retain null standards fields rather than receiving invented mappings.
 
 | Source                                       | What we use it for                                       |
 |----------------------------------------------|----------------------------------------------------------|
 | [NIST SSDF SP 800-218](https://csrc.nist.gov/pubs/sp/800/218/final) | Process practice id (e.g. `PW.5.1`) |
 | [OWASP Top 10 (2021)](https://owasp.org/Top10/2021/) | Risk bucket (e.g. `A03:2021-Injection`) |
 | [OWASP ASVS 5.0](https://github.com/OWASP/ASVS) | Verification requirement (e.g. `V5.3`) |
-| [MITRE CWE Top 25 (2025)](https://cwe.mitre.org/top25/) | Canonical weakness id — the dedupe key |
+| [MITRE CWE Top 25 (2025)](https://cwe.mitre.org/top25/) | Canonical weakness id used in stable fingerprints |
 | [OpenSSF Scorecard](https://openssf.org/projects/scorecard/) | Repo + supply-chain hygiene |
 | [SARIF 2.1.0](https://www.oasis-open.org/standard/sarif-v2-1-0/) | Output format (and external scanner ingest) |
 
-When Semgrep, CodeQL, and Bandit fire on the same SQL-injection sink with three different rule ids, they all map to `CWE-89` and the scorer counts **one** underlying weakness. Not three.
+When scanners map a finding to `CWE-89`, the canonical CWE participates in its
+stable fingerprint and baseline identity. Cross-scanner findings are not yet
+collapsed before scoring; reports preserve the original scanner evidence.
 
 ## Architecture (orchestrator, not engine)
 
@@ -169,7 +172,43 @@ Scoring math + worked examples in [`docs/scoring.md`](docs/scoring.md).
 
 Any tripped gate is a nonzero exit. Compose freely.
 
-## Suppressions you can't game
+`require_scanners` is a coverage gate, not a vulnerability gate. A required
+scanner must resolve and complete successfully. Missing executables, timeouts,
+invalid output, unsupported inputs, or excluding the scanner with CLI filters
+fail coverage. Optional scanner failures produce `PARTIAL` coverage without
+turning a clean finding set into a false comprehensive result. Markdown and
+JSON reports record each scanner's outcome, resolved command, and version.
+
+External scanners are not bundled. Resolution order is an explicit
+`scanners.<name>.command`, the active `PATH`, then `python -m <module>` for
+supported Python scanners. Relative executable paths resolve from the scan
+target and are executed with `shell=False`.
+
+```json
+{
+  "scanners": {
+    "bandit": {
+      "enabled": true,
+      "command": [".audit-tools/bin/python", "-m", "bandit"]
+    },
+    "pip_audit": {
+      "enabled": true,
+      "command": [".audit-tools/bin/python", "-m", "pip_audit"],
+      "mode": "project",
+      "inputs": ["engine/pyproject.toml"]
+    }
+  }
+}
+```
+
+The tool never downloads a scanner during an audit. Install and pin scanner
+versions in the audit environment or CI image.
+
+This repository's own CI audits `requirements-audit.txt`, which pins the
+minimum supported runtime dependency version. Project mode remains available
+for repositories whose `pyproject.toml` is their authoritative audit input.
+
+## Time-bounded suppressions
 
 `.scignore.yaml` — every suppression requires a `reason` AND an `expires` date (max 365 days). Past-expiry suppressions become CRITICAL findings on their own. You can't ship `reason: "we'll fix it later"` forever.
 
@@ -194,15 +233,19 @@ Wildcard rule (`rule_id: "*"`) requires a `file` or `paths` scope — you cannot
 - Findings present in baseline → **acknowledged**; don't trip `fail_on_new`.
 - Findings missing from baseline → **new**; trip the gate.
 
-Bumping a CRITICAL or HIGH finding into the baseline requires `--bump-baseline --i-acknowledge-risk`. The bump records the operator's git `user.email` per fingerprint so PR review can see who acknowledged what.
+`--bump-baseline` rewrites the baseline from the current findings. The file is
+plain JSON and must be reviewed like any other security-policy change. This
+release does not implement an interactive acknowledgment. Baseline entries
+record the best-effort local Git email, while repository review policy remains
+the approval boundary.
 
 This lets legacy repos adopt the gate without a 200-finding day-one cleanup.
 
 ## Quickstart
 
 ```bash
-# Install
-pip install secure-code-agent
+# Install the orchestrator with its pinned default Bandit + pip-audit toolchain
+pip install 'secure-code-agent[required-scanners]'
 
 # Initialize agent standards files for your AI coding tools
 secure-code-agent --init-agent-standards \
@@ -217,13 +260,17 @@ secure-code-agent --config secure-code-agent.json \
     --comment-output secure-code-pr-comment.md \
     --prompt-output secure-code-remediation-prompt.md
 
-# Audit only changed files since main
-secure-code-agent --changed-only main...HEAD --fail-on-new
-
 # Ingest external scanner SARIF (CodeQL, Snyk, Trivy, etc.)
 secure-code-agent --sarif-import codeql-results.sarif \
                    --sarif-import snyk-results.sarif
 ```
+
+`--changed-only` is reserved but not yet safely implemented. Passing it fails
+with exit code 2 so a caller cannot accidentally treat an unscoped audit as a
+changed-file audit.
+
+The current orchestrator accepts one repository root per invocation. Multiple
+positional roots fail with exit code 2 instead of silently ignoring coverage.
 
 ## Invokable skill / slash command
 
@@ -238,14 +285,19 @@ For agents that support invokable skills, this repo ships a portable skill under
 ## GitHub Action
 
 ```yaml
-- uses: marshallguillory86/secure-code-agent@v0.1.0
+- uses: marshallguillory86/secure-code-agent@v0.3.0
   with:
     config: secure-code-agent.json
-    changed-only: main...HEAD
     fail-on-gate: true
 ```
 
-The action uploads SARIF to GitHub Code Scanning by default. See [`action.yml`](action.yml) and [`examples/github-actions/`](examples/github-actions/) for full workflows.
+The action installs the exact source bundled with the referenced action plus
+the pinned `required-scanners` extra (Bandit and pip-audit),
+emits Markdown, JSON, SARIF, PR-comment, and remediation artifacts, and uploads
+SARIF by default. The calling workflow must grant `security-events: write` for
+SARIF upload. Pin production usage to a full commit SHA; the version tag above
+is shown for readability. See [`action.yml`](action.yml) and
+[`examples/github-actions/`](examples/github-actions/) for full workflows.
 
 ## What this is NOT
 
@@ -260,7 +312,7 @@ The action uploads SARIF to GitHub Code Scanning by default. See [`action.yml`](
 1. **Deterministic first, AI optional.** The audit never calls an LLM by default. The remediation prompt is a generated artifact you choose to hand to an agent.
 2. **Bounded scope.** The remediation prompt explicitly forbids touching crypto, auth, validation, logging, and tests.
 3. **Standards-anchored.** Five public standards (NIST / OWASP-x3 / CWE) — no invented taxonomy.
-4. **CWE-deduped scoring.** One underlying weakness = one finding, regardless of how many scanners found it.
+4. **Stable finding identity.** CWE, normalized path, and normalized evidence form the baseline fingerprint. Cross-scanner score deduplication remains future work.
 5. **No vendor lock-in.** Markdown, JSON, SARIF, plain files. Pipe anywhere.
 6. **CI-first, local-first.** Same binary in pre-commit, local CI, GitHub Actions, GitLab, Buildkite.
 
@@ -278,7 +330,8 @@ Full design philosophy in [`docs/design.md`](docs/design.md).
 ## Versioning
 
 - **Semver.** v0.x is pre-1.0 — the config schema may evolve. v1.0 locks it.
-- **SARIF 2.1.0** output is pinned and validated against the OASIS schema in CI.
+- **SARIF 2.1.0-shaped** output is structurally unit-tested and round-tripped;
+  full OASIS schema validation is not yet part of CI.
 
 ## Get in touch
 

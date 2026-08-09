@@ -10,7 +10,7 @@ All Tier-1 scanners are wired and emit canonical findings.
 |-----------------------|------------------------|------------------------------------------------------------------|-------------|---------------------------------------------------|
 | **Bandit**            | `code_vulnerabilities` | `bandit -r <path> -f json -ll -ii`                               | JSON        | CWE per rule, OWASP A03/A07/A02                   |
 | **Semgrep**           | `code_vulnerabilities` | `semgrep --config=auto --sarif --output=...`                     | SARIF       | CWE per rule (multi-language), OWASP all          |
-| **pip-audit**         | `dependencies`         | `pip-audit -r requirements.txt --format=json`                    | JSON        | CWE-1104, OWASP A06                               |
+| **pip-audit**         | `dependencies`         | requirements, local project, lock, or configured environment mode | JSON      | CWE-1104, OWASP A06                               |
 | **npm audit**         | `dependencies`         | `npm audit --json`                                               | JSON        | CWE-1104, OWASP A06                               |
 | **Gitleaks**          | `secrets`              | `gitleaks detect --no-banner --report-format=json --report-path=`| JSON        | CWE-798, OWASP A07                                |
 | **TruffleHog**        | `secrets`              | `trufflehog filesystem --json --no-update <path>`                | JSON Lines  | CWE-798, OWASP A07                                |
@@ -27,7 +27,7 @@ All Tier-2 scanners are wired and emit canonical findings.
 | **Trivy**              | `dependencies`, `config_iac`, `secrets`   | `trivy fs --format sarif --scanners vuln,secret,misconfig <target>`| SARIF      | CWE-1104 (vuln), CWE-1188 (misconfig), CWE-798 (secret) |
 | **Checkov**            | `config_iac`                              | `checkov -d <target> --output sarif --soft-fail`                   | SARIF      | CWE-1188, OWASP A05                                     |
 | **Hadolint**           | `config_iac`                              | `hadolint --no-fail --format json <Dockerfile>`                    | JSON       | CWE-250 (USER root), CWE-78 (shell-form CMD)            |
-| **OSV-Scanner**        | `dependencies`                            | `osv-scanner --format=json --recursive <target>`                   | JSON       | CWE-1104, OWASP A06                                     |
+| **OSV-Scanner**        | `dependencies`                            | `osv-scanner scan source --format=json --recursive <target>`       | JSON       | CWE-1104, OWASP A06                                     |
 | **TruffleHog**         | `secrets`                                 | `trufflehog filesystem --json --only-verified <target>`            | JSON Lines | CWE-798, OWASP A07                                      |
 | **OpenSSF Scorecard**  | `supply_chain`, `policy_docs`             | `scorecard --repo=<github-url> --format=json --show-details`       | JSON       | CWE-732, CWE-345, CWE-829, CWE-272 (per-check)          |
 
@@ -39,7 +39,7 @@ All Tier-2 scanners are wired and emit canonical findings.
 
 **Hadolint** — twelve security-relevant rule ids carry specific severities (`DL3002` USER root → HIGH; `DL3025` shell-form CMD → MEDIUM; `SC2086` unquoted variable → MEDIUM; etc.). Style-only rules (`DL3007` latest tag, `DL3008` unpinned apt) → LOW.
 
-**OSV-Scanner** — overlaps `pip_audit` + `npm_audit` by design. Dedupe is handled by the canonical fingerprint (`canonical_cwe` + `file_path` + `code_snippet`), so running all three together does not double-count.
+**OSV-Scanner** — overlaps `pip_audit` + `npm_audit` by design. Findings have stable baseline fingerprints, but the current scorer does not deduplicate across scanners; enabling overlapping SCA adapters can double-count an advisory.
 
 **TruffleHog** — defaults to `--only-verified` (high-precision matches confirmed live by upstream services). Verified secrets are CRITICAL; if operators opt into unverified findings via `scanners.trufflehog.extra_args: ["--no-only-verified"]`, those land as HIGH.
 
@@ -73,25 +73,24 @@ class Scanner(Protocol):
     binary:   str         # the command we exec ("bandit", "semgrep", ...)
     version_flag: str     # how to ask the binary its version ("--version")
 
-    def is_available(self) -> bool:
-        """Probe for the binary on PATH. Cached after first call."""
+    def configure(self, target: Path, config: "Config") -> None:
+        """Resolve an explicit command, PATH executable, or Python module."""
 
     def run(self, target: Path, config: "Config") -> list[Finding]:
         """Execute the scanner against target, parse output, return findings.
         MUST NOT raise. Errors → return [finding(severity=INFO,
         rule_id='scanner_error', message=<reason>)]."""
 
-    def fingerprint(self, finding: Finding) -> str:
-        """Compute a stable fingerprint for baseline + dedupe. Default
-        impl in base.Scanner; scanners can override if they have a
-        better signal."""
+    @property
+    def command(self) -> tuple[str, ...]:
+        """The resolved external command and any configured arguments."""
 ```
 
 ## Adding a new scanner
 
 1. Subclass `scanners.base.Scanner` in `scanners/<name>_scanner.py`.
 2. Implement `run()` — invoke binary, parse output, yield `Finding` objects.
-3. Add rule-id → standards mappings in `src/secure_code_audit/data/rule_map.json`.
+3. Add rule-id → standards mappings in `src/secure_code_audit/standards.py`.
 4. Register in `scanners.registry.SCANNERS`.
 5. Add unit test fixtures in `tests/fixtures/<name>/` with at least:
    - one HIGH finding
@@ -103,7 +102,7 @@ class Scanner(Protocol):
 
 ### Bandit
 - `--severity-level low --confidence-level low` and we filter ourselves (Bandit's own filtering is too coarse for our scoring model).
-- Bandit's `B101 (assert_used)` is noisy in tests; we ship a default suppression for `tests/` paths.
+- Bandit's `B101 (assert_used)` is noisy in tests; the repository example excludes `tests/`. Consumers should make that choice explicitly in their own config.
 
 ### Semgrep
 - Use `--config=auto` for the curated registry pack, or `--config=<file>` for repo-specific rules.
@@ -112,7 +111,7 @@ class Scanner(Protocol):
 ### Gitleaks
 - Default config is `gitleaks.toml` — we ship a curated one in `secure_code_audit/data/gitleaks.toml`.
 - Run against history: `gitleaks detect --redact` to avoid leaking secrets in the report itself.
-- We render the **redacted** match in the report, not the raw secret. The fingerprint hashes the raw match so dedupe still works.
+- We render the **redacted** match in the report, not the raw secret. The fingerprint is derived from the redacted evidence and location; the adapter never receives the raw secret from Gitleaks JSON.
 
 ### TruffleHog
 - High-noise; we filter to `verified: true` matches by default (real, currently-valid secrets).
@@ -123,12 +122,14 @@ class Scanner(Protocol):
 - Three severity levels in npm output (`info / low / moderate / high / critical`) — we map `moderate → medium`.
 
 ### pip-audit
-- Reads `requirements.txt` by default; supports `pyproject.toml` via `--strict`.
-- We pass `--ignore-vuln <id>` flags from `.scignore.yaml` for accepted-risk dependencies.
+- `auto` discovers `requirements*.txt` and `pyproject.toml` recursively while honoring configured exclusions. A requirements file wins over a `pyproject.toml` in the same directory to avoid duplicate resolution.
+- `requirements` invokes `pip-audit -r <file>`; `project` invokes `pip-audit <project>`; `locked` invokes `pip-audit --locked <project>`; `environment` audits the environment belonging to the configured command.
+- Use `inputs` for explicit manifests and `command` to bind the audit to a specific interpreter or tool environment.
+- Dependency resolution can access package indexes and should only be run against trusted project metadata. Suppressions are applied to normalized findings after scanner execution; they are not forwarded as pip-audit arguments.
 
 ### Built-in regex rules
 
-Located in `src/secure_code_audit/rules/`. Each rule:
+Located in `src/secure_code_audit/scanners/builtin_rules.py`. Each rule:
 - Targets a single CWE.
 - Has a confidence rating documented inline.
 - Is unit-tested with at least one true-positive and one false-positive fixture.
@@ -152,7 +153,8 @@ Suppression by file/path/rule via `.scignore.yaml` per [design.md §10](design.m
 
 ## SARIF import
 
-`--sarif-import path/to/file.sarif` ingests external scanner output. We've validated against:
+`--sarif-import path/to/file.sarif` ingests external scanner output. The parser
+targets common output from:
 
 - **CodeQL** (GitHub's hosted analysis)
 - **Semgrep Cloud** (`semgrep ci --sarif`)

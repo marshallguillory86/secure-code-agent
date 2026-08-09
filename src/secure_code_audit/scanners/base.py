@@ -1,12 +1,14 @@
 """Scanner protocol + subprocess helpers."""
+
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
+import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
 
 from secure_code_audit.config import Config, scanner_cfg
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
@@ -20,23 +22,60 @@ class Scanner(ABC):
     override `run()` entirely for built-in / in-process scanners).
     """
 
-    name:         str   # canonical id used in config + reports
-    binary:       str   # name of the executable on PATH
-    version_flag: str   = "--version"
+    name: str  # canonical id used in config + reports
+    binary: str  # name of the executable on PATH
+    version_flag: str = "--version"
+    python_module: str | None = None
     default_category: Category = Category.CODE_VULNERABILITIES
 
     # ----- availability ----------------------------------------------------
 
-    def is_available(self) -> bool:
-        return shutil.which(self.binary) is not None
+    def configure(self, target: Path, config: Config) -> None:
+        """Resolve the command once so probing and execution use the same tool."""
+        self._resolved_command = self._resolve_command(target, self.cfg(config))
 
-    def binary_version(self) -> Optional[str]:
+    @property
+    def command(self) -> tuple[str, ...]:
+        resolved = getattr(self, "_resolved_command", None)
+        if resolved is not None:
+            return resolved
+        found = shutil.which(self.binary) if self.binary else None
+        return (found,) if found else ()
+
+    def _resolve_command(self, target: Path, config: ScannerConfig) -> tuple[str, ...]:
+        if config.command:
+            executable, *arguments = config.command
+            candidate = Path(executable).expanduser()
+            if candidate.is_absolute() or "/" in executable or "\\" in executable:
+                if not candidate.is_absolute():
+                    candidate = target / candidate
+                candidate = candidate.resolve()
+                if candidate.is_file() and os.access(candidate, os.X_OK):
+                    return (str(candidate), *arguments)
+                return ()
+            found = shutil.which(executable)
+            return (found, *arguments) if found else ()
+
+        found = shutil.which(self.binary) if self.binary else None
+        if found:
+            return (found,)
+        if self.python_module and importlib.util.find_spec(self.python_module) is not None:
+            return (sys.executable, "-m", self.python_module)
+        return ()
+
+    def is_available(self) -> bool:
+        return bool(self.command)
+
+    def binary_version(self) -> str | None:
         if not self.is_available():
             return None
         try:
             r = subprocess.run(
-                [self.binary, self.version_flag],
-                check=False, capture_output=True, text=True, timeout=10,
+                [*self.command, self.version_flag],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return None
@@ -59,7 +98,7 @@ class Scanner(ABC):
     def _exec(
         self,
         args: list[str],
-        cwd:  Path,
+        cwd: Path,
         timeout_seconds: int,
         allowed_exits: tuple[int, ...] = (0,),
     ) -> subprocess.CompletedProcess:
@@ -102,17 +141,17 @@ class Scanner(ABC):
     def _make_finding(
         self,
         *,
-        rule_id:    str,
-        message:    str,
-        file_path:  Path,
+        rule_id: str,
+        message: str,
+        file_path: Path,
         line_start: int,
-        line_end:   Optional[int],
-        code_snippet: Optional[str],
-        severity:   Optional[Severity]   = None,
-        confidence: Optional[Confidence] = None,
-        category:   Optional[Category]   = None,
-        cwe_override: Optional[str]      = None,
-        scanner_name: Optional[str]      = None,
+        line_end: int | None,
+        code_snippet: str | None,
+        severity: Severity | None = None,
+        confidence: Confidence | None = None,
+        category: Category | None = None,
+        cwe_override: str | None = None,
+        scanner_name: str | None = None,
     ) -> Finding:
         """Construct a canonical Finding from scanner-emitted bits, layering
         in the standards mapping. Scanner-emitted severity wins over the
@@ -120,18 +159,18 @@ class Scanner(ABC):
         per the map unless explicitly overridden."""
 
         scanner_label = scanner_name or self.name
-        entry: Optional[StandardsEntry] = lookup(scanner_label, rule_id)
+        entry: StandardsEntry | None = lookup(scanner_label, rule_id)
 
         # Mapping fallback to wildcard (handled inside lookup).
         canonical_cwe = cwe_override or (entry.canonical_cwe if entry else None)
-        owasp_top10   = entry.owasp_top10 if entry else None
-        asvs_section  = entry.asvs_section if entry else None
-        nist_ssdf     = entry.nist_ssdf    if entry else None
-        chosen_cat    = category or (entry.category if entry else self.default_category)
-        chosen_sev    = severity or (entry.severity if entry else Severity.MEDIUM)
-        chosen_conf   = confidence or (entry.confidence if entry else Confidence.MEDIUM)
-        short_desc    = entry.short_desc if entry else None
-        fix_hint      = entry.fix_hint  if entry else None
+        owasp_top10 = entry.owasp_top10 if entry else None
+        asvs_section = entry.asvs_section if entry else None
+        nist_ssdf = entry.nist_ssdf if entry else None
+        chosen_cat = category or (entry.category if entry else self.default_category)
+        chosen_sev = severity or (entry.severity if entry else Severity.MEDIUM)
+        chosen_conf = confidence or (entry.confidence if entry else Confidence.MEDIUM)
+        short_desc = entry.short_desc if entry else None
+        fix_hint = entry.fix_hint if entry else None
 
         fingerprint = Finding.make_fingerprint(
             canonical_cwe=canonical_cwe,
@@ -162,7 +201,7 @@ class Scanner(ABC):
         )
 
     def _unavailable_finding(self, target: Path) -> Finding:
-        """Informational finding emitted when the binary isn't on PATH."""
+        """Informational finding emitted when no safe command can be resolved."""
         return Finding(
             rule_id=f"{self.name}.tool_unavailable",
             scanner=self.name,
@@ -178,14 +217,20 @@ class Scanner(ABC):
             line_start=0,
             line_end=None,
             code_snippet=None,
-            message=f"{self.binary} not on PATH; {self.name} scan skipped.",
+            message=(
+                f"Could not resolve {self.name} from its configured command, PATH, "
+                "or supported Python module fallback; scan skipped."
+            ),
             short_desc=None,
-            fix_hint=f"Install {self.binary} to enable {self.name} coverage.",
+            fix_hint=(
+                f"Install {self.binary} or configure scanners.{self.name}.command "
+                "to enable coverage."
+            ),
         )
 
     # ----- shared utility -------------------------------------------------
 
-    def cfg(self, config: Config) -> "ScannerConfig":
+    def cfg(self, config: Config) -> ScannerConfig:
         """Convenience accessor."""
         return scanner_cfg(config, self.name)
 

@@ -11,11 +11,11 @@ inputs:
     required:    false
     default:     'secure-code-agent.json'
   paths:
-    description: 'Paths to scan (default: current directory).'
+    description: 'One repository root to scan (default: current directory).'
     required:    false
     default:     '.'
   changed-only:
-    description: 'Audit only files changed since REF (e.g. main...HEAD).'
+    description: 'Reserved for a future release. Non-empty values fail rather than silently scanning the wrong scope.'
     required:    false
     default:     ''
   fail-on-gate:
@@ -49,8 +49,7 @@ runs:
     - name: Install secure-code-agent
       shell: bash
       run: |
-        python3 -m pip install --upgrade pip
-        python3 -m pip install secure-code-agent
+        python3 -m pip install "${GITHUB_ACTION_PATH}[required-scanners]"
 
     - name: Run audit
       id: run
@@ -68,6 +67,7 @@ runs:
         fi
         ARGS+=(--sarif-output "${{ inputs.sarif-output }}")
         ARGS+=(--output secure-code-report.md)
+        ARGS+=(--json-output secure-code-report.json)
         ARGS+=(--prompt-output secure-code-remediation-prompt.md)
         ARGS+=(--comment-output secure-code-pr-comment.md)
         ARGS+=("${{ inputs.paths }}")
@@ -87,14 +87,14 @@ runs:
 
     - name: Upload SARIF
       if: ${{ always() && inputs.upload-sarif == 'true' && hashFiles(inputs.sarif-output) != '' }}
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
       with:
         sarif_file: ${{ inputs.sarif-output }}
         category:   secure-code-agent
 
     - name: Upload report artifact
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: secure-code-agent-report
         path: |
