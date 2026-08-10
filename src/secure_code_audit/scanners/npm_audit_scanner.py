@@ -28,6 +28,7 @@ class NpmAuditScanner(Scanner):
     name = "npm_audit"
     binary = "npm"
     default_category = Category.DEPENDENCIES
+    install_hint = "Install Node.js from nodejs.org so npm is on PATH"
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():

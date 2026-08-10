@@ -25,6 +25,7 @@ class CheckovScanner(Scanner):
     binary = "checkov"
     python_module = "checkov"
     default_category = Category.CONFIG_IAC
+    install_hint = "pip install 'secure-code-agent[python-scanners]'"
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():

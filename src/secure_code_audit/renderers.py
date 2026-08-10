@@ -32,6 +32,12 @@ def to_json(
         "score": {
             "overall": score.overall,
             "letter": score.letter,
+            "coverage_complete": coverage is None or coverage.status.value == "complete",
+            "qualification": (
+                None
+                if coverage is None or coverage.status.value == "complete"
+                else "finding score; scanner coverage incomplete"
+            ),
             "loc_scanned": score.loc_scanned,
             "worst_category": score.worst_category.value if score.worst_category else None,
             "per_category": {c.value: round(v, 2) for c, v in score.per_category.items()},
@@ -89,6 +95,7 @@ def _coverage_to_dict(coverage: CoverageReport | None) -> dict | None:
                 "version": execution.version,
                 "finding_count": execution.finding_count,
                 "reason": execution.reason,
+                "scope": execution.scope,
             }
             for execution in coverage.executions
         ],
@@ -142,7 +149,7 @@ def _markdown(
         f"agent v{__version__}\n"
     )
 
-    lines.append(_summary_section(score, gate))
+    lines.append(_summary_section(score, gate, coverage))
     lines.append(_categories_table(score))
     lines.append(_severity_table(score))
     lines.append(_scanners_section(scanners_run, scanners_unavailable, coverage))
@@ -150,10 +157,20 @@ def _markdown(
     return "\n".join(lines)
 
 
-def _summary_section(score: ScoreReport, gate: GateResult) -> str:
+def _summary_section(
+    score: ScoreReport, gate: GateResult, coverage: CoverageReport | None = None
+) -> str:
     status = "✅ PASS" if gate.passed else "❌ FAIL"
     out = ["## Summary", ""]
-    out.append(f"- **Score:** {score.overall:.2f} / 5.00 — **{score.letter}**")
+    if coverage is not None:
+        out.append(f"- **Scanner coverage:** {coverage.status.value.upper()}")
+    if coverage is not None and coverage.status.value != "complete":
+        out.append(
+            f"- **Finding score (coverage incomplete):** {score.overall:.2f} / 5.00 — "
+            f"**{score.letter}**"
+        )
+    else:
+        out.append(f"- **Score:** {score.overall:.2f} / 5.00 — **{score.letter}**")
     out.append(f"- **Gate:** {status}")
     if not gate.passed:
         out.append("- **Tripped gates:**")
@@ -202,12 +219,18 @@ def _scanners_section(
     if scanners_unavailable:
         out.append(f"- Skipped (binary not on PATH): {', '.join(scanners_unavailable)}")
     if coverage is not None and coverage.executions:
-        out.extend(["", "| Scanner | Outcome | Version | Command |", "|---|---|---|---|"])
+        out.extend(
+            [
+                "",
+                "| Scanner | Outcome | Version | Command | Scope |",
+                "|---|---|---|---|---|",
+            ]
+        )
         for execution in coverage.executions:
             command = " ".join(execution.command) or "—"
             out.append(
                 f"| `{execution.name}` | `{execution.outcome.value}` | "
-                f"{execution.version or '—'} | `{command}` |"
+                f"{execution.version or '—'} | `{command}` | {execution.scope or '—'} |"
             )
     out.append("")
     return "\n".join(out)
@@ -321,8 +344,11 @@ def _pr_comment(
     n_high = score.per_severity_count.get(Severity.HIGH, 0)
     n_new = sum(1 for f in findings if f.is_new and not f.suppressed)
 
+    incomplete = coverage is not None and coverage.status.value != "complete"
+    score_label = "finding score; coverage incomplete" if incomplete else "score"
     out = [
-        f"### secure-code-agent {status} — score **{score.letter}** ({score.overall:.2f}/5.00)",
+        f"### secure-code-agent {status} — {score_label} **{score.letter}** "
+        f"({score.overall:.2f}/5.00)",
         "",
         f"- Critical: **{n_crit}** · High: **{n_high}** · New since baseline: **{n_new}**",
         f"- Worst category: `{score.worst_category.value if score.worst_category else '_none_'}`",

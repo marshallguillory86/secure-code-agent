@@ -178,11 +178,35 @@ invalid output, unsupported inputs, or excluding the scanner with CLI filters
 fail coverage. Optional scanner failures produce `PARTIAL` coverage without
 turning a clean finding set into a false comprehensive result. Markdown and
 JSON reports record each scanner's outcome, resolved command, and version.
+When `require_scanners` is present it must name at least one scanner; an empty
+list is rejected instead of silently removing the structural coverage gate.
 
-External scanners are not bundled. Resolution order is an explicit
-`scanners.<name>.command`, the active `PATH`, then `python -m <module>` for
-supported Python scanners. Relative executable paths resolve from the scan
+External scanners are not bundled, and the agent never installs one for you —
+a gate that fetches and runs binaries to satisfy its own coverage requirement
+is the supply-chain risk it is supposed to catch. Resolution order is an
+explicit `scanners.<name>.command`, the active `PATH`, then `python -m <module>`
+for supported Python scanners. Relative executable paths resolve from the scan
 target and are executed with `shell=False`.
+
+`secure-code-agent --preflight` reports which enabled scanners resolve on this
+host, with versions and the install command for anything missing, and exits
+nonzero when a required scanner is unavailable — so a missing toolchain costs a
+second instead of a full audit. Bandit and pip-audit install as
+`secure-code-agent[required-scanners]`; Semgrep and Checkov add
+`[python-scanners]`. The remaining scanners are standalone binaries that cannot
+come from PyPI: install them with your package manager, or run their pinned
+upstream CI action and feed us the SARIF, which counts as coverage:
+
+```bash
+secure-code-agent --fail-on-gate --sarif-import trivy.sarif
+```
+
+An import satisfies `require_scanners` for the tool that produced it. An
+unreadable, malformed, or run-less import fails the gate rather than ingesting
+nothing quietly, an import reporting its own `executionSuccessful: false` is
+recorded as failed, and when a scanner reports both locally and by import the
+worse outcome wins. See [`docs/scanners.md`](docs/scanners.md) for the full
+install matrix.
 
 ```json
 {
@@ -320,7 +344,9 @@ Full design philosophy in [`docs/design.md`](docs/design.md).
 
 ## Documentation
 
+- [`docs/product-intent.md`](docs/product-intent.md) — Why this exists, who it serves, what it refuses to become
 - [`docs/design.md`](docs/design.md)              — Architecture + non-goals + scanner protocol
+- [`docs/architecture.md`](docs/architecture.md)  — Audit of the system as built + remediation sequence
 - [`docs/standards.md`](docs/standards.md)        — NIST SSDF / OWASP / CWE / Scorecard / SARIF citations
 - [`docs/scoring.md`](docs/scoring.md)            — Weighting model + worked examples
 - [`docs/scanners.md`](docs/scanners.md)          — Per-scanner integrations + caveats

@@ -31,11 +31,31 @@ coverage are now reported and gated separately.
   dependency floor, isolated from unrelated CI and development tools.
 - Tag releases re-run lint, formatting, branch coverage, and required scanner
   coverage before attestation or publication.
+- `--preflight` resolves enabled scanners and reports each one's command,
+  version, and install remedy without running an audit, exiting nonzero when a
+  required scanner is unavailable or not enabled.
+- Per-scanner install guidance, surfaced in unavailable findings and preflight
+  output. The agent still installs nothing itself; acquisition stays with the
+  operator's package manager or a pinned CI action.
+- A `python-scanners` extra for Semgrep and Checkov, and `required-scanners`
+  folded into `dev` so a fresh checkout can run its own audit.
+- Imported SARIF now counts as scanner coverage and can satisfy
+  `gates.require_scanners`, which is the supported way to gate on scanners that
+  ship as standalone binaries. `--sarif-import NAME=PATH` names a run whose
+  SARIF driver name does not match its configured id.
+- An install matrix in `docs/scanners.md` and a development setup section in
+  `CONTRIBUTING.md`.
 
 ### Fixed
 
 - Scanner timeouts, unexpected exits, missing output, and parse failures no
   longer silently look like successful clean scans in the updated adapters.
+- Unreadable, malformed, or run-less `--sarif-import` input previously ingested
+  zero findings with no warning and no coverage signal; it now fails the gate.
+  An import that reports its own `executionSuccessful: false` is recorded as a
+  failed execution rather than laundered into a clean result.
+- A scanner reported both by local execution and by SARIF import now resolves
+  to its worst outcome, so a clean import cannot mask a failed local run.
 - CLI `--fail-on-new` now ignores informational control findings consistently
   with configured `gates.fail_on_new`.
 - Unknown configured or required scanner names fail configuration validation.

@@ -1,7 +1,7 @@
 # secure-code-agent — Design Spec
 
 > Status: **v0.1 — design locked, MVP in flight.**
-> Companion docs: [`standards.md`](standards.md), [`scoring.md`](scoring.md), [`scanners.md`](scanners.md), [`remediation.md`](remediation.md), [`threat-model.md`](threat-model.md).
+> Companion docs: [`product-intent.md`](product-intent.md) (why this exists), [`architecture.md`](architecture.md) (the system as built), [`standards.md`](standards.md), [`scoring.md`](scoring.md), [`scanners.md`](scanners.md), [`remediation.md`](remediation.md), [`threat-model.md`](threat-model.md).
 
 ## 1. Problem
 
@@ -241,7 +241,7 @@ The prompt also injects the standards mapping for each finding so the agent can 
 
 ```text
 secure-code-agent [path]
-  --config FILE                  Config file (default: secure-code-agent.json)
+  --config FILE                  Explicit config path (must exist); otherwise use secure-code-agent.json when present
   --output FILE                  Markdown report path
   --json-output FILE             Canonical JSON path
   --sarif-output FILE            SARIF 2.1.0 path

@@ -97,9 +97,16 @@ class Config:
 
 
 def load(path: Path | str | None = None) -> Config:
-    """Load config from path. Missing file → defaults. Malformed file → ValueError."""
-    p = Path(path) if path else DEFAULT_CONFIG_PATH
+    """Load config from path.
+
+    An omitted default config is optional. An explicitly named config is an
+    operator assertion and must exist so a typo cannot silently disable gates.
+    """
+    explicit = path is not None
+    p = Path(path) if explicit else DEFAULT_CONFIG_PATH
     if not p.exists():
+        if explicit:
+            raise ValueError(f"configuration file does not exist: {p}")
         return Config()
     try:
         raw = json.loads(p.read_text(encoding="utf-8"))
@@ -225,6 +232,8 @@ def _validate_gates(value: object) -> dict[str, Any]:
     for name in ("fail_on_severity", "fail_on_category", "require_scanners"):
         if name in gates:
             gates[name] = _string_list(gates[name], f"gates.{name}")
+    if "require_scanners" in gates and not gates["require_scanners"]:
+        raise ValueError("gates.require_scanners must contain at least one scanner")
     invalid_severities = set(gates.get("fail_on_severity", [])) - _SEVERITIES
     if invalid_severities:
         raise ValueError(f"invalid gates.fail_on_severity value: {sorted(invalid_severities)[0]}")
