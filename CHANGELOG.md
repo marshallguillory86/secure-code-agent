@@ -45,6 +45,10 @@ coverage are now reported and gated separately.
   SARIF driver name does not match its configured id.
 - An install matrix in `docs/scanners.md` and a development setup section in
   `CONTRIBUTING.md`.
+- An exact Ruff pin and a Markdown exclusion, so `ruff format --check` is
+  reproducible. Ruff 0.16 began formatting Python blocks embedded in Markdown;
+  with an unpinned formatter that turned an upstream release into a red build
+  with no change in this repository.
 
 ### Fixed
 

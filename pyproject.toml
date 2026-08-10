@@ -59,11 +59,14 @@ python-scanners = [
   "checkov>=3.3,<4",
 ]
 # Includes required-scanners so a fresh checkout can run its own audit.
+# Ruff is pinned exactly: `ruff format --check` is a CI gate, and an
+# unpinned formatter turns every upstream release into a possible red build
+# with no change in this repository. Same reasoning as required-scanners.
 dev = [
   "secure-code-agent[required-scanners]",
   "pytest>=8.0",
   "pytest-cov>=4.0",
-  "ruff>=0.5",
+  "ruff==0.16.2",
 ]
 
 [project.scripts]
@@ -86,6 +89,10 @@ secure_code_audit = ["data/*.json", "data/*.yaml"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# Ruff 0.16 formats Python blocks embedded in Markdown. Our docs use those
+# blocks illustratively — excerpted statements, aligned-comment schemas — and
+# reformatting them damages the documentation without improving any code.
+extend-exclude = ["**/*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "C4"]
