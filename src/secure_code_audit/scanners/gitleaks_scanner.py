@@ -23,6 +23,7 @@ class GitleaksScanner(Scanner):
     name = "gitleaks"
     binary = "gitleaks"
     default_category = Category.SECRETS
+    install_hint = "brew install gitleaks, or a pinned release from github.com/gitleaks/gitleaks"
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():

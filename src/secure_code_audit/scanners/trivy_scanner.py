@@ -34,6 +34,7 @@ class TrivyScanner(Scanner):
     name = "trivy"
     binary = "trivy"
     default_category = Category.CONFIG_IAC
+    install_hint = "brew install trivy, or follow trivy.dev/latest/getting-started/installation"
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():

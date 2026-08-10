@@ -1,6 +1,13 @@
 import json
+from pathlib import Path
 
-from secure_code_audit.cli import _under_root, main
+from secure_code_audit import config as config_mod
+from secure_code_audit.cli import (
+    _parse_sarif_import,
+    _scanner_scope,
+    _under_root,
+    main,
+)
 
 
 def _write_config(tmp_path, *, required: bool):
@@ -12,7 +19,7 @@ def _write_config(tmp_path, *, required: bool):
                 "command": [str(tmp_path / "missing-trivy")],
             }
         },
-        "gates": {"require_scanners": ["trivy"] if required else []},
+        "gates": {"require_scanners": ["trivy"]} if required else {},
     }
     path = tmp_path / "secure-code-agent.json"
     path.write_text(json.dumps(config), encoding="utf-8")
@@ -46,6 +53,20 @@ def test_cli_fails_when_required_scanner_is_unavailable(tmp_path):
     assert payload["coverage"]["scanners"][0]["outcome"] == "unavailable"
 
 
+def test_cli_rejects_explicit_missing_config_instead_of_disabling_gates(tmp_path, capsys):
+    exit_code = main(
+        [
+            str(tmp_path),
+            "--config",
+            str(tmp_path / "typo-config.json"),
+            "--fail-on-gate",
+        ]
+    )
+
+    assert exit_code == 2
+    assert "configuration file does not exist" in capsys.readouterr().err
+
+
 def test_cli_marks_optional_unavailable_scanner_partial_without_failing(tmp_path):
     config = _write_config(tmp_path, required=False)
 
@@ -73,3 +94,136 @@ def test_repository_policy_paths_resolve_from_scan_root(tmp_path):
     assert (
         _under_root(tmp_path, ".policy/ignore.yaml") == (tmp_path / ".policy/ignore.yaml").resolve()
     )
+
+
+def test_pip_audit_scope_discloses_bounded_inputs_and_flags():
+    scanner_config = config_mod.ScannerConfig(
+        mode="requirements",
+        inputs=["requirements-audit.txt"],
+        extra_args=["--no-deps"],
+    )
+
+    assert _scanner_scope("bandit", scanner_config) is None
+    assert _scanner_scope("pip_audit", scanner_config) == (
+        "mode=requirements; inputs=requirements-audit.txt; extra_args=--no-deps"
+    )
+
+
+def test_preflight_fails_before_auditing_when_a_required_scanner_is_missing(tmp_path, capsys):
+    config = _write_config(tmp_path, required=True)
+
+    exit_code = main([str(tmp_path), "--config", str(config), "--preflight"])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "required scanners unavailable: trivy" in out
+    assert not (tmp_path / "secure-code-report.md").exists()
+
+
+def test_preflight_json_names_the_remedy_without_installing_anything(tmp_path, capsys):
+    config = _write_config(tmp_path, required=True)
+
+    exit_code = main([str(tmp_path), "--config", str(config), "--preflight", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert payload["ready"] is False
+    assert payload["required_unresolved"] == ["trivy"]
+    row = next(r for r in payload["scanners"] if r["scanner"] == "trivy")
+    assert "brew install trivy" in row["remedy"]
+    assert "--sarif-import" in row["remedy"]
+
+
+def test_preflight_reports_a_required_scanner_that_is_not_even_enabled(tmp_path, capsys):
+    config = tmp_path / "secure-code-agent.json"
+    config.write_text(
+        json.dumps(
+            {
+                "scanners": {"trivy": {"enabled": False}},
+                "gates": {"require_scanners": ["trivy"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main([str(tmp_path), "--config", str(config), "--preflight"])
+
+    assert exit_code == 1
+    assert "not enabled in this configuration" in capsys.readouterr().out
+
+
+def test_imported_sarif_satisfies_a_required_scanner_the_host_cannot_install(tmp_path):
+    config = tmp_path / "secure-code-agent.json"
+    config.write_text(
+        json.dumps(
+            {
+                "scanners": {"builtin_rules": {"enabled": True}},
+                "gates": {"require_scanners": ["trivy"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    imported = tmp_path / "trivy.sarif"
+    imported.write_text(
+        json.dumps(
+            {
+                "version": "2.1.0",
+                "runs": [{"tool": {"driver": {"name": "Trivy", "rules": []}}, "results": []}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "report.json"
+
+    exit_code = main(
+        [
+            str(tmp_path),
+            "--config",
+            str(config),
+            "--fail-on-gate",
+            "--only-scanners",
+            "builtin_rules",
+            "--sarif-import",
+            str(imported),
+            "--json-output",
+            str(out),
+        ]
+    )
+    payload = json.loads(out.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert payload["coverage"]["status"] == "complete"
+    trivy = next(s for s in payload["coverage"]["scanners"] if s["name"] == "trivy")
+    assert trivy["scope"] == "sarif-import:trivy.sarif"
+
+
+def test_unreadable_sarif_import_fails_the_gate_instead_of_ingesting_nothing(tmp_path):
+    config = tmp_path / "secure-code-agent.json"
+    config.write_text(
+        json.dumps(
+            {
+                "scanners": {"builtin_rules": {"enabled": True}},
+                "gates": {"require_scanners": ["builtin_rules"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            str(tmp_path),
+            "--config",
+            str(config),
+            "--fail-on-gate",
+            "--sarif-import",
+            str(tmp_path / "never-written.sarif"),
+        ]
+    )
+
+    assert exit_code == 1
+
+
+def test_sarif_import_name_prefix_is_split_from_paths_that_contain_equals(tmp_path):
+    assert _parse_sarif_import("trivy=out.sarif") == ("trivy", Path("out.sarif"))
+    assert _parse_sarif_import("./a=b/out.sarif") == (None, Path("./a=b/out.sarif"))
+    assert _parse_sarif_import("out.sarif") == (None, Path("out.sarif"))

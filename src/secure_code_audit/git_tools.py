@@ -1,10 +1,8 @@
-"""Git helpers — repo root detection, LOC count, changed-only diffing."""
+"""Git helpers — repo root detection and LOC counting."""
 
 from __future__ import annotations
 
 import fnmatch
-import shutil
-import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -17,26 +15,6 @@ def find_repo_root(start: Path) -> Path:
         if (parent / ".git").exists():
             return parent
     return cur
-
-
-def changed_files(root: Path, since_ref: str) -> list[Path]:
-    """Return files changed since `since_ref` (e.g. 'main...HEAD'). Suitable
-    for `--changed-only`. Empty list on git failure."""
-    git = shutil.which("git")
-    if git is None:
-        return []
-    try:
-        out = subprocess.run(
-            [git, "diff", "--name-only", since_ref],
-            cwd=str(root),
-            check=True,
-            text=True,
-            capture_output=True,
-            timeout=30,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-        return []
-    return [root / line.strip() for line in out.stdout.splitlines() if line.strip()]
 
 
 def is_excluded(path: Path, root: Path, patterns: Iterable[str]) -> bool:

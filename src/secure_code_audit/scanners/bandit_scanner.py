@@ -22,6 +22,7 @@ class BanditScanner(Scanner):
     name = "bandit"
     binary = "bandit"
     python_module = "bandit"
+    install_hint = "pip install 'secure-code-agent[required-scanners]'"
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():

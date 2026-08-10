@@ -26,7 +26,12 @@ from secure_code_audit import baseline as baseline_mod
 from secure_code_audit import config as config_mod
 from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.git_tools import find_repo_root, loc_under
-from secure_code_audit.scanner_status import classify_execution, evaluate_coverage
+from secure_code_audit.scanner_status import (
+    ScannerExecution,
+    ScannerOutcome,
+    classify_execution,
+    evaluate_coverage,
+)
 from secure_code_audit.scoring import evaluate_gates
 from secure_code_audit.scoring import score as score_findings
 
@@ -44,8 +49,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--config",
-        default="secure-code-agent.json",
-        help="Path to config (default: secure-code-agent.json).",
+        default=None,
+        help="Path to config. If omitted, secure-code-agent.json is used when present.",
     )
 
     p.add_argument("--output", help="Markdown report output path.")
@@ -77,7 +82,21 @@ def _parser() -> argparse.ArgumentParser:
         "--sarif-import",
         action="append",
         default=[],
-        help="Path to an external SARIF file to ingest. May be passed multiple times.",
+        metavar="[NAME=]PATH",
+        help=(
+            "External SARIF file to ingest; counts toward scanner coverage. "
+            "Prefix with NAME= when the tool's SARIF driver name differs from "
+            "its id in gates.require_scanners. May be passed multiple times."
+        ),
+    )
+
+    p.add_argument(
+        "--preflight",
+        action="store_true",
+        help=(
+            "Resolve enabled scanners and report availability without auditing. "
+            "Exits nonzero if a required scanner cannot be resolved."
+        ),
     )
 
     p.add_argument(
@@ -113,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
         return _do_init_standards(args)
 
     try:
-        return _do_audit(args)
+        return _do_preflight(args) if args.preflight else _do_audit(args)
     except ValueError as exc:
         sys.stderr.write(f"ERROR: {exc}\n")
         return 2
@@ -129,58 +148,86 @@ def _do_init_standards(args: argparse.Namespace) -> int:
     return 0
 
 
-def _do_audit(args: argparse.Namespace) -> int:
-    cfg = config_mod.load(args.config)
-    _validate_scanner_config(cfg)
-    if args.changed_only:
-        raise ValueError(
-            "--changed-only is not implemented safely; refusing to claim a scoped audit"
+def _do_preflight(args: argparse.Namespace) -> int:
+    """Report which scanners resolve, without auditing anything.
+
+    Resolution only. A scanner that resolves here can still time out or fail
+    during a real audit, which is why coverage is evaluated per run and not
+    cached from this command.
+    """
+    cfg, target, _ = _prepare_audit(args)
+    required = set(cfg.gates.get("require_scanners", []))
+    selected = _selected_scanners(args, cfg)
+
+    rows: list[dict] = []
+    for name in selected:
+        scanner = scanners.SCANNERS[name]()
+        scanner.configure(target, cfg)
+        available = scanner.is_available()
+        rows.append(
+            {
+                "scanner": name,
+                "required": name in required,
+                "available": available,
+                "command": " ".join(scanner.command) or None,
+                "version": scanner.binary_version() if available else None,
+                "remedy": None if available else scanner.unavailable_fix_hint(),
+            }
         )
-    if len(args.paths) > 1:
-        raise ValueError("multiple scan roots are not supported; provide one repository root")
-    target = Path(args.paths[0]).resolve()
-    root = find_repo_root(target)
+
+    unresolved = [row["scanner"] for row in rows if row["required"] and not row["available"]]
+    unselected = sorted(required - set(selected))
+    blocking = unresolved + unselected
+
+    if args.json:
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "required": sorted(required),
+                    "scanners": rows,
+                    "required_unresolved": unresolved,
+                    "required_not_selected": unselected,
+                    "ready": not blocking,
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+    else:
+        _print_preflight(rows, unselected, blocking)
+    return 1 if blocking else 0
+
+
+def _print_preflight(rows: list[dict], unselected: list[str], blocking: list[str]) -> None:
+    print(f"secure-code-agent preflight  ·  {len(rows)} scanner(s) enabled")
+    for row in rows:
+        mark = "✓" if row["available"] else "✗"
+        role = "required" if row["required"] else "optional"
+        detail = row["version"] or row["command"] or "not resolved"
+        print(f"  {mark} {row['scanner']:<14} {role:<8} {detail}")
+        if row["remedy"]:
+            print(f"      → {row['remedy']}")
+    for name in unselected:
+        print(f"  ✗ {name:<14} required  not enabled in this configuration")
+    if blocking:
+        print(f"  required scanners unavailable: {', '.join(blocking)}")
+    else:
+        print("  all required scanners resolved")
+
+
+def _do_audit(args: argparse.Namespace) -> int:
+    cfg, target, root = _prepare_audit(args)
 
     # ----- scanners -----
-    skip = set(filter(None, (args.skip_scanners or "").split(",")))
-    only = set(filter(None, (args.only_scanners or "").split(",")))
-    all_findings: list[Finding] = []
-    ran: list[str] = []
-    unavailable: list[str] = []
-    executions = []
-
-    for name, klass in scanners.SCANNERS.items():
-        if only and name not in only:
-            continue
-        if name in skip:
-            continue
-        sc_cfg = cfg.scanners.get(name) or config_mod.ScannerConfig()
-        if not sc_cfg.enabled:
-            continue
-        scanner = klass()
-        scanner.configure(target, cfg)
-        if not scanner.is_available():
-            unavailable.append(name)
-            scanner_findings = scanner.run(target, cfg)
-            all_findings.extend(scanner_findings)
-            executions.append(classify_execution(name, scanner_findings))
-            continue
-        version = scanner.binary_version()
-        scanner_findings = scanner.run(target, cfg)
-        all_findings.extend(scanner_findings)
-        execution = classify_execution(
-            name,
-            scanner_findings,
-            command=scanner.command,
-            version=version,
-        )
-        executions.append(execution)
-        if execution.outcome.value == "completed":
-            ran.append(name)
+    scan = _run_scanners(args, cfg, target)
+    all_findings = scan.findings
+    ran, unavailable, executions = scan.ran, scan.unavailable, scan.executions
 
     # ----- SARIF imports -----
-    for sarif_path_str in args.sarif_import:
-        all_findings.extend(sarif.ingest(Path(sarif_path_str)))
+    # An imported SARIF is coverage: a scanner someone else ran on our behalf.
+    imported, imported_executions = _ingest_sarif_imports(args.sarif_import)
+    all_findings.extend(imported)
+    executions.extend(imported_executions)
 
     # ----- overrides from config -----
     all_findings = _apply_overrides(all_findings, cfg)
@@ -209,24 +256,18 @@ def _do_audit(args: argparse.Namespace) -> int:
     else:
         loc = loc_under(target, cfg.include_extensions, cfg.exclude_patterns)
     score = score_findings(all_findings, loc)
-    coverage = evaluate_coverage(executions, cfg.gates.get("require_scanners", []))
+    # Naming an import on the command line asserts that it contributes coverage,
+    # so a broken one fails the gate even if no config requires that scanner.
+    required = [
+        *cfg.gates.get("require_scanners", []),
+        *(execution.name for execution in imported_executions),
+    ]
+    coverage = evaluate_coverage(executions, required)
     gate = evaluate_gates(all_findings, score, cfg.gates, coverage)
 
     # ----- write outputs -----
     paths = _resolve_outputs(args, cfg, root)
-
-    if paths.markdown is not None:
-        renderers.write_markdown(
-            all_findings, score, gate, paths.markdown, ran, unavailable, coverage
-        )
-    if paths.json_out is not None:
-        renderers.write_json(all_findings, score, gate, paths.json_out, coverage)
-    if paths.sarif is not None:
-        sarif.write(all_findings, paths.sarif)
-    if paths.comment is not None:
-        renderers.write_pr_comment(all_findings, score, gate, paths.comment, coverage)
-    if paths.prompt is not None:
-        remediation.write(all_findings, paths.prompt)
+    _write_outputs(paths, all_findings, score, gate, coverage, ran, unavailable)
     if args.bump_baseline:
         baseline_mod.write(baseline_path, all_findings, baseline)
 
@@ -239,12 +280,30 @@ def _do_audit(args: argparse.Namespace) -> int:
     else:
         _print_summary(score, gate, ran, unavailable, coverage, paths)
 
-    # ----- exit code -----
+    return _exit_code(args, gate, all_findings)
+
+
+def _prepare_audit(
+    args: argparse.Namespace,
+) -> tuple[config_mod.Config, Path, Path]:
+    """Load config and resolve the single scan root, or refuse."""
+    cfg = config_mod.load(args.config)
+    _validate_scanner_config(cfg)
+    if args.changed_only:
+        raise ValueError(
+            "--changed-only is not implemented safely; refusing to claim a scoped audit"
+        )
+    if len(args.paths) > 1:
+        raise ValueError("multiple scan roots are not supported; provide one repository root")
+    target = Path(args.paths[0]).resolve()
+    return cfg, target, find_repo_root(target)
+
+
+def _exit_code(args: argparse.Namespace, gate, findings: list[Finding]) -> int:
     if args.fail_on_gate and not gate.passed:
         return 1
     if args.fail_on_new and any(
-        f.is_new and not f.suppressed and f.severity is not Severity.INFORMATIONAL
-        for f in all_findings
+        f.is_new and not f.suppressed and f.severity is not Severity.INFORMATIONAL for f in findings
     ):
         return 1
     return 0
@@ -253,6 +312,90 @@ def _do_audit(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+@dataclass
+class _ScanResult:
+    findings: list[Finding]
+    ran: list[str]
+    unavailable: list[str]
+    executions: list[ScannerExecution]
+
+
+def _selected_scanners(args: argparse.Namespace, cfg: config_mod.Config) -> list[str]:
+    """Names the operator actually asked for, in registry order."""
+    skip = set(filter(None, (args.skip_scanners or "").split(",")))
+    only = set(filter(None, (args.only_scanners or "").split(",")))
+    return [
+        name
+        for name in scanners.SCANNERS
+        if not (only and name not in only)
+        and name not in skip
+        and (cfg.scanners.get(name) or config_mod.ScannerConfig()).enabled
+    ]
+
+
+def _run_scanners(args: argparse.Namespace, cfg: config_mod.Config, target: Path) -> _ScanResult:
+    result = _ScanResult(findings=[], ran=[], unavailable=[], executions=[])
+    for name in _selected_scanners(args, cfg):
+        sc_cfg = cfg.scanners.get(name) or config_mod.ScannerConfig()
+        scanner = scanners.SCANNERS[name]()
+        scanner.configure(target, cfg)
+        available = scanner.is_available()
+        if not available:
+            result.unavailable.append(name)
+        version = scanner.binary_version() if available else None
+        findings = scanner.run(target, cfg)
+        result.findings.extend(findings)
+        execution = classify_execution(
+            name,
+            findings,
+            command=scanner.command if available else (),
+            version=version,
+            scope=_scanner_scope(name, sc_cfg),
+        )
+        result.executions.append(execution)
+        if execution.outcome is ScannerOutcome.COMPLETED:
+            result.ran.append(name)
+    return result
+
+
+def _parse_sarif_import(spec: str) -> tuple[str | None, Path]:
+    """Split an optional `NAME=` prefix off a --sarif-import value.
+
+    Only a leading token with no path separator counts as a name, so ordinary
+    paths that happen to contain '=' still resolve as paths.
+    """
+    name, separator, remainder = spec.partition("=")
+    if separator and name and not any(sep in name for sep in ("/", "\\", ".")):
+        return name, Path(remainder)
+    return None, Path(spec)
+
+
+def _ingest_sarif_imports(specs: list[str]) -> tuple[list[Finding], list[ScannerExecution]]:
+    findings: list[Finding] = []
+    executions: list[ScannerExecution] = []
+    for spec in specs:
+        name, sarif_path = _parse_sarif_import(spec)
+        imported, imported_executions = sarif.ingest_with_coverage(
+            sarif_path, override_scanner=name
+        )
+        findings.extend(imported)
+        executions.extend(imported_executions)
+    return findings, executions
+
+
+def _write_outputs(paths, findings, score, gate, coverage, ran, unavailable) -> None:
+    if paths.markdown is not None:
+        renderers.write_markdown(findings, score, gate, paths.markdown, ran, unavailable, coverage)
+    if paths.json_out is not None:
+        renderers.write_json(findings, score, gate, paths.json_out, coverage)
+    if paths.sarif is not None:
+        sarif.write(findings, paths.sarif, coverage)
+    if paths.comment is not None:
+        renderers.write_pr_comment(findings, score, gate, paths.comment, coverage)
+    if paths.prompt is not None:
+        remediation.write(findings, paths.prompt)
 
 
 def _apply_overrides(findings: list[Finding], cfg: config_mod.Config) -> list[Finding]:
@@ -286,17 +429,17 @@ def _resolve_outputs(args: argparse.Namespace, cfg: config_mod.Config, root: Pat
     'don't emit this format' — by default we emit Markdown only, and
     other outputs are opt-in via CLI flag or explicit config."""
 
-    def _p(flag_value, default_key) -> Path | None:
+    def _p(flag_value) -> Path | None:
         if flag_value is not None:
             return (root / flag_value).resolve()
         return None
 
     return _OutputPaths(
-        markdown=_p(args.output or cfg.outputs.get("markdown_path"), "markdown_path"),
-        json_out=_p(args.json_output, "json_path"),
-        sarif=_p(args.sarif_output, "sarif_path"),
-        comment=_p(args.comment_output, "comment_path"),
-        prompt=_p(args.prompt_output, "prompt_path"),
+        markdown=_p(args.output or cfg.outputs.get("markdown_path")),
+        json_out=_p(args.json_output),
+        sarif=_p(args.sarif_output),
+        comment=_p(args.comment_output),
+        prompt=_p(args.prompt_output),
     )
 
 
@@ -307,7 +450,13 @@ def _under_root(root: Path, value: str) -> Path:
 
 def _print_summary(score, gate, ran, unavailable, coverage, paths) -> None:
     status = "PASS" if gate.passed else "FAIL"
-    print(f"secure-code-agent  ·  score {score.overall:.2f} ({score.letter})  ·  gate {status}")
+    score_label = "score"
+    if coverage.status.value != "complete":
+        score_label = "finding score (coverage incomplete)"
+    print(
+        f"secure-code-agent  ·  {score_label} {score.overall:.2f} ({score.letter})  "
+        f"·  gate {status}"
+    )
     print(f"  scanned LOC: {score.loc_scanned:,}")
     print(f"  scanners run: {', '.join(ran) if ran else '(none)'}")
     print(f"  coverage: {coverage.status.value.upper()}")
@@ -334,6 +483,18 @@ def _validate_scanner_config(cfg: config_mod.Config) -> None:
     unknown_required = sorted(required - known)
     if unknown_required:
         raise ValueError(f"unknown required scanner: {', '.join(unknown_required)}")
+
+
+def _scanner_scope(name: str, cfg: config_mod.ScannerConfig) -> str | None:
+    """Describe configured audit scope without changing scanner semantics."""
+    if name != "pip_audit":
+        return None
+    parts = [f"mode={cfg.mode}"]
+    if cfg.inputs:
+        parts.append(f"inputs={','.join(cfg.inputs)}")
+    if cfg.extra_args:
+        parts.append(f"extra_args={' '.join(cfg.extra_args)}")
+    return "; ".join(parts)
 
 
 if __name__ == "__main__":

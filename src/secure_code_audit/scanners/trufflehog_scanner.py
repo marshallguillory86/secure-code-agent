@@ -26,6 +26,9 @@ class TruffleHogScanner(Scanner):
     name = "trufflehog"
     binary = "trufflehog"
     default_category = Category.SECRETS
+    install_hint = (
+        "brew install trufflehog, or a pinned release from github.com/trufflesecurity/trufflehog"
+    )
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():
