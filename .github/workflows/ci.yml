@@ -72,6 +72,9 @@ jobs:
       - name: Install project and pinned required scanners
         run: python -m pip install --disable-pip-version-check -e ".[dev,required-scanners]"
 
+      - name: Verify the required scanner toolchain resolves
+        run: secure-code-agent --config secure-code-agent.json --preflight
+
       - name: Run required security coverage
         run: >-
           secure-code-agent

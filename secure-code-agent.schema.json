@@ -6,6 +6,10 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference used by editors and validators."
+    },
     "version":     { "type": "integer", "enum": [1] },
     "paths": {
       "type": "object",
@@ -109,6 +113,7 @@
         "min_score":        { "type": "number", "minimum": 0, "maximum": 5 },
         "require_scanners": {
           "type": "array",
+          "minItems": 1,
           "items": { "type": "string" }
         },
         "max_unsuppressed": {

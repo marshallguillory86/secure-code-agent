@@ -44,6 +44,7 @@ class HadolintScanner(Scanner):
     name = "hadolint"
     binary = "hadolint"
     default_category = Category.CONFIG_IAC
+    install_hint = "brew install hadolint, or a pinned release from github.com/hadolint/hadolint"
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():

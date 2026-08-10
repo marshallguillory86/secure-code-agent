@@ -23,6 +23,7 @@ class SemgrepScanner(Scanner):
     binary = "semgrep"
     python_module = "semgrep"
     default_category = Category.CODE_VULNERABILITIES
+    install_hint = "pip install 'secure-code-agent[python-scanners]'"
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():

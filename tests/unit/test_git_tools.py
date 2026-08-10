@@ -1,32 +1,12 @@
-from subprocess import CalledProcessError, CompletedProcess
-
 from secure_code_audit import git_tools
 
 
-def test_find_repo_root_and_changed_files(tmp_path, monkeypatch):
+def test_find_repo_root(tmp_path):
     repo = tmp_path / "repo"
     child = repo / "src"
     (repo / ".git").mkdir(parents=True)
     child.mkdir()
-    monkeypatch.setattr(
-        git_tools.subprocess,
-        "run",
-        lambda *args, **kwargs: CompletedProcess(
-            args=[], returncode=0, stdout="a.py\ndocs/readme.md\n"
-        ),
-    )
-
     assert git_tools.find_repo_root(child) == repo
-    assert git_tools.changed_files(repo, "main...HEAD") == [repo / "a.py", repo / "docs/readme.md"]
-
-
-def test_changed_files_failure_is_empty(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        git_tools.subprocess,
-        "run",
-        lambda *args, **kwargs: (_ for _ in ()).throw(CalledProcessError(1, "git")),
-    )
-    assert git_tools.changed_files(tmp_path, "bad") == []
 
 
 def test_scope_exclusions_and_loc(tmp_path):

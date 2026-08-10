@@ -7,9 +7,11 @@ branding:
 
 inputs:
   config:
-    description: 'Path to secure-code-agent config (JSON).'
+    description: >-
+      Path to secure-code-agent config (JSON). An explicit value must exist or
+      the run fails; leave empty to use secure-code-agent.json when present.
     required:    false
-    default:     'secure-code-agent.json'
+    default:     ''
   paths:
     description: 'One repository root to scan (default: current directory).'
     required:    false
@@ -54,30 +56,40 @@ runs:
     - name: Run audit
       id: run
       shell: bash
+      env:
+        SCA_CONFIG: ${{ inputs.config }}
+        SCA_CHANGED_ONLY: ${{ inputs.changed-only }}
+        SCA_FAIL_ON_GATE: ${{ inputs.fail-on-gate }}
+        SCA_FAIL_ON_NEW: ${{ inputs.fail-on-new }}
+        SCA_SARIF_OUTPUT: ${{ inputs.sarif-output }}
+        SCA_PATHS: ${{ inputs.paths }}
       run: |
-        ARGS=(--config "${{ inputs.config }}")
-        if [ -n "${{ inputs.changed-only }}" ]; then
-          ARGS+=(--changed-only "${{ inputs.changed-only }}")
+        ARGS=()
+        if [ -n "$SCA_CONFIG" ]; then
+          ARGS+=(--config "$SCA_CONFIG")
         fi
-        if [ "${{ inputs.fail-on-gate }}" = "true" ]; then
+        if [ -n "$SCA_CHANGED_ONLY" ]; then
+          ARGS+=(--changed-only "$SCA_CHANGED_ONLY")
+        fi
+        if [ "$SCA_FAIL_ON_GATE" = "true" ]; then
           ARGS+=(--fail-on-gate)
         fi
-        if [ "${{ inputs.fail-on-new }}" = "true" ]; then
+        if [ "$SCA_FAIL_ON_NEW" = "true" ]; then
           ARGS+=(--fail-on-new)
         fi
-        ARGS+=(--sarif-output "${{ inputs.sarif-output }}")
+        ARGS+=(--sarif-output "$SCA_SARIF_OUTPUT")
         ARGS+=(--output secure-code-report.md)
         ARGS+=(--json-output secure-code-report.json)
         ARGS+=(--prompt-output secure-code-remediation-prompt.md)
         ARGS+=(--comment-output secure-code-pr-comment.md)
-        ARGS+=("${{ inputs.paths }}")
+        ARGS+=("$SCA_PATHS")
 
         set +e
         secure-code-agent "${ARGS[@]}"
         EC=$?
         set -e
 
-        echo "sarif-path=${{ inputs.sarif-output }}" >> "$GITHUB_OUTPUT"
+        echo "sarif-path=$SCA_SARIF_OUTPUT" >> "$GITHUB_OUTPUT"
         if [ "$EC" -eq 0 ]; then
           echo "passed=true"  >> "$GITHUB_OUTPUT"
         else

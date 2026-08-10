@@ -42,7 +42,12 @@ def _coverage():
         required=("bandit", "pip_audit"),
         executions=(
             ScannerExecution(
-                "bandit", ScannerOutcome.COMPLETED, ("/tools/bandit",), "bandit 1.9.4", 1
+                "bandit",
+                ScannerOutcome.COMPLETED,
+                ("/tools/bandit",),
+                "bandit 1.9.4",
+                1,
+                scope="mode=requirements; inputs=requirements-audit.txt; extra_args=--no-deps",
             ),
         ),
         failures=("required scanner 'pip_audit' was not selected",),
@@ -65,10 +70,16 @@ def test_all_report_formats_include_gate_coverage_and_provenance(tmp_path):
     markdown_text = markdown.read_text(encoding="utf-8")
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert "Coverage: **FAILED**" in markdown_text
+    assert "Finding score (coverage incomplete)" in markdown_text
     assert "bandit 1.9.4" in markdown_text
+    assert "inputs=requirements-audit.txt" in markdown_text
     assert "CWE-89" in markdown_text
     assert payload["coverage"]["scanners"][0]["command"] == ["/tools/bandit"]
+    assert payload["coverage"]["scanners"][0]["scope"].startswith("mode=requirements")
+    assert payload["score"]["coverage_complete"] is False
+    assert payload["score"]["qualification"] == "finding score; scanner coverage incomplete"
     assert "Scanner coverage: **FAILED**" in comment.read_text(encoding="utf-8")
+    assert "finding score; coverage incomplete" in comment.read_text(encoding="utf-8")
 
 
 def test_empty_markdown_report_and_no_coverage(tmp_path):

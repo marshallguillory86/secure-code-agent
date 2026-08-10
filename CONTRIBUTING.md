@@ -14,6 +14,20 @@ It is NOT a SAST engine. PRs that propose:
 
 …will be closed. See [`docs/design.md`](docs/design.md) for the non-goals.
 
+## Development setup
+
+```bash
+pip install -e ".[dev]"        # includes Bandit + pip-audit, so the repo can audit itself
+secure-code-agent --preflight  # confirm the toolchain resolves before running an audit
+pytest -q
+ruff check . && ruff format --check .
+```
+
+`[dev]` pulls in `required-scanners` deliberately: a checkout that cannot run
+its own gate is a checkout that will surprise you in CI. Optional Python
+scanners come from `[python-scanners]`; standalone binaries are listed with
+their install commands in [`docs/scanners.md`](docs/scanners.md).
+
 ## Adding a new scanner
 
 The bar is high. Each new scanner must:

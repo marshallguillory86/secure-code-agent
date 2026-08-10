@@ -33,6 +33,9 @@ class OsvScanner(Scanner):
     name = "osv_scanner"
     binary = "osv-scanner"
     default_category = Category.DEPENDENCIES
+    install_hint = (
+        "brew install osv-scanner, or a pinned release from github.com/google/osv-scanner"
+    )
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():

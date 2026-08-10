@@ -37,6 +37,7 @@ class ScannerExecution:
     version: str | None = None
     finding_count: int = 0
     reason: str | None = None
+    scope: str | None = None
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,7 @@ def classify_execution(
     *,
     command: tuple[str, ...] = (),
     version: str | None = None,
+    scope: str | None = None,
 ) -> ScannerExecution:
     """Classify scanner control findings without counting them as coverage."""
     findings = list(findings)
@@ -73,6 +75,7 @@ def classify_execution(
                 version=version,
                 finding_count=0,
                 reason=control[rule_id].message,
+                scope=scope,
             )
 
     not_applicable = next(
@@ -87,6 +90,7 @@ def classify_execution(
             version=version,
             finding_count=0,
             reason=not_applicable.message,
+            scope=scope,
         )
 
     security_findings = sum(
@@ -98,7 +102,35 @@ def classify_execution(
         command=command,
         version=version,
         finding_count=security_findings,
+        scope=scope,
     )
+
+
+# Worst-first. A scanner can be reported twice — once from a local run and
+# once from an imported SARIF — and the degraded result must win so a clean
+# import cannot mask a failed local execution.
+_OUTCOME_PRECEDENCE: dict[ScannerOutcome, int] = {
+    ScannerOutcome.FAILED: 0,
+    ScannerOutcome.TIMED_OUT: 1,
+    ScannerOutcome.UNAVAILABLE: 2,
+    ScannerOutcome.NOT_APPLICABLE: 3,
+    ScannerOutcome.COMPLETED: 4,
+}
+
+
+def worst_by_name(
+    executions: Iterable[ScannerExecution],
+) -> dict[str, ScannerExecution]:
+    """Collapse duplicate scanner names to their least successful execution."""
+    by_name: dict[str, ScannerExecution] = {}
+    for execution in executions:
+        current = by_name.get(execution.name)
+        if (
+            current is None
+            or _OUTCOME_PRECEDENCE[execution.outcome] < _OUTCOME_PRECEDENCE[current.outcome]
+        ):
+            by_name[execution.name] = execution
+    return by_name
 
 
 def evaluate_coverage(
@@ -107,7 +139,7 @@ def evaluate_coverage(
 ) -> CoverageReport:
     executions = tuple(executions)
     required = tuple(dict.fromkeys(required))
-    by_name = {execution.name: execution for execution in executions}
+    by_name = worst_by_name(executions)
 
     failures: list[str] = []
     for name in required:

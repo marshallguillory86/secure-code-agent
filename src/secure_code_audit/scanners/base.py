@@ -27,6 +27,9 @@ class Scanner(ABC):
     version_flag: str = "--version"
     python_module: str | None = None
     default_category: Category = Category.CODE_VULNERABILITIES
+    # How an operator obtains this scanner. Surfaced in the unavailable
+    # finding and in --preflight. The agent never installs anything itself.
+    install_hint: str = ""
 
     # ----- availability ----------------------------------------------------
 
@@ -222,10 +225,15 @@ class Scanner(ABC):
                 "or supported Python module fallback; scan skipped."
             ),
             short_desc=None,
-            fix_hint=(
-                f"Install {self.binary} or configure scanners.{self.name}.command "
-                "to enable coverage."
-            ),
+            fix_hint=self.unavailable_fix_hint(),
+        )
+
+    def unavailable_fix_hint(self) -> str:
+        """Operator-actionable text for a scanner that could not be resolved."""
+        install = self.install_hint or f"Install {self.binary}"
+        return (
+            f"{install}, or set scanners.{self.name}.command to an explicit path, "
+            "or supply its SARIF via --sarif-import."
         )
 
     # ----- shared utility -------------------------------------------------

@@ -40,6 +40,7 @@ class ScorecardScanner(Scanner):
     name = "scorecard"
     binary = "scorecard"
     default_category = Category.SUPPLY_CHAIN
+    install_hint = "brew install scorecard, or a pinned release from github.com/ossf/scorecard"
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():

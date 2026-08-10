@@ -7,6 +7,7 @@ from secure_code_audit.scanner_status import (
     ScannerOutcome,
     classify_execution,
     evaluate_coverage,
+    worst_by_name,
 )
 from secure_code_audit.scoring import evaluate_gates, score
 
@@ -64,3 +65,29 @@ def test_required_scanner_not_selected_fails_coverage():
 
     assert coverage.status is CoverageStatus.FAILED
     assert "was not selected" in coverage.failures[0]
+
+
+def _execution(name: str, outcome: ScannerOutcome) -> ScannerExecution:
+    return ScannerExecution(name=name, outcome=outcome)
+
+
+def test_a_clean_import_cannot_mask_a_failed_local_run_of_the_same_scanner():
+    coverage = evaluate_coverage(
+        [
+            _execution("trivy", ScannerOutcome.FAILED),
+            _execution("trivy", ScannerOutcome.COMPLETED),
+        ],
+        ["trivy"],
+    )
+
+    assert coverage.status is CoverageStatus.FAILED
+    assert "did not complete" in coverage.failures[0]
+
+
+def test_duplicate_names_collapse_to_the_worst_outcome_in_either_order():
+    for pair in (
+        (ScannerOutcome.COMPLETED, ScannerOutcome.UNAVAILABLE),
+        (ScannerOutcome.UNAVAILABLE, ScannerOutcome.COMPLETED),
+    ):
+        collapsed = worst_by_name([_execution("bandit", pair[0]), _execution("bandit", pair[1])])
+        assert collapsed["bandit"].outcome is ScannerOutcome.UNAVAILABLE

@@ -38,11 +38,10 @@ secure-code-agent \
   --comment-output secure-code-pr-comment.md
 ```
 
-3. For branch / PR work, use a changed-file audit:
+3. Changed-file audits are reserved but not yet safely implemented. Do not
+   pass `--changed-only`; it exits 2 instead of silently claiming scoped coverage.
 
-```bash
-secure-code-agent --changed-only main...HEAD --fail-on-new
-```
+   Use a full audit with `--fail-on-new` until changed-file execution is implemented.
 
 4. If the audit emits `secure-code-remediation-prompt.md`, **read it before
    editing** and treat it as the bounded task.

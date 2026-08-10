@@ -30,6 +30,8 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Security",
   "Topic :: Software Development :: Quality Assurance",
 ]
@@ -39,11 +41,26 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Scanners the default configuration lists in gates.require_scanners. Pinned
+# exactly: a gate asserting "bandit completed" should mean a known Bandit
+# completed, not whatever Bandit resolved that day.
 required-scanners = [
   "bandit==1.9.4",
   "pip-audit==2.10.1",
 ]
+# The remaining Python-packaged scanners. Bounded rather than pinned because
+# they are optional; the coverage gate does not require them by default.
+# Scanners distributed as standalone binaries (gitleaks, hadolint, npm,
+# osv-scanner, scorecard, trivy, trufflehog) cannot be installed from PyPI —
+# see docs/scanners.md for their install commands and the SARIF-import route.
+python-scanners = [
+  "secure-code-agent[required-scanners]",
+  "semgrep>=1.172,<2",
+  "checkov>=3.3,<4",
+]
+# Includes required-scanners so a fresh checkout can run its own audit.
 dev = [
+  "secure-code-agent[required-scanners]",
   "pytest>=8.0",
   "pytest-cov>=4.0",
   "ruff>=0.5",

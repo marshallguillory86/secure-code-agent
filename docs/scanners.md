@@ -2,6 +2,54 @@
 
 The agent is an orchestrator — it shells out to each scanner, parses canonical output, and maps to the unified `Finding` schema. We don't reimplement SAST.
 
+## Obtaining scanners
+
+**The agent never installs a scanner for you.** A security gate that downloads
+and executes binaries to satisfy its own coverage requirement is a supply-chain
+liability, and it is the kind of thing this tool exists to flag. Acquisition
+stays with your package manager or a pinned CI action.
+
+Run `secure-code-agent --preflight` to see what resolves on the current host
+before spending a full audit on it. It reports each enabled scanner's resolved
+command and version, prints the install command for anything missing, and exits
+nonzero when a required scanner cannot be resolved.
+
+Resolution order per scanner is `scanners.<name>.command`, then `PATH`, then
+`python -m <module>` for the Python-packaged ones.
+
+### Python-packaged scanners
+
+Installable as extras, so the version is pinned alongside the agent:
+
+| Extra | Scanners | Command |
+| --- | --- | --- |
+| `required-scanners` | Bandit, pip-audit | `pip install 'secure-code-agent[required-scanners]'` |
+| `python-scanners` | the above plus Semgrep, Checkov | `pip install 'secure-code-agent[python-scanners]'` |
+
+`required-scanners` is pinned exactly because the default configuration lists
+those scanners in `gates.require_scanners`; a gate asserting "Bandit completed"
+should mean a known Bandit completed. It is also included in `dev`, so a fresh
+checkout can run its own audit.
+
+### Standalone binaries
+
+These ship as Go/Haskell binaries and **cannot come from PyPI**. Install them
+locally, or — better in CI — run the upstream pinned action and hand us its
+SARIF (see [SARIF import](#sarif-import)).
+
+| Scanner | Local install | Pinned CI action |
+| --- | --- | --- |
+| **Trivy** | `brew install trivy` | `aquasecurity/trivy-action` |
+| **Gitleaks** | `brew install gitleaks` | `gitleaks/gitleaks-action` |
+| **OSV-Scanner** | `brew install osv-scanner` | `google/osv-scanner-action` |
+| **OpenSSF Scorecard** | `brew install scorecard` | `ossf/scorecard-action` |
+| **Hadolint** | `brew install hadolint` | `hadolint/hadolint-action` |
+| **TruffleHog** | `brew install trufflehog` | `trufflesecurity/trufflehog` |
+| **npm audit** | install Node.js | any Node setup action |
+
+Non-Homebrew hosts should take a pinned release archive from each project's
+GitHub releases rather than piping an installer script to a shell.
+
 ## Tier 1 — shipped in v0.1
 
 All Tier-1 scanners are wired and emit canonical findings.
@@ -163,3 +211,30 @@ targets common output from:
 - **Checkov** (`checkov -d . --output sarif`)
 
 Multiple SARIF imports merge by `fingerprint`. Standards mappings for imported findings come from the SARIF `rules` array if present, otherwise from our local `rule_map.json`.
+
+### Imports are coverage
+
+A scanner someone else ran on our behalf covers the same ground as one we
+invoke, so an import produces a scanner execution and **can satisfy
+`gates.require_scanners`**. This is the supported way to gate on a scanner the
+audit host cannot install:
+
+```yaml
+- uses: aquasecurity/trivy-action@<pinned-sha>
+  with: { format: sarif, output: trivy.sarif }
+- run: secure-code-agent --fail-on-gate --sarif-import trivy.sarif
+```
+
+with `"require_scanners": ["trivy"]` in the config. Rules:
+
+- The execution is named from the SARIF `tool.driver.name`, lowercased with
+  spaces and hyphens folded to underscores — `OSV-Scanner` becomes
+  `osv_scanner`. When a driver names itself something else entirely, say so
+  explicitly: `--sarif-import trivy=vendor-output.sarif`.
+- Naming an import on the command line asserts it contributes coverage, so an
+  unreadable, malformed, or run-less SARIF **fails the gate** rather than
+  ingesting zero findings quietly.
+- An import whose own `invocations[].executionSuccessful` is `false` is
+  recorded as a failed execution. We do not launder another tool's failure.
+- If the same scanner reports twice — once locally, once by import — the worse
+  outcome wins, so a clean import cannot mask a failed local run.

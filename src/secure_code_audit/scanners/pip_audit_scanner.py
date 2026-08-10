@@ -11,7 +11,6 @@ from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.git_tools import is_excluded
 from secure_code_audit.scanners.base import Scanner
 
-_REQ_NAMES = ("requirements.txt", "requirements-dev.txt")
 _MODES = {"auto", "requirements", "project", "locked", "environment"}
 
 
@@ -26,6 +25,7 @@ class PipAuditScanner(Scanner):
     binary = "pip-audit"
     python_module = "pip_audit"
     default_category = Category.DEPENDENCIES
+    install_hint = "pip install 'secure-code-agent[required-scanners]'"
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():

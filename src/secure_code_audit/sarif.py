@@ -11,7 +11,13 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from secure_code_audit import __version__
-from secure_code_audit.findings import Confidence, Finding, Severity
+from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.scanner_status import (
+    CoverageReport,
+    CoverageStatus,
+    ScannerExecution,
+    ScannerOutcome,
+)
 from secure_code_audit.standards import cwe_url
 
 _SARIF_LEVEL = {
@@ -23,7 +29,7 @@ _SARIF_LEVEL = {
 }
 
 
-def emit(findings: Iterable[Finding]) -> dict:
+def emit(findings: Iterable[Finding], coverage: CoverageReport | None = None) -> dict:
     """Build a SARIF 2.1.0 document from canonical findings."""
     findings = list(findings)
 
@@ -37,23 +43,53 @@ def emit(findings: Iterable[Finding]) -> dict:
             rule_meta[rid] = _rule(f)
         results.append(_result(f))
 
+    run = {
+        "tool": {
+            "driver": {
+                "name": "secure-code-agent",
+                "informationUri": "https://github.com/marshallguillory86/secure-code-agent",
+                "version": __version__,
+                "rules": list(rule_meta.values()),
+            }
+        },
+        "results": results,
+    }
+    if coverage is not None:
+        run["invocations"] = [_invocation(coverage)]
+
     return {
         "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schemas/sarif-schema-2.1.0.json",
         "version": "2.1.0",
-        "runs": [
-            {
-                "tool": {
-                    "driver": {
-                        "name": "secure-code-agent",
-                        "informationUri": "https://github.com/marshallguillory86/secure-code-agent",
-                        "version": __version__,
-                        "rules": list(rule_meta.values()),
-                    }
-                },
-                "results": results,
-            }
-        ],
+        "runs": [run],
     }
+
+
+def _invocation(coverage: CoverageReport) -> dict:
+    invocation = {
+        "executionSuccessful": coverage.status is CoverageStatus.COMPLETE,
+        "properties": {
+            "coverageStatus": coverage.status.value,
+            "requiredScanners": list(coverage.required),
+            "scannerExecutions": [
+                {
+                    "name": execution.name,
+                    "outcome": execution.outcome.value,
+                    "scope": execution.scope,
+                }
+                for execution in coverage.executions
+            ],
+        },
+    }
+    if coverage.failures:
+        invocation["toolExecutionNotifications"] = [
+            {
+                "level": "error",
+                "message": {"text": failure},
+                "descriptor": {"id": "scanner-coverage"},
+            }
+            for failure in coverage.failures
+        ]
+    return invocation
 
 
 def _rule(f: Finding) -> dict:
@@ -106,8 +142,10 @@ def _result(f: Finding) -> dict:
     }
 
 
-def write(findings: Iterable[Finding], output: Path) -> None:
-    output.write_text(json.dumps(emit(findings), indent=2), encoding="utf-8")
+def write(
+    findings: Iterable[Finding], output: Path, coverage: CoverageReport | None = None
+) -> None:
+    output.write_text(json.dumps(emit(findings, coverage), indent=2), encoding="utf-8")
 
 
 # ----- ingest -------------------------------------------------------------
@@ -124,26 +162,129 @@ def ingest(sarif_path: Path, default_scanner: str = "external_sarif") -> list[Fi
     """Parse an external SARIF file (CodeQL, Snyk, Trivy, etc.) into canonical
     Findings. We trust the SARIF's own rule metadata for severity + CWE;
     standards.lookup() may still enhance via the local map."""
-    payload = _read_sarif(sarif_path)
-    if payload is None:
-        return []
-
-    out: list[Finding] = []
-    for run in payload.get("runs", []):
-        out.extend(_findings_from_run(run, default_scanner))
-    return out
+    findings, _ = ingest_with_coverage(sarif_path, default_scanner)
+    return findings
 
 
-def _read_sarif(path: Path) -> dict | None:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+def ingest_with_coverage(
+    sarif_path: Path,
+    default_scanner: str = "external_sarif",
+    override_scanner: str | None = None,
+) -> tuple[list[Finding], list[ScannerExecution]]:
+    """Ingest an external SARIF file and report what it covered.
+
+    A scanner that runs in CI and hands us SARIF is as much a coverage
+    participant as one we invoke ourselves, so imports produce executions that
+    can satisfy `gates.require_scanners`. An unreadable, malformed, or empty
+    import is a coverage failure, never a silently empty finding set.
+
+    `override_scanner` names the run explicitly when a tool's SARIF driver name
+    does not match the id used in configuration.
+    """
+    scope = f"sarif-import:{sarif_path.name}"
+    fallback = override_scanner or default_scanner
+    payload, error = _read_sarif(sarif_path)
+    if error is None and not (payload.get("runs") or []):
+        error = f"imported SARIF {sarif_path} declares no runs; nothing was covered"
+    if error is not None:
+        return (
+            [_import_control_finding(sarif_path, fallback, error)],
+            [
+                ScannerExecution(
+                    name=fallback,
+                    outcome=ScannerOutcome.FAILED,
+                    reason=error,
+                    scope=scope,
+                )
+            ],
+        )
+
+    findings: list[Finding] = []
+    executions: list[ScannerExecution] = []
+    for run in payload["runs"]:
+        driver = (run.get("tool") or {}).get("driver") or {}
+        name = override_scanner or _scanner_name(driver, default_scanner)
+        run_findings = _findings_from_run(run, name)
+        findings.extend(run_findings)
+        executions.append(_execution_from_run(run, name, len(run_findings), scope))
+    return findings, executions
 
 
-def _findings_from_run(run: dict, default_scanner: str) -> list[Finding]:
+def _execution_from_run(run: dict, name: str, finding_count: int, scope: str) -> ScannerExecution:
+    """Trust the imported tool's own invocation status over its silence."""
     driver = (run.get("tool") or {}).get("driver") or {}
-    scanner = (driver.get("name") or default_scanner).lower().replace(" ", "_")
+    invocations = run.get("invocations") or []
+    if any(invocation.get("executionSuccessful") is False for invocation in invocations):
+        return ScannerExecution(
+            name=name,
+            outcome=ScannerOutcome.FAILED,
+            version=driver.get("version"),
+            reason=f"imported {name} SARIF reports executionSuccessful=false",
+            scope=scope,
+        )
+    return ScannerExecution(
+        name=name,
+        outcome=ScannerOutcome.COMPLETED,
+        version=driver.get("version"),
+        finding_count=finding_count,
+        scope=scope,
+    )
+
+
+def _import_control_finding(sarif_path: Path, scanner: str, message: str) -> Finding:
+    return Finding(
+        rule_id=f"{scanner}.tool_error",
+        scanner=scanner,
+        fingerprint=f"sarif_import_error.{sarif_path.name}",
+        canonical_cwe=None,
+        owasp_top10=None,
+        asvs_section=None,
+        nist_ssdf=None,
+        category=Category.POLICY_DOCS,
+        severity=Severity.INFORMATIONAL,
+        confidence=Confidence.HIGH,
+        file_path=sarif_path,
+        line_start=0,
+        line_end=None,
+        code_snippet=None,
+        message=message,
+        short_desc=None,
+        fix_hint=(
+            "Regenerate the imported SARIF, or drop the --sarif-import argument "
+            "rather than gating on coverage it cannot supply."
+        ),
+    )
+
+
+def _read_sarif(path: Path) -> tuple[dict, str | None]:
+    """Return the parsed document, or an operator-readable reason it failed."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        return {}, f"could not read imported SARIF {path}: {exc}"
+    except json.JSONDecodeError as exc:
+        return {}, f"imported SARIF {path} is not valid JSON: {exc}"
+    if not isinstance(payload, dict):
+        return {}, f"imported SARIF {path} root must be a JSON object"
+    return payload, None
+
+
+def _scanner_name(driver: dict, default_scanner: str) -> str:
+    """Normalize a SARIF driver name toward this project's scanner ids.
+
+    Drivers spell themselves inconsistently ("OSV-Scanner", "npm audit"), so
+    separators are folded. A driver that still does not match the id used in
+    `gates.require_scanners` can be named explicitly via `--sarif-import
+    NAME=PATH`.
+    """
+    raw = driver.get("name") or default_scanner
+    return raw.strip().lower().replace(" ", "_").replace("-", "_")
+
+
+def _findings_from_run(run: dict, scanner: str) -> list[Finding]:
+    """`scanner` is the already-resolved id, so findings and the coverage
+    execution for the same run can never disagree about who produced them."""
+    driver = (run.get("tool") or {}).get("driver") or {}
     rules = {r.get("id"): r for r in (driver.get("rules") or [])}
 
     findings: list[Finding] = []
