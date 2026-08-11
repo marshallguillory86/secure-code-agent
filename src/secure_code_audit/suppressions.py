@@ -32,12 +32,20 @@ class SuppressionRule:
     expires: datetime.date
     file: str | None = None
     paths: tuple[str, ...] = field(default_factory=tuple)
+    # Identity of the ONE finding this entry was written for. A suppression keyed only to
+    # (file, rule) silently covers every future finding of that rule in that file — a different
+    # secret, on a different line, with different content, is hidden by a reason that was never
+    # about it. That is a suppression widening beyond its stated justification, which is the
+    # failure mode suppressions are supposed to prevent.
+    fingerprint: str | None = None
 
     def matches(self, finding: Finding) -> bool:
         if self.rule_id != "*" and self.rule_id != finding.rule_id:
             return False
         rel = finding.file_path.as_posix()
         if self.file is not None and self.file != rel and not rel.endswith(self.file):
+            return False
+        if self.fingerprint is not None and self.fingerprint != finding.fingerprint:
             return False
         return not self.paths or any(fnmatch.fnmatch(rel, p) for p in self.paths)
 
@@ -97,6 +105,7 @@ def load(path: Path) -> tuple[list[SuppressionRule], list[str]]:
 
         file_v = entry.get("file")
         paths_v = entry.get("paths") or []
+        fingerprint_v = entry.get("fingerprint")
         if rule_id == "*" and not file_v and not paths_v:
             errors.append(f"{path}: entry #{i}: rule_id='*' requires `file` or `paths`.")
             continue
@@ -108,6 +117,7 @@ def load(path: Path) -> tuple[list[SuppressionRule], list[str]]:
                 expires=expires,
                 file=str(file_v) if file_v else None,
                 paths=tuple(str(p) for p in paths_v) if paths_v else (),
+                fingerprint=str(fingerprint_v) if fingerprint_v else None,
             )
         )
 
