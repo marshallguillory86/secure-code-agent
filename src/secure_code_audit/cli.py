@@ -236,8 +236,22 @@ def _do_audit(args: argparse.Namespace) -> int:
     suppression_path = _under_root(root, cfg.suppressions_file)
     sup_rules, sup_errors = suppressions.load(suppression_path)
     if sup_errors:
+        # Fail closed. A suppression file that exists is an explicit
+        # instruction; ignoring it silently changes which findings are
+        # reported, and "my suppressions are working" then looks exactly
+        # like "my suppressions were skipped". This bit in practice: a
+        # missing PyYAML made an entire .scignore.yaml a no-op while the
+        # run still exited 0 and reported the suppressed finding as live.
+        #
+        # Only reachable when the file is present, so repositories that
+        # do not use suppressions are unaffected.
         for err in sup_errors:
-            sys.stderr.write(f"WARN: {err}\n")
+            sys.stderr.write(f"ERROR: {err}\n")
+        sys.stderr.write(
+            f"ERROR: {suppression_path} exists but could not be applied; refusing to "
+            "report results that silently ignore it.\n"
+        )
+        return 1
     all_findings = suppressions.apply(all_findings, sup_rules)
     all_findings.extend(suppressions.expired_findings(sup_rules, suppression_path))
 

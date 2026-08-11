@@ -1,6 +1,7 @@
 """Suppressions loader + apply + expired-rule findings."""
 
 import datetime
+import subprocess
 from pathlib import Path
 
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
@@ -98,3 +99,37 @@ def test_expired_findings_emit_critical(tmp_path):
     expired = expired_findings(rules, p)
     assert len(expired) == 1
     assert expired[0].severity is Severity.CRITICAL
+
+
+def test_a_present_but_unloadable_suppression_file_fails_the_run(tmp_path, capsys):
+    """An unusable suppression file must stop the run, not warn and continue.
+
+    A suppression file that exists is an explicit instruction. Ignoring it
+    silently changes which findings are reported, and "my suppressions
+    applied" then looks identical to "my suppressions were skipped". This
+    happened for real: PyYAML was missing, so an entire .scignore.yaml was
+    a no-op while the run exited 0 and reported the suppressed finding as
+    live. The warning was on stderr and scrolled past unread.
+    """
+    from secure_code_audit.cli import main
+
+    # A git repo, because suppressions resolve against the repository root
+    # rather than the scan target.
+    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / "a.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    (tmp_path / ".scignore.yaml").write_text("not: valid: yaml: [\n", encoding="utf-8")
+
+    code = main([str(tmp_path), "--json-output", str(tmp_path / "out.json")])
+
+    assert code == 1
+    assert "could not be applied" in capsys.readouterr().err
+
+
+def test_no_suppression_file_is_not_an_error(tmp_path):
+    """Repositories that use no suppressions are unaffected by the above."""
+    from secure_code_audit.cli import main
+
+    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / "a.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+
+    assert main([str(tmp_path), "--json-output", str(tmp_path / "out.json")]) == 0
