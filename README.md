@@ -347,6 +347,7 @@ Full design philosophy in [`docs/design.md`](docs/design.md).
 - [`docs/product-intent.md`](docs/product-intent.md) — Why this exists, who it serves, what it refuses to become
 - [`docs/design.md`](docs/design.md)              — Architecture + non-goals + scanner protocol
 - [`docs/architecture.md`](docs/architecture.md)  — Audit of the system as built + remediation sequence
+- [`docs/release-blockers.md`](docs/release-blockers.md) — Open v0.3.0 release blockers (do not tag until closed)
 - [`docs/standards.md`](docs/standards.md)        — NIST SSDF / OWASP / CWE / Scorecard / SARIF citations
 - [`docs/scoring.md`](docs/scoring.md)            — Weighting model + worked examples
 - [`docs/scanners.md`](docs/scanners.md)          — Per-scanner integrations + caveats
