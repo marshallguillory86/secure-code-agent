@@ -242,6 +242,10 @@ for repositories whose `pyproject.toml` is their authoritative audit input.
   reason:  "Slated for rewrite Q3 2026 — gated by initiative INV-44."
   expires: "2026-09-30"
 
+  fingerprint: 0aaa689f8a967d8c   # optional: pin to ONE finding (16 hex, from the report)
+
+  line: 18                          # optional: with fingerprint, pins the exact location
+
 - rule_id: "B101"
   paths:   ["tests/"]
   reason:  "assert statements are legitimate in test code."

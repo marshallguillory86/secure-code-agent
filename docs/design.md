@@ -205,7 +205,20 @@ Per-file or per-rule suppression with mandatory justification:
 - rule_id: "B101"   # assert_used — used pervasively in test fixtures
   paths:   ["tests/"]
   reason:  "assert statements legitimate in test code."
+- file: api/tests/test_validation_errors.py
+  rule_id: gitleaks.generic-api-key
+  reason:  "Deliberate test canary, not a credential."
+  expires: "2027-08-01"
+  fingerprint: 0aaa689f8a967d8c   # optional: pin to ONE finding (16 hex, from the report)
+  line: 18                        # optional: with fingerprint, pins the exact location
 ```
+
+`fingerprint` and `line` narrow an entry to a single finding. Without them, an entry covers every
+present and future finding of that rule in that file. Neither is sufficient alone for secrets: the
+fingerprint deliberately excludes the line so reformatting cannot break baseline identity, and
+gitleaks reports REDACTED evidence — so two different secrets in one file share a fingerprint and
+only `line` separates them. Unknown fields and malformed values are rejected, never ignored: a
+typo must not silently widen a suppression back to file+rule.
 
 `expires` is required. Past-expiry suppressions become CRITICAL findings on their own — you can't ship `reason: "we'll fix it later"` forever.
 
