@@ -9,6 +9,23 @@ Schema:
 
 Wildcard rule (rule_id: "*") requires `file` or `paths` so an operator can't
 disable a rule globally. Past-expiry entries become CRITICAL findings.
+
+Entry schema (.scignore.yaml)::
+
+    - rule_id: gitleaks.generic-api-key   # or "*" (then file/paths is required)
+      reason: >-                           # required; why this is not a real finding
+        ...
+      expires: 2027-08-01                  # required; max 365 days out
+      file: api/tests/x.py                 # optional path (suffix match)
+      paths: ["api/**"]                    # optional fnmatch patterns
+      fingerprint: 0aaa689f8a967d8c        # optional; 16 hex chars, from the report
+      line: 18                             # optional; positive integer
+
+`fingerprint` + `line` together pin an entry to ONE finding. Neither is sufficient alone for
+secret findings: the fingerprint excludes the line (so reformatting does not break baseline
+identity) and gitleaks reports REDACTED evidence, so two different secrets in one file share a
+fingerprint. Unknown fields and malformed values are rejected rather than ignored — a typo must
+not silently widen a suppression back to file+rule.
 """
 
 from __future__ import annotations
@@ -24,6 +41,11 @@ from secure_code_audit.findings import Category, Confidence, Finding, Severity
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MAX_TTL_DAYS = 365
 
+# Exactly the keys an entry may carry. Anything else is a typo or a misunderstanding, and both
+# must fail loudly rather than degrade the entry to a broader match.
+_ALLOWED_KEYS = frozenset({"rule_id", "reason", "expires", "file", "paths", "fingerprint", "line"})
+_VALID_FINGERPRINT = re.compile(r"[0-9a-f]{16}")
+
 
 @dataclass(frozen=True)
 class SuppressionRule:
@@ -32,12 +54,27 @@ class SuppressionRule:
     expires: datetime.date
     file: str | None = None
     paths: tuple[str, ...] = field(default_factory=tuple)
+    # Narrowing keys. A suppression keyed only to (file, rule) covers every present and future
+    # finding of that rule in that file — a different secret, on a different line, hidden by a
+    # reason that was never about it.
+    #
+    # `fingerprint` alone is NOT sufficient for secret findings and must not be sold as such:
+    # Finding.make_fingerprint deliberately excludes the line number (so a reformat does not
+    # break baseline identity) and gitleaks reports REDACTED evidence, so two different secrets
+    # on different lines of the same file produce the SAME fingerprint. `line` is what separates
+    # them. An audit demonstrated exactly that collision.
+    fingerprint: str | None = None
+    line: int | None = None
 
     def matches(self, finding: Finding) -> bool:
         if self.rule_id != "*" and self.rule_id != finding.rule_id:
             return False
         rel = finding.file_path.as_posix()
         if self.file is not None and self.file != rel and not rel.endswith(self.file):
+            return False
+        if self.fingerprint is not None and self.fingerprint != finding.fingerprint:
+            return False
+        if self.line is not None and self.line != finding.line_start:
             return False
         return not self.paths or any(fnmatch.fnmatch(rel, p) for p in self.paths)
 
@@ -95,10 +132,39 @@ def load(path: Path) -> tuple[list[SuppressionRule], list[str]]:
             )
             continue
 
+        # FAIL CLOSED on anything unrecognised or malformed. Silently ignoring a key means a
+        # typo (`fingerpint:`) or an empty value quietly downgrades a narrow suppression back to
+        # the broad file+rule form — restoring the blind spot the narrow keys exist to remove,
+        # with the config still reading as if it were narrow.
+        unknown = sorted(set(entry) - _ALLOWED_KEYS)
+        if unknown:
+            errors.append(
+                f"{path}: entry #{i}: unknown field(s) {', '.join(unknown)}. "
+                f"Allowed: {', '.join(sorted(_ALLOWED_KEYS))}."
+            )
+            continue
+
         file_v = entry.get("file")
         paths_v = entry.get("paths") or []
         if rule_id == "*" and not file_v and not paths_v:
             errors.append(f"{path}: entry #{i}: rule_id='*' requires `file` or `paths`.")
+            continue
+
+        fingerprint_v = entry.get("fingerprint")
+        if "fingerprint" in entry and not _VALID_FINGERPRINT.fullmatch(str(fingerprint_v or "")):
+            errors.append(
+                f"{path}: entry #{i}: 'fingerprint' must be 16 hexadecimal characters "
+                f"(got {fingerprint_v!r})."
+            )
+            continue
+
+        line_v = entry.get("line")
+        if "line" in entry and not (
+            isinstance(line_v, int) and not isinstance(line_v, bool) and line_v > 0
+        ):
+            errors.append(
+                f"{path}: entry #{i}: 'line' must be a positive integer (got {line_v!r})."
+            )
             continue
 
         rules.append(
@@ -108,6 +174,8 @@ def load(path: Path) -> tuple[list[SuppressionRule], list[str]]:
                 expires=expires,
                 file=str(file_v) if file_v else None,
                 paths=tuple(str(p) for p in paths_v) if paths_v else (),
+                fingerprint=str(fingerprint_v) if fingerprint_v else None,
+                line=line_v if isinstance(line_v, int) else None,
             )
         )
 
