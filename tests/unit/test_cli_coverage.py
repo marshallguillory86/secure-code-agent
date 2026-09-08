@@ -19,7 +19,12 @@ def _write_config(tmp_path, *, required: bool):
                 "command": [str(tmp_path / "missing-trivy")],
             }
         },
-        "gates": {"require_scanners": ["trivy"]} if required else {},
+        # When trivy is not required we still configure a real gate, so the
+        # test proves the gate ran and chose not to trip — rather than
+        # proving nothing was gated at all.
+        "gates": (
+            {"require_scanners": ["trivy"]} if required else {"fail_on_severity": ["critical"]}
+        ),
     }
     path = tmp_path / "secure-code-agent.json"
     path.write_text(json.dumps(config), encoding="utf-8")
@@ -227,3 +232,58 @@ def test_sarif_import_name_prefix_is_split_from_paths_that_contain_equals(tmp_pa
     assert _parse_sarif_import("trivy=out.sarif") == ("trivy", Path("out.sarif"))
     assert _parse_sarif_import("./a=b/out.sarif") == (None, Path("./a=b/out.sarif"))
     assert _parse_sarif_import("out.sarif") == (None, Path("out.sarif"))
+
+
+def _vulnerable_repo(tmp_path):
+    """A target the built-in rules will flag HIGH (CWE-78)."""
+    (tmp_path / "vuln.py").write_text(
+        "import subprocess\n\n\ndef run(user_input):\n    subprocess.run(user_input, shell=True)\n",
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_high_finding_cannot_pass_the_gate_when_no_gate_is_configured(tmp_path, capsys):
+    # Regression for the false green: the audit correctly found a HIGH CWE-78,
+    # scored it 0.00/F, and still exited 0 because every gate was absent.
+    target = _vulnerable_repo(tmp_path)
+    config = tmp_path / "secure-code-agent.json"
+    config.write_text(json.dumps({"gates": {}}), encoding="utf-8")
+
+    exit_code = main([str(target), "--config", str(config), "--fail-on-gate"])
+
+    assert exit_code == 2
+    assert "no gate is configured" in capsys.readouterr().err
+
+
+def test_inert_gate_keys_do_not_satisfy_fail_on_gate(tmp_path, capsys):
+    target = _vulnerable_repo(tmp_path)
+    config = tmp_path / "secure-code-agent.json"
+    config.write_text(
+        json.dumps({"gates": {"fail_on_severity": [], "fail_on_new": False, "min_score": 0}}),
+        encoding="utf-8",
+    )
+
+    exit_code = main([str(target), "--config", str(config), "--fail-on-gate"])
+
+    assert exit_code == 2
+    assert "no gate is configured" in capsys.readouterr().err
+
+
+def test_one_configured_gate_is_enough_to_allow_fail_on_gate(tmp_path):
+    target = _vulnerable_repo(tmp_path)
+    config = tmp_path / "secure-code-agent.json"
+    config.write_text(
+        json.dumps({"gates": {"fail_on_severity": ["high", "critical"]}}), encoding="utf-8"
+    )
+
+    # Not a usage error (2) — the gate runs and trips on the HIGH finding (1).
+    assert main([str(target), "--config", str(config), "--fail-on-gate"]) == 1
+
+
+def test_report_only_audits_still_run_without_any_gate(tmp_path):
+    target = _vulnerable_repo(tmp_path)
+    config = tmp_path / "secure-code-agent.json"
+    config.write_text(json.dumps({"gates": {}}), encoding="utf-8")
+
+    assert main([str(target), "--config", str(config)]) == 0
