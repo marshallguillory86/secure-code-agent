@@ -26,7 +26,7 @@ The minimum set that must close before `v0.3.0` is tagged:
 - [ ] **§3** — trust model for SARIF imports decided and enforced
 - [ ] **§4** — malformed SARIF contained as failed coverage, not a traceback
 - [ ] **§5** — offline Semgrep is genuinely offline
-- [ ] **§6** — failed-coverage SARIF reaches Code Scanning
+- [x] **§6** — failed-coverage SARIF reaches Code Scanning ([#17](https://github.com/marshallguillory86/secure-code-agent/issues/17))
 
 §7 and §8 are not release blockers but should land in the same cycle.
 
@@ -134,6 +134,12 @@ The Security tab therefore retains an older clean result. The adjacent artifact
 upload correctly uses `always()`.
 
 **Bounded fix:** add `!cancelled() &&` to the existing condition.
+
+**Resolved.** The condition now leads with `!cancelled()` plus a `hashFiles`
+guard, parenthesized so `&&` cannot bind tighter than the fork check. The
+happy path is exercised by every CI run; the failure path is reasoned from
+GitHub's documented implicit `success()` and cannot be exercised without
+deliberately breaking this repository's own audit.
 
 ## 7. Medium — default config resolves against the shell's cwd, not the target
 

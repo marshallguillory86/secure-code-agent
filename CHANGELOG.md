@@ -52,6 +52,10 @@ coverage are now reported and gated separately.
 
 ### Fixed
 
+- CI now uploads the audit SARIF to Code Scanning when required coverage fails.
+  The step carried no status-check function, so GitHub's implicit `success()`
+  skipped it exactly when the SARIF reported `executionSuccessful: false`,
+  leaving the Security tab showing an older clean result.
 - Scanner timeouts, unexpected exits, missing output, and parse failures no
   longer silently look like successful clean scans in the updated adapters.
 - Unreadable, malformed, or run-less `--sarif-import` input previously ingested
