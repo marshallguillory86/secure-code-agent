@@ -25,6 +25,9 @@ The minimum set that must close before `v0.3.0` is tagged:
 - [x] **§2** — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage ([#13](https://github.com/marshallguillory86/secure-code-agent/issues/13))
 - [ ] **§3** — trust model for SARIF imports decided and enforced
 - [ ] **§4** — malformed SARIF contained as failed coverage, not a traceback
+- [ ] **§2** — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage
+- [x] **§3** — trust model for SARIF imports decided and enforced ([#14](https://github.com/marshallguillory86/secure-code-agent/issues/14))
+- [x] **§4** — malformed SARIF contained as failed coverage, not a traceback ([#15](https://github.com/marshallguillory86/secure-code-agent/issues/15))
 - [ ] **§5** — offline Semgrep is genuinely offline
 - [x] **§6** — failed-coverage SARIF reaches Code Scanning ([#17](https://github.com/marshallguillory86/secure-code-agent/issues/17))
 
@@ -105,6 +108,25 @@ coverage from an import demands positive invocation evidence, with a distinct
 `reported` / `unverified` outcome for imports that lack it. Minimum — document
 the assumption in `docs/scanners.md` and surface `unverified` in the report.
 
+**Resolved, with the trigger moved.** Keying on the presence of `invocations`
+would make our trust depend on an optional SARIF field that most tools omit —
+firing either almost always or almost never depending on which tools an
+operator feeds it. The durable distinction is provenance, not self-description:
+
+- we ran it and watched the process → `COMPLETED`
+- someone handed us the artifact → `UNVERIFIED`, always, even when the file
+  says `executionSuccessful: true` (a file describing itself proves nothing)
+- the artifact declares its own failure → `FAILED`, regardless of source
+
+`UNVERIFIED` satisfies `require_scanners`, because passing
+`--sarif-import trivy=x.sarif` is an operator assertion of the same kind we
+already trust from `scanners.trivy.command`. It does not degrade coverage to
+`PARTIAL`, which keeps `PARTIAL` meaning "something did not run". Instead every
+report names it: `coverage: COMPLETE (1 unverified: trivy)`, plus
+`coverage.unverified` in JSON and `unverifiedScanners` in the emitted SARIF.
+`COMPLETED` outranks `UNVERIFIED` on duplicate names, so our own observation is
+never downgraded by someone else's file.
+
 ## 4. Medium — structurally malformed SARIF crashes the audit
 
 `{"version":"2.1.0","runs":[null]}`, or a `results` object where an array is
@@ -118,6 +140,12 @@ adapter failure-isolation rule described in [`architecture.md`](architecture.md)
 **Bounded fix:** validate run/results shape during ingest and route any
 structural violation to the existing failed-execution path already used for
 unreadable and malformed input.
+
+**Resolved.** A non-object run and a non-array `results` each produce a failed
+execution naming the offending index and type, so the audit still emits its
+full evidence set. Non-object entries *inside* a valid `results` array are
+skipped rather than failing the whole run — they carry nothing to normalize,
+and one malformed row should not discard a scanner's other findings.
 
 ## 5. High — `online: false` does not make Semgrep offline
 
