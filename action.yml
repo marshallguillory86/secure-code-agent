@@ -21,7 +21,10 @@ inputs:
     required:    false
     default:     ''
   fail-on-gate:
-    description: 'Exit nonzero if any configured gate trips.'
+    description: >-
+      Exit nonzero if any configured gate trips. Requires at least one gate in
+      the config; the run fails loudly rather than passing with no security
+      floor when none is configured.
     required:    false
     default:     'true'
   fail-on-new:

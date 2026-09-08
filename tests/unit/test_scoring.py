@@ -4,6 +4,7 @@ from pathlib import Path
 
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scoring import (
+    active_gates,
     evaluate_gates,
     finding_score,
     letter_grade,
@@ -128,3 +129,34 @@ def test_gate_min_score():
     r = score(findings, loc_scanned=5_000)
     gate = evaluate_gates(findings, r, {"min_score": 4.0})
     assert not gate.passed
+
+
+def test_absent_gate_config_has_no_active_gates():
+    assert active_gates({}) == ()
+
+
+def test_gate_keys_that_cannot_trip_do_not_count_as_configured():
+    # Each of these is present but inert: nothing matches an empty list, an
+    # empty cap map caps nothing, and no score can fall below 0.
+    inert = {
+        "fail_on_severity": [],
+        "fail_on_category": [],
+        "fail_on_new": False,
+        "min_score": 0,
+        "require_scanners": [],
+        "max_unsuppressed": {},
+    }
+
+    assert active_gates(inert) == ()
+
+
+def test_a_single_real_gate_is_enough():
+    assert active_gates({"min_score": 4.0}) == ("min_score",)
+    assert active_gates({"fail_on_severity": ["high"]}) == ("fail_on_severity",)
+    assert active_gates({"require_scanners": ["bandit"]}) == ("require_scanners",)
+
+
+def test_active_gates_reports_every_configured_gate():
+    assert active_gates(
+        {"fail_on_new": True, "min_score": 4.0, "max_unsuppressed": {"critical": 0}}
+    ) == ("fail_on_new", "min_score", "max_unsuppressed")
