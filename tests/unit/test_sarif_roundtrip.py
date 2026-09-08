@@ -153,8 +153,11 @@ def test_import_satisfies_required_scanner_coverage(tmp_path):
     assert executions[0].name == "trivy"
     assert executions[0].version == "0.60.0"
     assert executions[0].scope == "sarif-import:trivy.sarif"
+    # Covers the required ground, but as an artifact we did not watch run.
+    assert executions[0].outcome is ScannerOutcome.UNVERIFIED
     assert report.status is CoverageStatus.COMPLETE
     assert report.failures == ()
+    assert report.unverified == ("trivy",)
 
 
 def test_import_honors_the_exporting_tools_own_failure(tmp_path):
@@ -215,3 +218,103 @@ def test_explicit_name_overrides_an_unrecognized_driver(tmp_path):
     _, executions = sarif.ingest_with_coverage(p, override_scanner="semgrep")
 
     assert executions[0].name == "semgrep"
+
+
+def _import(tmp_path, name, payload):
+    p = tmp_path / f"{name}.sarif"
+    p.write_text(json.dumps(payload), encoding="utf-8")
+    return p
+
+
+def test_a_locally_run_scanner_outranks_an_unverified_import_of_the_same_name():
+    # We watched our own process; someone else's file must not downgrade that.
+    local = ScannerExecution("trivy", ScannerOutcome.COMPLETED)
+    imported = ScannerExecution("trivy", ScannerOutcome.UNVERIFIED)
+
+    for pair in ((local, imported), (imported, local)):
+        report = evaluate_coverage(pair, ["trivy"])
+        assert report.status is CoverageStatus.COMPLETE
+        assert report.unverified == ()
+
+
+def test_a_failed_local_run_still_beats_an_unverified_import():
+    report = evaluate_coverage(
+        [
+            ScannerExecution("trivy", ScannerOutcome.UNVERIFIED),
+            ScannerExecution("trivy", ScannerOutcome.FAILED),
+        ],
+        ["trivy"],
+    )
+
+    assert report.status is CoverageStatus.FAILED
+
+
+def test_import_declaring_success_is_still_unverified(tmp_path):
+    # executionSuccessful: true is the file describing itself. We did not
+    # observe the process, so the outcome does not become COMPLETED.
+    p = _import(
+        tmp_path,
+        "trivy",
+        {
+            "version": "2.1.0",
+            "runs": [
+                {
+                    "tool": {"driver": {"name": "Trivy", "rules": []}},
+                    "invocations": [{"executionSuccessful": True}],
+                    "results": [],
+                }
+            ],
+        },
+    )
+
+    _, executions = sarif.ingest_with_coverage(p)
+
+    assert executions[0].outcome is ScannerOutcome.UNVERIFIED
+
+
+def test_null_run_is_contained_as_failed_coverage_not_a_traceback(tmp_path):
+    p = _import(tmp_path, "broken", {"version": "2.1.0", "runs": [None]})
+
+    findings, executions = sarif.ingest_with_coverage(p)
+
+    assert executions[0].outcome is ScannerOutcome.FAILED
+    assert "not an object" in executions[0].reason
+    assert [f.rule_id for f in findings] == ["external_sarif.tool_error"]
+
+
+def test_object_results_is_contained_as_failed_coverage(tmp_path):
+    p = _import(
+        tmp_path,
+        "broken",
+        {
+            "version": "2.1.0",
+            "runs": [{"tool": {"driver": {"name": "Trivy"}}, "results": {"not": "an array"}}],
+        },
+    )
+
+    _, executions = sarif.ingest_with_coverage(p)
+
+    assert executions[0].outcome is ScannerOutcome.FAILED
+    assert "not an array" in executions[0].reason
+    assert evaluate_coverage(executions, ["trivy"]).status is CoverageStatus.FAILED
+
+
+def test_non_object_entries_inside_results_are_skipped_not_fatal(tmp_path):
+    p = _import(
+        tmp_path,
+        "mixed",
+        {
+            "version": "2.1.0",
+            "runs": [
+                {
+                    "tool": {"driver": {"name": "Trivy", "rules": [None, {"id": "R1"}]}},
+                    "results": [None, {"ruleId": "R1", "message": {"text": "real"}}],
+                }
+            ],
+        },
+    )
+
+    findings, executions = sarif.ingest_with_coverage(p)
+
+    assert len(findings) == 1
+    assert executions[0].outcome is ScannerOutcome.UNVERIFIED

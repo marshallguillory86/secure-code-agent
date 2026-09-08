@@ -86,6 +86,7 @@ def _coverage_to_dict(coverage: CoverageReport | None) -> dict | None:
     return {
         "status": coverage.status.value,
         "required": list(coverage.required),
+        "unverified": list(coverage.unverified),
         "failures": list(coverage.failures),
         "scanners": [
             {
@@ -215,6 +216,11 @@ def _scanners_section(
         out.append(f"- Coverage: **{coverage.status.value.upper()}**")
         if coverage.required:
             out.append(f"- Required: {', '.join(coverage.required)}")
+        if coverage.unverified:
+            out.append(
+                f"- Unverified (imported artifact, execution not observed): "
+                f"{', '.join(coverage.unverified)}"
+            )
     out.append(f"- Run: {', '.join(scanners_run) if scanners_run else '_none_'}")
     if scanners_unavailable:
         out.append(f"- Skipped (binary not on PATH): {', '.join(scanners_unavailable)}")
