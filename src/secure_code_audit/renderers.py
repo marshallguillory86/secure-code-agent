@@ -11,7 +11,7 @@ from pathlib import Path
 from secure_code_audit import __version__
 from secure_code_audit.findings import Finding, Severity
 from secure_code_audit.scanner_status import CoverageReport
-from secure_code_audit.scoring import GateResult, ScoreReport
+from secure_code_audit.scoring import GateResult, ScoreReport, Verdict
 from secure_code_audit.standards import cwe_url, owasp_label
 
 # ---------------------------------------------------------------------------
@@ -24,6 +24,7 @@ def to_json(
     score: ScoreReport,
     gate: GateResult,
     coverage: CoverageReport | None = None,
+    verdict: Verdict | None = None,
 ) -> dict:
     findings = list(findings)
     return {
@@ -32,12 +33,10 @@ def to_json(
         "score": {
             "overall": score.overall,
             "letter": score.letter,
+            "verified_grade": verdict.verified_grade if verdict else None,
+            "evidence_status": verdict.evidence_status if verdict else "incomplete",
+            "evidence_reasons": list(verdict.reasons) if verdict else [],
             "coverage_complete": coverage is None or coverage.status.value == "complete",
-            "qualification": (
-                None
-                if coverage is None or coverage.status.value == "complete"
-                else "finding score; scanner coverage incomplete"
-            ),
             "loc_scanned": score.loc_scanned,
             "worst_category": score.worst_category.value if score.worst_category else None,
             "per_category": {c.value: round(v, 2) for c, v in score.per_category.items()},
@@ -109,9 +108,10 @@ def write_json(
     gate: GateResult,
     path: Path,
     coverage: CoverageReport | None = None,
+    verdict: Verdict | None = None,
 ) -> None:
     path.write_text(
-        json.dumps(to_json(findings, score, gate, coverage), indent=2), encoding="utf-8"
+        json.dumps(to_json(findings, score, gate, coverage, verdict), indent=2), encoding="utf-8"
     )
 
 

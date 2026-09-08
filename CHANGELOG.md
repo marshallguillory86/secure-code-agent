@@ -29,6 +29,20 @@ clear.
 
 ### Fixed
 
+- **Withholding evidence can no longer buy a better grade.** The score is a
+  rate over findings, so disabling scanners removed findings and the number
+  rose — on one tree, from 0.00/F to 5.00/A+, the best possible letter earned
+  by looking less hard. Scanner coverage did not catch it, because a disabled
+  scanner produces no execution record at all. A letter grade is now issued
+  only when `gates.require_scanners` declares a scanner set *and* coverage
+  confirms it ran; otherwise `verified_grade` is null with reasons. The numeric
+  estimate is unchanged and still reported — it is honest about what was found,
+  it simply is not a grade. Borrowed from `maintainability-agent`'s P3 and
+  ADR 001.
+- The decision to qualify or withhold a score is made once, in
+  `scoring.verdict()`, instead of independently in five renderers — the
+  duplication `architecture.md` §3 recorded, where the SARIF site was missed on
+  the first pass.
 - Unknown top-level configuration keys are rejected instead of ignored. The
   schema declared `additionalProperties: false` while the loader accepted
   anything, so a typo'd gate name silently disabled a gate. See
