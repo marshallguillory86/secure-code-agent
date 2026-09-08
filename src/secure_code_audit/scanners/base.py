@@ -203,6 +203,40 @@ class Scanner(ABC):
             cwe_top25=is_top25(canonical_cwe),
         )
 
+    def _findings_exit_contradiction(
+        self,
+        target: Path,
+        *,
+        exit_code: int,
+        findings_exit: int,
+        findings: list[Finding],
+    ) -> Finding | None:
+        """Catch "the scanner said it found things, and we parsed none".
+
+        A findings-signalling exit code is the tool asserting it detected
+        something. Recording zero findings in that case reports a clean scan
+        of a target the scanner just called dirty — the scanner's own signal,
+        silently discarded. Fail the scanner instead, so coverage says we do
+        not know rather than saying nothing is there.
+
+        Returns the control finding when the contradiction holds, else None.
+        """
+        if exit_code != findings_exit or findings:
+            return None
+        return self._make_finding(
+            rule_id=f"{self.name}.tool_error",
+            message=(
+                f"{self.name} exited {exit_code} to signal findings but produced no "
+                "parseable results; refusing to record this as a clean scan"
+            ),
+            file_path=target,
+            line_start=0,
+            line_end=None,
+            code_snippet=None,
+            severity=Severity.INFORMATIONAL,
+            confidence=Confidence.HIGH,
+        )
+
     def _unavailable_finding(self, target: Path) -> Finding:
         """Informational finding emitted when no safe command can be resolved."""
         return Finding(

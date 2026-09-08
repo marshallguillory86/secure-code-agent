@@ -18,6 +18,8 @@ from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanners.base import Scanner
 
+_FINDINGS_EXIT = 1  # gitleaks: 0 = clean, 1 = leaks found, >1 = error
+
 
 class GitleaksScanner(Scanner):
     name = "gitleaks"
@@ -64,7 +66,13 @@ class GitleaksScanner(Scanner):
                     )
                 ]
             if not report_path.exists() or report_path.stat().st_size == 0:
-                return []
+                # Exit 0 with no report is a genuinely clean scan. Exit 1 with
+                # no report is gitleaks telling us it found secrets and us
+                # having nothing to show for it.
+                contradiction = self._findings_exit_contradiction(
+                    target, exit_code=r.returncode, findings_exit=_FINDINGS_EXIT, findings=[]
+                )
+                return [contradiction] if contradiction else []
             try:
                 payload = json.loads(report_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
@@ -80,13 +88,28 @@ class GitleaksScanner(Scanner):
                         confidence=Confidence.HIGH,
                     )
                 ]
-            return self._parse(payload, target)
+            if not isinstance(payload, list):
+                return [
+                    self._make_finding(
+                        rule_id=f"{self.name}.parse_error",
+                        message="gitleaks report root must be a JSON array",
+                        file_path=target,
+                        line_start=0,
+                        line_end=None,
+                        code_snippet=None,
+                        severity=Severity.INFORMATIONAL,
+                        confidence=Confidence.HIGH,
+                    )
+                ]
+            findings = self._parse(payload, target)
+            contradiction = self._findings_exit_contradiction(
+                target, exit_code=r.returncode, findings_exit=_FINDINGS_EXIT, findings=findings
+            )
+            return [contradiction] if contradiction else findings
         finally:
             report_path.unlink(missing_ok=True)
 
     def _parse(self, payload: list[dict], target: Path) -> list[Finding]:
-        if not isinstance(payload, list):
-            return []
         findings: list[Finding] = []
         for hit in payload:
             rule_id = str(hit.get("RuleID") or hit.get("Rule") or "unknown")
