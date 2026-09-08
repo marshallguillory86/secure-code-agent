@@ -86,10 +86,18 @@ jobs:
           --prompt-output secure-code-remediation-prompt.md
           --comment-output secure-code-pr-comment.md
 
+      # The audit step exits nonzero when required coverage fails, and that is
+      # exactly the SARIF worth publishing: it carries executionSuccessful
+      # false. Without a status-check function GitHub applies an implicit
+      # success(), which skipped the upload precisely then and left the
+      # Security tab showing an older clean result. The parentheses matter —
+      # && binds tighter than ||, so without them a fork PR would upload.
       - name: Upload SARIF to code scanning
         if: >-
-          github.event_name != 'pull_request' ||
-          github.event.pull_request.head.repo.full_name == github.repository
+          !cancelled() &&
+          hashFiles('secure-code.sarif') != '' &&
+          (github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository)
         uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           sarif_file: secure-code.sarif
