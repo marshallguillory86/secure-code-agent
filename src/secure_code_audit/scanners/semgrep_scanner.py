@@ -11,11 +11,43 @@ from __future__ import annotations
 
 import json
 import tempfile
+from importlib.resources import files
 from pathlib import Path
 
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanners.base import Scanner
+
+#: Ruleset shipped inside the wheel, used when `online` is false. Deliberately
+#: narrower than the Registry packs — see docs/scanners.md.
+OFFLINE_RULESET = "data/semgrep-offline.yaml"
+
+
+def offline_ruleset_path() -> Path | None:
+    """Filesystem path to the packaged offline ruleset, or None if absent."""
+    candidate = Path(str(files("secure_code_audit").joinpath(OFFLINE_RULESET)))
+    return candidate if candidate.is_file() else None
+
+
+def _cwe_from_rule(rule: dict) -> str | None:
+    """Recover a CWE id from a Semgrep SARIF rule.
+
+    Semgrep does not surface `metadata.cwe` as `properties.cwe`; it folds it
+    into `properties.tags` alongside confidence and OWASP entries. Reading only
+    `properties.cwe` meant every Semgrep finding — registry rules included —
+    arrived with no CWE, so it scored without the Top-25 weighting and mapped
+    to no standard. Both shapes are accepted now.
+    """
+    props = rule.get("properties") or {}
+    explicit = props.get("cwe")
+    if isinstance(explicit, list) and explicit:
+        return str(explicit[0]).split(":", 1)[0].strip() or None
+    if isinstance(explicit, str) and explicit.strip():
+        return explicit.split(":", 1)[0].strip()
+    for tag in props.get("tags") or []:
+        if isinstance(tag, str) and tag.upper().startswith("CWE-"):
+            return tag.split(":", 1)[0].strip()
+    return None
 
 
 class SemgrepScanner(Scanner):
@@ -30,12 +62,25 @@ class SemgrepScanner(Scanner):
             return [self._unavailable_finding(target)]
 
         sc_cfg = self.cfg(config)
-        config_arg = "auto"  # registry-curated pack
+        config_arg = "auto"  # registry-curated pack; requires network
         if not sc_cfg.online:
-            # Operator opted out of online registry — fall back to bundled
-            # rules. Semgrep ships a small offline set under p/python +
-            # p/javascript when --config points to those names.
-            config_arg = "p/security-audit"
+            # `p/security-audit` used to be selected here and described as a
+            # bundled offline set. It is a Registry ruleset and is fetched over
+            # the network, so "offline" silently was not. Use the ruleset we
+            # ship, and fail closed if the installation lacks it rather than
+            # falling back to something that reaches the network.
+            ruleset = offline_ruleset_path()
+            if ruleset is None:
+                return [
+                    self._error_finding(
+                        target,
+                        f"offline semgrep requested but the packaged ruleset "
+                        f"({OFFLINE_RULESET}) is missing from this installation; "
+                        "reinstall secure-code-agent, or set scanners.semgrep.online "
+                        "to allow the Semgrep Registry",
+                    )
+                ]
+            config_arg = str(ruleset)
 
         with tempfile.NamedTemporaryFile(suffix=".sarif", delete=False) as tmp:
             sarif_path = Path(tmp.name)
@@ -46,6 +91,12 @@ class SemgrepScanner(Scanner):
                 config_arg,
                 "--sarif",
                 "--metrics=off",
+                # Semgrep derives a rule-id prefix from the config file path,
+                # so a local ruleset would emit ids like
+                # `src.secure_code_audit.data.sca.offline.…` that vary by
+                # install location — breaking standards lookup and making
+                # baseline fingerprints unstable across machines.
+                "--no-rewrite-rule-ids",
                 "--output",
                 str(sarif_path),
                 str(target),
@@ -120,13 +171,7 @@ class SemgrepScanner(Scanner):
                 else:
                     severity = Severity.MEDIUM
 
-                # Pull CWE from rule properties.cwe if present.
-                cwe = None
-                props = rule.get("properties") or {}
-                if isinstance(props.get("cwe"), list) and props["cwe"]:
-                    cwe = props["cwe"][0]
-                elif isinstance(props.get("cwe"), str):
-                    cwe = props["cwe"]
+                cwe = _cwe_from_rule(rule)
 
                 findings.append(
                     self._make_finding(

@@ -62,6 +62,20 @@ coverage are now reported and gated separately.
   as a completed scan — discarding the scanner's own assertion that it found
   secrets, in the highest-weighted category. Both now fail coverage. A clean
   exit with no output remains a clean scan.
+- `scanners.semgrep.online: false` now genuinely runs offline. It selected
+  `p/security-audit` and described it as a bundled ruleset; that is a Semgrep
+  Registry pack fetched over the network, so an air-gapped run failed on a
+  certificate error while the config claimed offline coverage. A ten-rule
+  ruleset now ships in the wheel and is used instead, with a `tool_error` if it
+  is missing rather than a fallback that reaches the network. It is narrower
+  than the Registry packs and `docs/scanners.md` says so.
+- Semgrep findings now carry a CWE. Semgrep folds `metadata.cwe` into
+  `properties.tags` rather than `properties.cwe`, which the adapter alone read,
+  so every Semgrep finding — Registry rules included — arrived unmapped and
+  scored without CWE Top-25 weighting.
+- Semgrep runs with `--no-rewrite-rule-ids`. Semgrep otherwise prefixes rule
+  ids with the config file's path, which varies by install location and would
+  destabilize baseline fingerprints across machines.
 - Scanner timeouts, unexpected exits, missing output, and parse failures no
   longer silently look like successful clean scans in the updated adapters.
 - Unreadable, malformed, or run-less `--sarif-import` input previously ingested

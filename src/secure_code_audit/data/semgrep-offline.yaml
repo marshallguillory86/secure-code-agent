@@ -1,0 +1,155 @@
+# Offline Semgrep ruleset — shipped inside the wheel.
+#
+# Used when `scanners.semgrep.online` is false. This is deliberately a small,
+# high-precision set, NOT a replacement for the Semgrep Registry packs. It
+# exists so that "offline" means offline: no network, no registry fetch, no
+# silent dependency on a rule server. Coverage is narrower than `p/security-audit`
+# and docs/scanners.md says so.
+#
+# Rule ids are namespaced `sca.offline.*` and carry standards mappings in
+# src/secure_code_audit/standards.py, so findings arrive with a CWE rather than
+# falling through to the wildcard.
+rules:
+  - id: sca.offline.python.subprocess-shell-true
+    message: >-
+      subprocess call with shell=True runs the command through a shell. Any
+      attacker-influenced element of the command becomes command injection.
+      Pass an argument list and leave shell=False.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-78"
+      owasp: "A03:2021-Injection"
+      confidence: HIGH
+    pattern-either:
+      - pattern: subprocess.run(..., shell=True, ...)
+      - pattern: subprocess.Popen(..., shell=True, ...)
+      - pattern: subprocess.call(..., shell=True, ...)
+      - pattern: subprocess.check_call(..., shell=True, ...)
+      - pattern: subprocess.check_output(..., shell=True, ...)
+
+  - id: sca.offline.python.os-system
+    message: >-
+      os.system() passes its argument to a shell. Use subprocess with an
+      argument list instead.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-78"
+      owasp: "A03:2021-Injection"
+      confidence: MEDIUM
+    pattern: os.system(...)
+
+  - id: sca.offline.python.pickle-load
+    message: >-
+      Deserializing with pickle executes arbitrary code from the payload. Use
+      JSON for data, or a signed envelope for trusted state transfer.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-502"
+      owasp: "A08:2021-Software and Data Integrity Failures"
+      confidence: HIGH
+    pattern-either:
+      - pattern: pickle.load(...)
+      - pattern: pickle.loads(...)
+
+  - id: sca.offline.python.yaml-unsafe-load
+    message: >-
+      yaml.load without SafeLoader can construct arbitrary Python objects.
+      Use yaml.safe_load().
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-502"
+      owasp: "A08:2021-Software and Data Integrity Failures"
+      confidence: HIGH
+    pattern-either:
+      - pattern: yaml.load($X)
+      - pattern: yaml.load($X, Loader=yaml.Loader)
+      - pattern: yaml.load($X, Loader=yaml.UnsafeLoader)
+
+  - id: sca.offline.python.weak-hash
+    message: >-
+      MD5 and SHA-1 are broken for security use. Use SHA-256 or better, and a
+      password KDF for passwords.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-327"
+      owasp: "A02:2021-Cryptographic Failures"
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: hashlib.md5(...)
+      - pattern: hashlib.sha1(...)
+
+  - id: sca.offline.python.requests-verify-disabled
+    message: >-
+      TLS certificate verification is disabled, so the connection is open to
+      interception. Remove verify=False.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-295"
+      owasp: "A02:2021-Cryptographic Failures"
+      confidence: HIGH
+    pattern-either:
+      - pattern: requests.get(..., verify=False, ...)
+      - pattern: requests.post(..., verify=False, ...)
+      - pattern: requests.put(..., verify=False, ...)
+      - pattern: requests.delete(..., verify=False, ...)
+      - pattern: requests.patch(..., verify=False, ...)
+      - pattern: requests.head(..., verify=False, ...)
+      - pattern: requests.request(..., verify=False, ...)
+
+  - id: sca.offline.python.debug-enabled
+    message: >-
+      Running with debug=True exposes an interactive console and stack traces.
+      Never enable it outside local development.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-489"
+      owasp: "A05:2021-Security Misconfiguration"
+      confidence: MEDIUM
+    pattern: $APP.run(..., debug=True, ...)
+
+  - id: sca.offline.javascript.eval
+    message: >-
+      eval() executes its argument as code. If any part is attacker-influenced
+      this is code injection.
+    languages: [javascript, typescript]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-95"
+      owasp: "A03:2021-Injection"
+      confidence: MEDIUM
+    pattern: eval(...)
+
+  - id: sca.offline.javascript.child-process-exec
+    message: >-
+      child_process.exec() runs its argument through a shell. Use execFile()
+      or spawn() with an argument array.
+    languages: [javascript, typescript]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-78"
+      owasp: "A03:2021-Injection"
+      confidence: HIGH
+    pattern-either:
+      - pattern: child_process.exec(...)
+      - pattern: cp.exec(...)
+
+  - id: sca.offline.javascript.inner-html-assignment
+    message: >-
+      Assigning to innerHTML renders its value as markup. If the value is
+      attacker-influenced this is DOM XSS. Use textContent, or sanitize.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-79"
+      owasp: "A03:2021-Injection"
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: $EL.innerHTML = $VALUE
+      - pattern: $EL.outerHTML = $VALUE

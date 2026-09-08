@@ -153,7 +153,11 @@ class Scanner(Protocol):
 - Bandit's `B101 (assert_used)` is noisy in tests; the repository example excludes `tests/`. Consumers should make that choice explicitly in their own config.
 
 ### Semgrep
-- Use `--config=auto` for the curated registry pack, or `--config=<file>` for repo-specific rules.
+- `scanners.semgrep.online: true` (the default) uses `--config=auto`, the curated Registry pack. **This reaches the network.**
+- `scanners.semgrep.online: false` uses the ruleset shipped in the wheel at `secure_code_audit/data/semgrep-offline.yaml`. No registry fetch, no rule server.
+- **The offline set is deliberately narrower than the Registry packs — it is not equivalent, and you should not read a clean offline run as equivalent to a clean `auto` run.** It is ten high-precision rules covering command injection, unsafe deserialization, weak hashes, disabled TLS verification, debug mode, `eval`, and DOM XSS, across Python and JavaScript/TypeScript. Every rule carries a CWE, and each is regression-tested to actually match its target pattern.
+- If the packaged ruleset is missing from an installation, offline Semgrep fails with a `tool_error` rather than falling back to anything that would reach the network.
+- We pass `--no-rewrite-rule-ids`. Semgrep otherwise prefixes rule ids with the config file's path, which would vary by install location and destabilize baseline fingerprints.
 - Semgrep timeouts on huge repos — we default to a 600s wall clock per run and fail soft (informational finding) on timeout.
 
 ### Gitleaks
