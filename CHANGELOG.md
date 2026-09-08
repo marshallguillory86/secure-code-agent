@@ -68,6 +68,19 @@ coverage are now reported and gated separately.
   zero findings with no warning and no coverage signal; it now fails the gate.
   An import that reports its own `executionSuccessful: false` is recorded as a
   failed execution rather than laundered into a clean result.
+- Imported SARIF is now recorded as `unverified` rather than `completed`. We
+  never observed the process, so a successful import means the operator vouched
+  for the artifact, not that we watched it succeed — `executionSuccessful: true`
+  is a file describing itself. Unverified coverage still satisfies
+  `require_scanners` and does not degrade status to `PARTIAL`, but is named in
+  every output: the terminal summary, `coverage.unverified` in JSON, and
+  `unverifiedScanners` in the emitted SARIF. A local run outranks an import of
+  the same scanner.
+- Structurally malformed imported SARIF is contained as failed coverage instead
+  of raising an uncaught `AttributeError`. A non-object run or a non-array
+  `results` fails that run and still emits the full evidence set; non-object
+  entries inside a valid `results` array are skipped rather than discarding the
+  scanner's other findings.
 - A scanner reported both by local execution and by SARIF import now resolves
   to its worst outcome, so a clean import cannot mask a failed local run.
 - CLI `--fail-on-new` now ignores informational control findings consistently

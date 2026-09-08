@@ -70,6 +70,7 @@ def _invocation(coverage: CoverageReport) -> dict:
         "properties": {
             "coverageStatus": coverage.status.value,
             "requiredScanners": list(coverage.required),
+            "unverifiedScanners": list(coverage.unverified),
             "scannerExecutions": [
                 {
                     "name": execution.name,
@@ -201,9 +202,39 @@ def ingest_with_coverage(
 
     findings: list[Finding] = []
     executions: list[ScannerExecution] = []
-    for run in payload["runs"]:
+    for index, run in enumerate(payload["runs"]):
+        if not isinstance(run, dict):
+            message = (
+                f"imported SARIF {sarif_path} run #{index} is {type(run).__name__}, not an object"
+            )
+            findings.append(_import_control_finding(sarif_path, fallback, message))
+            executions.append(
+                ScannerExecution(
+                    name=fallback,
+                    outcome=ScannerOutcome.FAILED,
+                    reason=message,
+                    scope=scope,
+                )
+            )
+            continue
         driver = (run.get("tool") or {}).get("driver") or {}
         name = override_scanner or _scanner_name(driver, default_scanner)
+        results = run.get("results")
+        if results is not None and not isinstance(results, list):
+            message = (
+                f"imported {name} SARIF run #{index} has a "
+                f"{type(results).__name__} 'results', not an array"
+            )
+            findings.append(_import_control_finding(sarif_path, name, message))
+            executions.append(
+                ScannerExecution(
+                    name=name,
+                    outcome=ScannerOutcome.FAILED,
+                    reason=message,
+                    scope=scope,
+                )
+            )
+            continue
         run_findings = _findings_from_run(run, name)
         findings.extend(run_findings)
         executions.append(_execution_from_run(run, name, len(run_findings), scope))
@@ -211,10 +242,21 @@ def ingest_with_coverage(
 
 
 def _execution_from_run(run: dict, name: str, finding_count: int, scope: str) -> ScannerExecution:
-    """Trust the imported tool's own invocation status over its silence."""
+    """Classify an imported run by provenance, not by self-description.
+
+    We did not watch this process. Even `executionSuccessful: true` is a file
+    describing itself, so a successful import is UNVERIFIED rather than
+    COMPLETED — the operator vouched for it, we did not observe it. A run that
+    declares its own failure is still FAILED: we do not launder that regardless
+    of where it came from.
+    """
     driver = (run.get("tool") or {}).get("driver") or {}
     invocations = run.get("invocations") or []
-    if any(invocation.get("executionSuccessful") is False for invocation in invocations):
+    declared_failure = any(
+        isinstance(invocation, dict) and invocation.get("executionSuccessful") is False
+        for invocation in invocations
+    )
+    if declared_failure:
         return ScannerExecution(
             name=name,
             outcome=ScannerOutcome.FAILED,
@@ -224,9 +266,10 @@ def _execution_from_run(run: dict, name: str, finding_count: int, scope: str) ->
         )
     return ScannerExecution(
         name=name,
-        outcome=ScannerOutcome.COMPLETED,
+        outcome=ScannerOutcome.UNVERIFIED,
         version=driver.get("version"),
         finding_count=finding_count,
+        reason="coverage from an imported artifact; execution was not observed",
         scope=scope,
     )
 
@@ -285,10 +328,12 @@ def _findings_from_run(run: dict, scanner: str) -> list[Finding]:
     """`scanner` is the already-resolved id, so findings and the coverage
     execution for the same run can never disagree about who produced them."""
     driver = (run.get("tool") or {}).get("driver") or {}
-    rules = {r.get("id"): r for r in (driver.get("rules") or [])}
+    rules = {r.get("id"): r for r in (driver.get("rules") or []) if isinstance(r, dict)}
 
     findings: list[Finding] = []
-    for result in run.get("results", []):
+    for result in run.get("results") or []:
+        if not isinstance(result, dict):
+            continue  # a non-object result carries nothing we can normalize
         findings.append(_finding_from_result(result, rules, scanner))
     return findings
 

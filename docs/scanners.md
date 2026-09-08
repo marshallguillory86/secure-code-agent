@@ -231,9 +231,17 @@ with `"require_scanners": ["trivy"]` in the config. Rules:
   spaces and hyphens folded to underscores — `OSV-Scanner` becomes
   `osv_scanner`. When a driver names itself something else entirely, say so
   explicitly: `--sarif-import trivy=vendor-output.sarif`.
+- **An import is `unverified`, never `completed`.** We did not watch the
+  process, so we cannot assert it succeeded — only that you vouched for the
+  file. Even `executionSuccessful: true` is the artifact describing itself.
+  Unverified coverage satisfies `require_scanners` (naming the import is your
+  assertion, the same kind we trust from `scanners.<name>.command`), but every
+  report says so: `coverage: COMPLETE (1 unverified: trivy)`, `coverage.unverified`
+  in JSON, `unverifiedScanners` in the emitted SARIF. If we also ran the scanner
+  ourselves, our observation wins over the import.
 - Naming an import on the command line asserts it contributes coverage, so an
-  unreadable, malformed, or run-less SARIF **fails the gate** rather than
-  ingesting zero findings quietly.
+  unreadable, malformed, structurally invalid, or run-less SARIF **fails the
+  gate** rather than ingesting zero findings quietly.
 - An import whose own `invocations[].executionSuccessful` is `false` is
   recorded as a failed execution. We do not launder another tool's failure.
 - If the same scanner reports twice — once locally, once by import — the worse

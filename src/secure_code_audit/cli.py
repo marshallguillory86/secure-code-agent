@@ -473,7 +473,12 @@ def _print_summary(score, gate, ran, unavailable, coverage, paths) -> None:
     )
     print(f"  scanned LOC: {score.loc_scanned:,}")
     print(f"  scanners run: {', '.join(ran) if ran else '(none)'}")
-    print(f"  coverage: {coverage.status.value.upper()}")
+    coverage_line = f"  coverage: {coverage.status.value.upper()}"
+    if coverage.unverified:
+        coverage_line += (
+            f"  ({len(coverage.unverified)} unverified: {', '.join(coverage.unverified)})"
+        )
+    print(coverage_line)
     if unavailable:
         print(f"  unavailable: {', '.join(unavailable)}")
     if not gate.passed:

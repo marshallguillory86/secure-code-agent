@@ -17,10 +17,18 @@ from secure_code_audit.findings import Finding
 
 class ScannerOutcome(str, Enum):
     COMPLETED = "completed"
+    # Someone else ran the scanner and handed us the output. We never observed
+    # the process, so we cannot assert it succeeded — only that the operator
+    # vouched for the file. Distinct from COMPLETED on purpose.
+    UNVERIFIED = "unverified"
     UNAVAILABLE = "unavailable"
     NOT_APPLICABLE = "not_applicable"
     TIMED_OUT = "timed_out"
     FAILED = "failed"
+
+
+#: Outcomes that mean the scanner's ground was covered, verified or not.
+COVERING_OUTCOMES = (ScannerOutcome.COMPLETED, ScannerOutcome.UNVERIFIED)
 
 
 class CoverageStatus(str, Enum):
@@ -46,6 +54,10 @@ class CoverageReport:
     required: tuple[str, ...]
     executions: tuple[ScannerExecution, ...]
     failures: tuple[str, ...]
+    #: Scanners whose coverage rests on an operator-supplied artifact rather
+    #: than a process we watched. Reported everywhere so COMPLETE is never
+    #: read as "we verified all of this ourselves".
+    unverified: tuple[str, ...] = ()
 
 
 def classify_execution(
@@ -109,12 +121,17 @@ def classify_execution(
 # Worst-first. A scanner can be reported twice — once from a local run and
 # once from an imported SARIF — and the degraded result must win so a clean
 # import cannot mask a failed local execution.
+#
+# COMPLETED outranks UNVERIFIED deliberately: if we ran the scanner ourselves
+# *and* an import reports it, our own observation is the stronger evidence and
+# should not be downgraded by someone else's file.
 _OUTCOME_PRECEDENCE: dict[ScannerOutcome, int] = {
     ScannerOutcome.FAILED: 0,
     ScannerOutcome.TIMED_OUT: 1,
     ScannerOutcome.UNAVAILABLE: 2,
     ScannerOutcome.NOT_APPLICABLE: 3,
     ScannerOutcome.COMPLETED: 4,
+    ScannerOutcome.UNVERIFIED: 5,
 }
 
 
@@ -146,15 +163,25 @@ def evaluate_coverage(
         execution = by_name.get(name)
         if execution is None:
             failures.append(f"required scanner {name!r} was not selected")
-        elif execution.outcome is not ScannerOutcome.COMPLETED:
+        elif execution.outcome not in COVERING_OUTCOMES:
             failures.append(
                 f"required scanner {name!r} did not complete: {execution.outcome.value}"
             )
 
+    # An unverified import covers the ground, so it does not degrade status to
+    # PARTIAL — PARTIAL still means "something did not run". It is named
+    # separately instead, so COMPLETE never silently implies we watched every
+    # scanner ourselves.
+    unverified = tuple(
+        execution.name
+        for execution in by_name.values()
+        if execution.outcome is ScannerOutcome.UNVERIFIED
+    )
+
     if failures:
         status = CoverageStatus.FAILED
     elif any(
-        execution.outcome not in (ScannerOutcome.COMPLETED, ScannerOutcome.NOT_APPLICABLE)
+        execution.outcome not in (*COVERING_OUTCOMES, ScannerOutcome.NOT_APPLICABLE)
         for execution in executions
     ):
         status = CoverageStatus.PARTIAL
@@ -164,6 +191,7 @@ def evaluate_coverage(
     return CoverageReport(
         status=status,
         required=required,
+        unverified=unverified,
         executions=executions,
         failures=tuple(failures),
     )
