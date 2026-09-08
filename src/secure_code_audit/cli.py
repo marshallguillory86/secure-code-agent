@@ -32,7 +32,7 @@ from secure_code_audit.scanner_status import (
     classify_execution,
     evaluate_coverage,
 )
-from secure_code_audit.scoring import evaluate_gates
+from secure_code_audit.scoring import active_gates, evaluate_gates
 from secure_code_audit.scoring import score as score_findings
 
 
@@ -217,6 +217,7 @@ def _print_preflight(rows: list[dict], unselected: list[str], blocking: list[str
 
 def _do_audit(args: argparse.Namespace) -> int:
     cfg, target, root = _prepare_audit(args)
+    _require_configured_gates(args, cfg)
 
     # ----- scanners -----
     scan = _run_scanners(args, cfg, target)
@@ -311,6 +312,26 @@ def _prepare_audit(
         raise ValueError("multiple scan roots are not supported; provide one repository root")
     target = Path(args.paths[0]).resolve()
     return cfg, target, find_repo_root(target)
+
+
+def _require_configured_gates(args: argparse.Namespace, cfg: config_mod.Config) -> None:
+    """Refuse --fail-on-gate when no gate could ever fail.
+
+    Without this, an audit that detects a HIGH finding, scores it 0.00/F, and
+    reports it in full still exits 0, because every gate is absent and an
+    absent gate does not trip. That is a green build with no security floor,
+    and it is the shape a default Action adoption takes.
+    """
+    if not args.fail_on_gate or active_gates(cfg.gates):
+        return
+    raise ValueError(
+        "--fail-on-gate was requested but no gate is configured, so no finding "
+        "could ever fail the build. Configure at least one of "
+        "gates.fail_on_severity, gates.fail_on_category, gates.fail_on_new, "
+        "gates.min_score (above 0), gates.require_scanners, or "
+        "gates.max_unsuppressed — see secure-code-agent.example.json. Drop "
+        "--fail-on-gate to run an ungated, report-only audit."
+    )
 
 
 def _exit_code(args: argparse.Namespace, gate, findings: list[Finding]) -> int:

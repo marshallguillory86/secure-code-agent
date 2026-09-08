@@ -76,6 +76,12 @@ coverage are now reported and gated separately.
 - Semgrep runs with `--no-rewrite-rule-ids`. Semgrep otherwise prefixes rule
   ids with the config file's path, which varies by install location and would
   destabilize baseline fingerprints across machines.
+- `--fail-on-gate` is refused when no gate is configured. Previously an audit
+  could detect a HIGH CWE-78 finding, score it 0.00/F, report it in full, and
+  still exit 0, because every gate was absent and an absent gate does not trip.
+  A gate key that is present but inert — an empty severity list, an empty cap
+  map, a `min_score` of 0 — does not count as configured. Report-only audits
+  without `--fail-on-gate` are unaffected.
 - Scanner timeouts, unexpected exits, missing output, and parse failures no
   longer silently look like successful clean scans in the updated adapters.
 - Unreadable, malformed, or run-less `--sarif-import` input previously ingested

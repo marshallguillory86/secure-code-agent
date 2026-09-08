@@ -23,6 +23,8 @@ The minimum set that must close before `v0.3.0` is tagged:
 
 - [ ] **§1** — absent gate configuration cannot read as a passing gate
 - [x] **§2** — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage ([#13](https://github.com/marshallguillory86/secure-code-agent/issues/13))
+- [x] **§1** — absent gate configuration cannot read as a passing gate ([#12](https://github.com/marshallguillory86/secure-code-agent/issues/12))
+- [ ] **§2** — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage
 - [ ] **§3** — trust model for SARIF imports decided and enforced
 - [ ] **§4** — malformed SARIF contained as failed coverage, not a traceback
 - [ ] **§2** — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage
@@ -59,6 +61,12 @@ gate passed anyway."
 **Bounded fix:** reject `--fail-on-gate` when no gates are configured, *or*
 ship documented safe default gates, *or* require a config in the Action. Prefer
 the first: it fails closed and needs no policy invention.
+
+**Resolved.** `scoring.active_gates()` reports the gates that can actually
+trip, and the CLI refuses `--fail-on-gate` with exit 2 when none can. A gate
+key that is present but inert does not count. Report-only audits are
+unaffected. Verified against the original reproduction: the two HIGH CWE-78
+findings now produce exit 2 instead of exit 0.
 
 ## 2. Critical — secret scanners launder a findings-exit into a clean result
 

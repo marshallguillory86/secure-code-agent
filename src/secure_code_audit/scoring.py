@@ -11,8 +11,9 @@ Implements the model documented in docs/scoring.md:
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from typing import Any
 
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanner_status import CoverageReport, CoverageStatus
@@ -169,6 +170,32 @@ class GateResult:
     passed: bool
     reasons: tuple[str, ...]  # human-readable trip reasons
     tripped: tuple[str, ...] = field(default_factory=tuple)
+
+
+# Every gate, with the predicate that decides whether it can actually trip.
+# A key that is present but inert provides no security floor: an empty
+# severity list matches nothing, an empty cap map caps nothing, and no score
+# can fall below a min_score of 0. Treating those as "configured" is how an
+# empty policy passes for a real one.
+_GATE_ACTIVATION: tuple[tuple[str, Callable[[Any], bool]], ...] = (
+    ("fail_on_severity", bool),
+    ("fail_on_category", bool),
+    ("fail_on_new", bool),
+    ("min_score", lambda v: isinstance(v, (int, float)) and v > 0),
+    ("require_scanners", bool),
+    ("max_unsuppressed", bool),
+)
+
+
+def active_gates(gate_config: dict) -> tuple[str, ...]:
+    """Names of gates that can actually fail the build.
+
+    `evaluate_gates` treats an absent gate as "not configured", which is
+    correct for evaluation but means a config with no gates at all yields
+    `passed=True` no matter what was found. Callers that promise to fail on
+    a tripped gate use this to refuse that arrangement up front.
+    """
+    return tuple(name for name, is_active in _GATE_ACTIVATION if is_active(gate_config.get(name)))
 
 
 def evaluate_gates(
