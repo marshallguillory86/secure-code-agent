@@ -9,6 +9,12 @@ from subprocess import CompletedProcess
 
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Severity
+from secure_code_audit.scanner_status import (
+    CoverageStatus,
+    ScannerOutcome,
+    classify_execution,
+    evaluate_coverage,
+)
 from secure_code_audit.scanners.checkov_scanner import CheckovScanner
 from secure_code_audit.scanners.hadolint_scanner import HadolintScanner
 from secure_code_audit.scanners.osv_scanner import OsvScanner
@@ -363,3 +369,52 @@ def test_scorecard_routes_security_policy_to_policy_docs(tmp_path, monkeypatch):
     by_name = {f.rule_id: f for f in findings}
     assert by_name["scorecard.Security-Policy"].category is Category.POLICY_DOCS
     assert by_name["scorecard.Pinned-Dependencies"].category is Category.SUPPLY_CHAIN
+
+
+def test_trufflehog_findings_exit_with_empty_stdout_fails_instead_of_reading_clean(
+    tmp_path, monkeypatch
+):
+    # 183 is trufflehog asserting it found verified secrets.
+    monkeypatch.setattr(
+        TruffleHogScanner,
+        "_exec",
+        lambda self, args, cwd, timeout_seconds, allowed_exits=(0,): _proc(code=183),
+    )
+    scanner = TruffleHogScanner()
+    scanner._resolved_command = ("trufflehog",)
+
+    findings = scanner.run(tmp_path, Config())
+
+    assert [f.rule_id for f in findings] == ["trufflehog.tool_error"]
+    execution = classify_execution("trufflehog", findings)
+    assert execution.outcome is ScannerOutcome.FAILED
+    assert evaluate_coverage([execution], ["trufflehog"]).status is CoverageStatus.FAILED
+
+
+def test_trufflehog_findings_exit_with_only_blank_lines_also_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        TruffleHogScanner,
+        "_exec",
+        lambda self, args, cwd, timeout_seconds, allowed_exits=(0,): _proc(
+            stdout="\n  \n", code=183
+        ),
+    )
+    scanner = TruffleHogScanner()
+    scanner._resolved_command = ("trufflehog",)
+
+    assert [f.rule_id for f in scanner.run(tmp_path, Config())] == ["trufflehog.tool_error"]
+
+
+def test_trufflehog_clean_exit_with_empty_stdout_is_still_a_clean_scan(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        TruffleHogScanner,
+        "_exec",
+        lambda self, args, cwd, timeout_seconds, allowed_exits=(0,): _proc(code=0),
+    )
+    scanner = TruffleHogScanner()
+    scanner._resolved_command = ("trufflehog",)
+
+    findings = scanner.run(tmp_path, Config())
+
+    assert findings == []
+    assert classify_execution("trufflehog", findings).outcome is ScannerOutcome.COMPLETED

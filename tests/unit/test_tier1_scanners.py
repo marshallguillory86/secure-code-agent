@@ -4,6 +4,12 @@ from subprocess import CompletedProcess
 
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Severity
+from secure_code_audit.scanner_status import (
+    CoverageStatus,
+    ScannerOutcome,
+    classify_execution,
+    evaluate_coverage,
+)
 from secure_code_audit.scanners.bandit_scanner import BanditScanner
 from secure_code_audit.scanners.gitleaks_scanner import GitleaksScanner
 from secure_code_audit.scanners.npm_audit_scanner import NpmAuditScanner
@@ -217,3 +223,56 @@ def test_semgrep_parses_sarif_and_reports_invalid_output(tmp_path, monkeypatch):
 
     monkeypatch.setattr(SemgrepScanner, "_exec", invalid_exec)
     assert scanner.run(tmp_path, Config())[0].rule_id == "semgrep.tool_error"
+
+
+def test_gitleaks_findings_exit_with_empty_report_fails_instead_of_reading_clean(
+    tmp_path, monkeypatch
+):
+    # Exit 1 is gitleaks asserting it found secrets. An empty report then means
+    # we have nothing to show for it — recording a clean scan would discard the
+    # scanner's own signal in the highest-weighted category.
+    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+        Path(args[args.index("--report-path") + 1]).write_text("", encoding="utf-8")
+        return _proc(code=1)
+
+    monkeypatch.setattr(GitleaksScanner, "_exec", fake_exec)
+    findings = _configured(GitleaksScanner(), "gitleaks").run(tmp_path, Config())
+
+    assert [f.rule_id for f in findings] == ["gitleaks.tool_error"]
+    execution = classify_execution("gitleaks", findings)
+    assert execution.outcome is ScannerOutcome.FAILED
+    assert evaluate_coverage([execution], ["gitleaks"]).status is CoverageStatus.FAILED
+
+
+def test_gitleaks_findings_exit_with_empty_array_report_also_fails(tmp_path, monkeypatch):
+    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+        Path(args[args.index("--report-path") + 1]).write_text("[]", encoding="utf-8")
+        return _proc(code=1)
+
+    monkeypatch.setattr(GitleaksScanner, "_exec", fake_exec)
+    findings = _configured(GitleaksScanner(), "gitleaks").run(tmp_path, Config())
+
+    assert [f.rule_id for f in findings] == ["gitleaks.tool_error"]
+
+
+def test_gitleaks_clean_exit_with_empty_report_is_still_a_clean_scan(tmp_path, monkeypatch):
+    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+        Path(args[args.index("--report-path") + 1]).write_text("", encoding="utf-8")
+        return _proc(code=0)
+
+    monkeypatch.setattr(GitleaksScanner, "_exec", fake_exec)
+    findings = _configured(GitleaksScanner(), "gitleaks").run(tmp_path, Config())
+
+    assert findings == []
+    assert classify_execution("gitleaks", findings).outcome is ScannerOutcome.COMPLETED
+
+
+def test_gitleaks_non_array_report_is_a_parse_error(tmp_path, monkeypatch):
+    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+        Path(args[args.index("--report-path") + 1]).write_text('{"oops": 1}', encoding="utf-8")
+        return _proc(code=0)
+
+    monkeypatch.setattr(GitleaksScanner, "_exec", fake_exec)
+    findings = _configured(GitleaksScanner(), "gitleaks").run(tmp_path, Config())
+
+    assert [f.rule_id for f in findings] == ["gitleaks.parse_error"]

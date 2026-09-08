@@ -21,6 +21,8 @@ from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanners.base import Scanner
 
+_FINDINGS_EXIT = 183  # trufflehog: 0 = clean, 183 = verified secrets found
+
 
 class TruffleHogScanner(Scanner):
     name = "trufflehog"
@@ -75,7 +77,12 @@ class TruffleHogScanner(Scanner):
                 )
             ]
         if not r.stdout.strip():
-            return []
+            # Exit 0 with no output is a clean scan. Exit 183 with no output is
+            # trufflehog reporting verified secrets we cannot show.
+            contradiction = self._findings_exit_contradiction(
+                target, exit_code=r.returncode, findings_exit=_FINDINGS_EXIT, findings=[]
+            )
+            return [contradiction] if contradiction else []
 
         out: list[Finding] = []
         parse_errors = 0
@@ -102,7 +109,10 @@ class TruffleHogScanner(Scanner):
                     confidence=Confidence.HIGH,
                 )
             )
-        return out
+        contradiction = self._findings_exit_contradiction(
+            target, exit_code=r.returncode, findings_exit=_FINDINGS_EXIT, findings=out
+        )
+        return [contradiction] if contradiction else out
 
     def _parse_one(self, hit: dict) -> Finding:
         detector = str(hit.get("DetectorName") or hit.get("Detector") or "unknown")
