@@ -30,6 +30,8 @@ The minimum set that must close before `v0.3.0` is tagged:
 - [x] **§4** — malformed SARIF contained as failed coverage, not a traceback ([#15](https://github.com/marshallguillory86/secure-code-agent/issues/15))
 - [ ] **§5** — offline Semgrep is genuinely offline
 - [x] **§6** — failed-coverage SARIF reaches Code Scanning ([#17](https://github.com/marshallguillory86/secure-code-agent/issues/17))
+- [x] **§5** — offline Semgrep is genuinely offline ([#16](https://github.com/marshallguillory86/secure-code-agent/issues/16))
+- [ ] **§6** — failed-coverage SARIF reaches Code Scanning
 
 §7 and §8 are not release blockers but should land in the same cycle.
 
@@ -161,6 +163,26 @@ does not have, which is the failure mode [`product-intent.md`](product-intent.md
 **Bounded fix:** package a local ruleset for offline execution, or reject
 offline Semgrep when no local config is available. Delete the inaccurate comment
 either way.
+
+**Resolved by packaging a ruleset.** `src/secure_code_audit/data/semgrep-offline.yaml`
+ships in the wheel and is used when `online` is false; a missing ruleset is a
+`tool_error` rather than a fallback that reaches the network. It is ten
+high-precision rules, deliberately narrower than the Registry packs, and
+`docs/scanners.md` says so rather than implying parity.
+
+Two further defects surfaced only by running the real binary against a
+fixture, neither visible from reading the code:
+
+- **Rule ids were path-mangled.** Semgrep derives a rule-id prefix from the
+  config file path, yielding
+  `src.secure_code_audit.data.sca.offline.…` — ids that vary by install
+  location, so standards lookup would never match and baseline fingerprints
+  would churn between machines. Fixed with `--no-rewrite-rule-ids`.
+- **Semgrep never populated `properties.cwe`.** It folds `metadata.cwe` into
+  `properties.tags`. The adapter read only `properties.cwe`, so *every* Semgrep
+  finding — Registry rules included, not just the new ones — arrived with no
+  CWE, scored without Top-25 weighting, and mapped to no standard. This was a
+  pre-existing bug in the adapter, unrelated to offline mode.
 
 ## 6. Medium — CI skips Code Scanning upload on the failures that matter
 

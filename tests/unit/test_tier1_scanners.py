@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from subprocess import CompletedProcess
 
-from secure_code_audit.config import Config
+from secure_code_audit.config import Config, ScannerConfig
 from secure_code_audit.findings import Category, Severity
 from secure_code_audit.scanner_status import (
     CoverageStatus,
@@ -10,6 +10,7 @@ from secure_code_audit.scanner_status import (
     classify_execution,
     evaluate_coverage,
 )
+from secure_code_audit.scanners import semgrep_scanner
 from secure_code_audit.scanners.bandit_scanner import BanditScanner
 from secure_code_audit.scanners.gitleaks_scanner import GitleaksScanner
 from secure_code_audit.scanners.npm_audit_scanner import NpmAuditScanner
@@ -276,3 +277,66 @@ def test_gitleaks_non_array_report_is_a_parse_error(tmp_path, monkeypatch):
     findings = _configured(GitleaksScanner(), "gitleaks").run(tmp_path, Config())
 
     assert [f.rule_id for f in findings] == ["gitleaks.parse_error"]
+
+
+def test_semgrep_offline_uses_the_packaged_ruleset_not_the_registry(tmp_path, monkeypatch):
+    # `p/security-audit` reads as bundled but is a Registry ruleset fetched over
+    # the network, so offline silently was not offline.
+    captured: dict = {}
+
+    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+        captured["args"] = args
+        Path(args[args.index("--output") + 1]).write_text(
+            json.dumps({"runs": [{"tool": {"driver": {"rules": []}}, "results": []}]}),
+            encoding="utf-8",
+        )
+        return _proc()
+
+    monkeypatch.setattr(SemgrepScanner, "_exec", fake_exec)
+    config = Config()
+    config.scanners["semgrep"] = ScannerConfig(online=False)
+    _configured(SemgrepScanner(), "semgrep").run(tmp_path, config)
+
+    config_arg = captured["args"][captured["args"].index("--config") + 1]
+    assert config_arg.endswith("semgrep-offline.yaml")
+    assert not config_arg.startswith("p/")
+    # Rule ids would otherwise be prefixed with the config file's path,
+    # varying by install location and destabilizing baseline fingerprints.
+    assert "--no-rewrite-rule-ids" in captured["args"]
+
+
+def test_semgrep_offline_fails_closed_when_the_ruleset_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(semgrep_scanner, "offline_ruleset_path", lambda: None)
+    config = Config()
+    config.scanners["semgrep"] = ScannerConfig(online=False)
+
+    findings = _configured(SemgrepScanner(), "semgrep").run(tmp_path, config)
+
+    assert [f.rule_id for f in findings] == ["semgrep.tool_error"]
+    assert "packaged ruleset" in findings[0].message
+    assert classify_execution("semgrep", findings).outcome is ScannerOutcome.FAILED
+
+
+def test_semgrep_recovers_cwe_from_tags_as_well_as_properties():
+    # Semgrep folds metadata.cwe into properties.tags, so reading only
+    # properties.cwe left every semgrep finding without a CWE.
+    from secure_code_audit.scanners.semgrep_scanner import _cwe_from_rule
+
+    assert _cwe_from_rule({"properties": {"tags": ["CWE-78", "security"]}}) == "CWE-78"
+    assert _cwe_from_rule({"properties": {"cwe": ["CWE-89: SQL Injection"]}}) == "CWE-89"
+    assert _cwe_from_rule({"properties": {"cwe": "CWE-22"}}) == "CWE-22"
+    assert _cwe_from_rule({"properties": {"tags": ["security"]}}) is None
+    assert _cwe_from_rule({}) is None
+
+
+def test_packaged_offline_ruleset_is_present_and_well_formed():
+    import yaml
+
+    path = semgrep_scanner.offline_ruleset_path()
+    assert path is not None, "the offline ruleset must ship with the package"
+    rules = yaml.safe_load(path.read_text(encoding="utf-8"))["rules"]
+    assert rules
+    for rule in rules:
+        assert rule["id"].startswith("sca.offline.")
+        assert rule["metadata"]["cwe"].startswith("CWE-")
+        assert rule["severity"] in {"ERROR", "WARNING", "INFO"}
