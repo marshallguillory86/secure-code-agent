@@ -56,6 +56,12 @@ coverage are now reported and gated separately.
   The step carried no status-check function, so GitHub's implicit `success()`
   skipped it exactly when the SARIF reported `executionSuccessful: false`,
   leaving the Security tab showing an older clean result.
+- Gitleaks and TruffleHog no longer record a clean scan after signalling
+  findings. Gitleaks exit 1 with an empty or non-array report, and TruffleHog
+  exit 183 with empty output, previously returned zero findings and classified
+  as a completed scan — discarding the scanner's own assertion that it found
+  secrets, in the highest-weighted category. Both now fail coverage. A clean
+  exit with no output remains a clean scan.
 - Scanner timeouts, unexpected exits, missing output, and parse failures no
   longer silently look like successful clean scans in the updated adapters.
 - Unreadable, malformed, or run-less `--sarif-import` input previously ingested

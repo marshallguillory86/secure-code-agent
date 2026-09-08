@@ -22,7 +22,7 @@ Two of these (§3, §4) were introduced by the v0.3.0 SARIF-import work itself.
 The minimum set that must close before `v0.3.0` is tagged:
 
 - [ ] **§1** — absent gate configuration cannot read as a passing gate
-- [ ] **§2** — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage
+- [x] **§2** — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage ([#13](https://github.com/marshallguillory86/secure-code-agent/issues/13))
 - [ ] **§3** — trust model for SARIF imports decided and enforced
 - [ ] **§4** — malformed SARIF contained as failed coverage, not a traceback
 - [ ] **§5** — offline Semgrep is genuinely offline
@@ -72,6 +72,18 @@ is in `require_scanners`, this is a false-green gate.
 parsed, non-empty findings. Otherwise emit a `tool_error` control finding so the
 outcome is `failed`. Audit the other adapters for the same pattern — this is a
 class, not two instances.
+
+**Resolved.** `Scanner._findings_exit_contradiction()` is the single
+implementation, applied in both adapters at every exit from `run()`. A clean
+exit with no output is still a clean scan; a findings exit with nothing to show
+is a `tool_error`, which classifies as `failed` coverage. Gitleaks also stopped
+swallowing a non-array report root, which was a second silent path.
+
+**The other adapters were audited.** Bandit, pip-audit, OSV-Scanner and npm
+audit already emit `tool_error` on empty output, so the `return []` shape was
+unique to the two secret scanners. What they do *not* yet have is the weaker
+variant — a findings exit whose non-empty output parses to zero findings.
+Tracked separately rather than folded into this fix.
 
 ## 3. High — unverified SARIF can satisfy required scanner coverage
 
