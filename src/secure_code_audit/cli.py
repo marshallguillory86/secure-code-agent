@@ -91,6 +91,16 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     p.add_argument(
+        "--trust-target-config",
+        action="store_true",
+        help=(
+            "Allow a config inside the audited tree to name executables from "
+            "that tree. Only for repositories you own. CLI-only by design: a "
+            "config file cannot grant itself this."
+        ),
+    )
+
+    p.add_argument(
         "--preflight",
         action="store_true",
         help=(
@@ -303,6 +313,9 @@ def _prepare_audit(
 ) -> tuple[config_mod.Config, Path, Path]:
     """Load config and resolve the single scan root, or refuse."""
     cfg = config_mod.load(args.config)
+    # Set from the command line only. Threading it through the loaded config
+    # would let a repository-supplied file assert its own trustworthiness.
+    cfg.trust_target_config = bool(getattr(args, "trust_target_config", False))
     _validate_scanner_config(cfg)
     if args.changed_only:
         raise ValueError(

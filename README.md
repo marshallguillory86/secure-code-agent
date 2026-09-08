@@ -349,6 +349,7 @@ Full design philosophy in [`docs/design.md`](docs/design.md).
 ## Documentation
 
 - [`docs/product-intent.md`](docs/product-intent.md) — Why this exists, who it serves, what it refuses to become
+- [`docs/decisions.md`](docs/decisions.md)        — Decision register: rulings the code alone cannot answer
 - [`docs/design.md`](docs/design.md)              — Architecture + non-goals + scanner protocol
 - [`docs/architecture.md`](docs/architecture.md)  — Audit of the system as built + remediation sequence
 - [`docs/release-blockers.md`](docs/release-blockers.md) — Open v0.3.0 release blockers (do not tag until closed)
