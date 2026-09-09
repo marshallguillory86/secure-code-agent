@@ -3,6 +3,7 @@
     - "*/src/secure_code_audit/baseline.py"
     - "*/src/secure_code_audit/scanners/base.py"
     - "*/src/secure_code_audit/scanners/scorecard_scanner.py"
+    - "*/calibration/calibrate.py"
   reason: "Reviewed subprocess imports are required for Git metadata and external scanner adapters; every invocation uses an argument array with shell=False."
   expires: "2027-08-01"
 
@@ -11,5 +12,6 @@
     - "*/src/secure_code_audit/baseline.py"
     - "*/src/secure_code_audit/scanners/base.py"
     - "*/src/secure_code_audit/scanners/scorecard_scanner.py"
-  reason: "Reviewed subprocess calls use resolved executables or configured argument arrays, sanitized inputs where applicable, and never invoke a shell."
+    - "*/calibration/calibrate.py"
+  reason: "Reviewed subprocess calls use resolved executables or configured argument arrays, sanitized inputs where applicable, and never invoke a shell. calibration/calibrate.py shells out to git and to this tool's own CLI the same way, and is a study tool rather than part of the shipped package."
   expires: "2027-08-01"
