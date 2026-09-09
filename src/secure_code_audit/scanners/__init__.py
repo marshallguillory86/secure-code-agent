@@ -12,10 +12,13 @@ from secure_code_audit.scanners.base import Scanner
 from secure_code_audit.scanners.builtin_rules import BuiltinRulesScanner
 from secure_code_audit.scanners.checkov_scanner import CheckovScanner
 from secure_code_audit.scanners.gitleaks_scanner import GitleaksScanner
+from secure_code_audit.scanners.gosec_scanner import GosecScanner
 from secure_code_audit.scanners.hadolint_scanner import HadolintScanner
+from secure_code_audit.scanners.njsscan_scanner import NjsscanScanner
 from secure_code_audit.scanners.npm_audit_scanner import NpmAuditScanner
 from secure_code_audit.scanners.osv_scanner import OsvScanner
 from secure_code_audit.scanners.pip_audit_scanner import PipAuditScanner
+from secure_code_audit.scanners.rubocop_scanner import RubocopScanner
 from secure_code_audit.scanners.scorecard_scanner import ScorecardScanner
 from secure_code_audit.scanners.semgrep_scanner import SemgrepScanner
 from secure_code_audit.scanners.trivy_scanner import TrivyScanner
@@ -26,13 +29,16 @@ SCANNERS: dict[str, type[Scanner]] = {
     "bandit": BanditScanner,
     "builtin_rules": BuiltinRulesScanner,
     "gitleaks": GitleaksScanner,
+    "njsscan": NjsscanScanner,
     "npm_audit": NpmAuditScanner,
     "pip_audit": PipAuditScanner,
     "semgrep": SemgrepScanner,
     # Tier-2 — IaC / containers / supply chain / multi-ecosystem SCA / verified secrets
     "checkov": CheckovScanner,
+    "gosec": GosecScanner,
     "hadolint": HadolintScanner,
     "osv_scanner": OsvScanner,
+    "rubocop": RubocopScanner,
     "scorecard": ScorecardScanner,
     "trivy": TrivyScanner,
     "trufflehog": TruffleHogScanner,

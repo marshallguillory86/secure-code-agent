@@ -70,7 +70,9 @@ def test_all_report_formats_include_gate_coverage_and_provenance(tmp_path):
     markdown_text = markdown.read_text(encoding="utf-8")
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert "Coverage: **FAILED**" in markdown_text
-    assert "Finding score (coverage incomplete)" in markdown_text
+    # Without a verdict no output may claim a grade — the conservative
+    # default, so an unwired caller cannot accidentally present one.
+    assert "Finding score (not a verified grade)" in markdown_text
     assert "bandit 1.9.4" in markdown_text
     assert "inputs=requirements-audit.txt" in markdown_text
     assert "CWE-89" in markdown_text
@@ -82,7 +84,7 @@ def test_all_report_formats_include_gate_coverage_and_provenance(tmp_path):
     assert payload["score"]["verified_grade"] is None
     assert payload["score"]["evidence_status"] == "incomplete"
     assert "Scanner coverage: **FAILED**" in comment.read_text(encoding="utf-8")
-    assert "finding score; coverage incomplete" in comment.read_text(encoding="utf-8")
+    assert "not a verified grade" in comment.read_text(encoding="utf-8")
 
 
 def test_empty_markdown_report_and_no_coverage(tmp_path):

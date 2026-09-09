@@ -17,6 +17,7 @@ from pathlib import Path
 
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 _OSV_SEVERITY: dict[str, Severity] = {
@@ -37,9 +38,9 @@ class OsvScanner(Scanner):
         "brew install osv-scanner, or a pinned release from github.com/google/osv-scanner"
     )
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
-            return [self._unavailable_finding(target)]
+            return self.unavailable(target)
 
         sc_cfg = self.cfg(config)
         args = [
@@ -58,62 +59,18 @@ class OsvScanner(Scanner):
             args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
         )
         if r.returncode == 124:
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.tool_timeout",
-                    message=f"osv-scanner timed out: {r.stderr[:200]}",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                )
-            ]
+            return self.timed_out(target, f"osv-scanner timed out: {r.stderr[:200]}")
         if r.returncode not in (0, 1):
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.tool_error",
-                    message=f"osv-scanner failed: {r.stderr[:300]}",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                )
-            ]
+            return self.failed(target, f"osv-scanner failed: {r.stderr[:300]}")
         if not r.stdout.strip():
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.tool_error",
-                    message="osv-scanner emitted no JSON",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                )
-            ]
+            return self.failed(target, "osv-scanner emitted no JSON")
 
         try:
             payload = json.loads(r.stdout)
         except json.JSONDecodeError as exc:
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.parse_error",
-                    message=f"osv-scanner JSON parse failure: {exc}",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                )
-            ]
+            return self.failed(target, f"osv-scanner JSON parse failure: {exc}")
 
-        return self._parse(payload, target)
+        return self.completed(self._parse(payload, target))
 
     def _parse(self, payload: dict, target: Path) -> list[Finding]:
         out: list[Finding] = []

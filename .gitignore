@@ -29,10 +29,18 @@ htmlcov/
 
 # Tool outputs that the agent itself writes (committed report should be explicit, not transient)
 secure-code-report.md
+# The JSON report was the one output missing here, so running the CI command
+# locally left exactly one untracked file behind — the format most likely to
+# be committed by a `git add -A`, since it looks like data rather than a
+# generated report.
+secure-code-report.json
 secure-code-remediation-prompt.md
 secure-code-pr-comment.md
 secure-code.sarif
 secure-code-baseline.tmp.json
+# Written by the release workflow's self-audit step.
+secure-code-release-audit.md
+secure-code-release-audit.json
 
 # Scanner caches
 .semgrepignore.local

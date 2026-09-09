@@ -8,19 +8,21 @@ import shutil
 import subprocess
 import sys
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 
 from secure_code_audit.config import Config, is_within, scanner_cfg, target_executables_allowed
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.scanner_status import ScannerOutcome, ScanResult
 from secure_code_audit.standards import StandardsEntry, is_top25, lookup
 
 
 class Scanner(ABC):
     """Base class for all scanner adapters.
 
-    Subclasses implement `_run_subprocess()` and `_parse_output()` (or
-    override `run()` entirely for built-in / in-process scanners).
+    Subclasses implement `scan()`, returning a `ScanResult` built with the
+    outcome constructors below.
     """
 
     name: str  # canonical id used in config + reports
@@ -113,11 +115,17 @@ class Scanner(ABC):
     # ----- main entrypoint ------------------------------------------------
 
     @abstractmethod
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scan(self, target: Path, config: Config) -> ScanResult:
         """Execute the scanner against target. MUST NOT raise.
 
-        Errors are converted to a single informational finding so the
-        audit pipeline never dies on a single scanner failing.
+        Returns a `ScanResult` stating what happened. Errors become an outcome
+        plus a derived control finding, so the audit pipeline never dies on a
+        single scanner failing and the orchestrator never has to guess what a
+        finding id meant.
+
+        Build the result with `completed()`, `failed()`, `timed_out()`,
+        `unavailable()` or `not_applicable()` rather than constructing it
+        directly — those keep the outcome and its control finding in step.
         """
         ...
 
@@ -235,7 +243,7 @@ class Scanner(ABC):
         exit_code: int,
         findings_exit: int,
         findings: list[Finding],
-    ) -> Finding | None:
+    ) -> str | None:
         """Catch "the scanner said it found things, and we parsed none".
 
         A findings-signalling exit code is the tool asserting it detected
@@ -244,22 +252,15 @@ class Scanner(ABC):
         silently discarded. Fail the scanner instead, so coverage says we do
         not know rather than saying nothing is there.
 
-        Returns the control finding when the contradiction holds, else None.
+        Returns the reason when the contradiction holds, else None. The caller
+        turns that into `self.failed(...)` — the helper does not build the
+        finding itself, because the outcome is the caller's to state.
         """
         if exit_code != findings_exit or findings:
             return None
-        return self._make_finding(
-            rule_id=f"{self.name}.tool_error",
-            message=(
-                f"{self.name} exited {exit_code} to signal findings but produced no "
-                "parseable results; refusing to record this as a clean scan"
-            ),
-            file_path=target,
-            line_start=0,
-            line_end=None,
-            code_snippet=None,
-            severity=Severity.INFORMATIONAL,
-            confidence=Confidence.HIGH,
+        return (
+            f"{self.name} exited {exit_code} to signal findings but produced no "
+            "parseable results; refusing to record this as a clean scan"
         )
 
     def _unavailable_finding(self, target: Path) -> Finding:
@@ -294,6 +295,72 @@ class Scanner(ABC):
             f"{install}, or set scanners.{self.name}.command to an explicit path, "
             "or supply its SARIF via --sarif-import."
         )
+
+    # ----- results --------------------------------------------------------
+    #
+    # One constructor per outcome. The control finding is *derived* from the
+    # outcome here rather than being the thing an outcome is later inferred
+    # from, so an adapter cannot name one and mean the other. See
+    # `docs/architecture.md` §2 and `ScanResult`.
+
+    def scope(self, config: ScannerConfig) -> str | None:
+        """What this adapter's configuration means it actually covered.
+
+        Declared by the adapter because the orchestrator used to special-case
+        scanners by name to supply it — there was nowhere else to put it.
+        """
+        return None
+
+    def completed(self, findings: Iterable[Finding], *, scope: str | None = None) -> ScanResult:
+        """The scanner ran and these are its findings. An empty list is clean."""
+        return ScanResult(outcome=ScannerOutcome.COMPLETED, findings=tuple(findings), scope=scope)
+
+    def unavailable(self, target: Path) -> ScanResult:
+        finding = self._unavailable_finding(target)
+        return ScanResult(
+            outcome=ScannerOutcome.UNAVAILABLE, findings=(finding,), reason=finding.message
+        )
+
+    def failed(self, target: Path, reason: str, *, findings: Iterable[Finding] = ()) -> ScanResult:
+        """The scanner did not cover its ground.
+
+        `findings` carries anything that *was* parsed before the failure. A
+        scanner that emitted twenty secrets and three unparseable lines has
+        found real defects and still has not scanned the repository, so the
+        findings are reported and the outcome stays FAILED. Previously the
+        partial findings survived into the report while `classify_execution`
+        recorded `finding_count=0` for the same run — the two disagreed
+        because neither was the source of truth.
+        """
+        result = self._control_result(target, ScannerOutcome.FAILED, "tool_error", reason)
+        return replace(result, findings=(*findings, *result.findings))
+
+    def timed_out(self, target: Path, reason: str) -> ScanResult:
+        return self._control_result(target, ScannerOutcome.TIMED_OUT, "tool_timeout", reason)
+
+    def not_applicable(self, target: Path, reason: str) -> ScanResult:
+        """Nothing here for this scanner to read.
+
+        Not a gap: requiring a Terraform scanner of a pure-Python repository
+        would make every such repository permanently incomplete. The reason is
+        mandatory because silence would read as a pass.
+        """
+        return self._control_result(target, ScannerOutcome.NOT_APPLICABLE, "not_applicable", reason)
+
+    def _control_result(
+        self, target: Path, outcome: ScannerOutcome, suffix: str, reason: str
+    ) -> ScanResult:
+        finding = self._make_finding(
+            rule_id=f"{self.name}.{suffix}",
+            message=reason,
+            file_path=target,
+            line_start=0,
+            line_end=None,
+            code_snippet=None,
+            severity=Severity.INFORMATIONAL,
+            confidence=Confidence.HIGH,
+        )
+        return ScanResult(outcome=outcome, findings=(finding,), reason=reason)
 
     # ----- shared utility -------------------------------------------------
 

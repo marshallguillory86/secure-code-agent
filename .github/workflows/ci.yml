@@ -52,6 +52,50 @@ jobs:
       - name: Build wheel through pip
         run: python -m pip wheel . --no-deps --wheel-dir wheelhouse
 
+  ruleset:
+    name: Offline ruleset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # The paired-fixture tests skip without semgrep, and a skip nobody
+      # notices is how a ruleset rots. This job exists so they always run.
+      # `python-scanners` brings semgrep, bandit and njsscan; RuboCop is a gem.
+      - name: Install project with the Semgrep engine
+        run: python -m pip install --disable-pip-version-check -e ".[dev,python-scanners]"
+
+      # The overlap tests are the enforceable half of D11 and D12: a rule that
+      # duplicates a floor tool fails the build instead of surviving to a later
+      # audit. Each needs the tool it checks against actually installed, or it
+      # skips and proves nothing.
+      # --user-install because the runner's system gem directory is not
+      # writable, and the user gem bin has to reach PATH or the test finds no
+      # `rubocop` and skips — which the guard below then fails on.
+      - name: Install RuboCop for the Ruby overlap check
+        run: |
+          gem install --user-install --no-document rubocop -v 1.90.0
+          echo "$(ruby -e 'puts Gem.user_dir')/bin" >> "$GITHUB_PATH"
+
+      - name: Every rule fires, none fires on safe code, and none duplicates a tool
+        run: python -m pytest tests/unit/test_offline_ruleset.py -v --no-header
+
+      # A skip here means the check did not run. Fail loudly rather than let a
+      # green tick stand for an assertion nobody made.
+      - name: No overlap check was skipped
+        run: |
+          python -m pytest tests/unit/test_offline_ruleset.py -q --no-header -rs 2>&1 | tee out.txt
+          if grep -q "skipped" out.txt; then
+            echo "::error::an offline-ruleset test skipped; the tool it needs is missing"
+            exit 1
+          fi
+
   security:
     name: Required scanner coverage
     needs: test
@@ -69,37 +113,12 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install project and the Python-packaged floor scanners
-        run: python -m pip install --disable-pip-version-check -e ".[dev,python-scanners]"
-
-      # The floor (scanners/floor.py) is this project's declared minimum, and
-      # this repository is expected to meet it rather than grade itself with
-      # whatever happened to be installed. Versions are pinned so the audit
-      # stays reproducible; the agent never acquires these itself.
-      - name: Install the binary floor scanners
-        env:
-          GITLEAKS_VERSION: "8.30.1"
-          TRIVY_VERSION: "0.74.0"
-          OSV_VERSION: "2.5.1"
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.local/bin"
-          cd "$(mktemp -d)"
-
-          curl -sSfL -o gitleaks.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          tar -xzf gitleaks.tar.gz gitleaks && mv gitleaks "$HOME/.local/bin/"
-
-          curl -sSfL -o trivy.tar.gz \
-            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-          tar -xzf trivy.tar.gz trivy && mv trivy "$HOME/.local/bin/"
-
-          # osv-scanner's asset name carries no version, unlike the others.
-          curl -sSfL -o osv-scanner \
-            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
-          chmod +x osv-scanner && mv osv-scanner "$HOME/.local/bin/"
-
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # One source for the floor install — see ./.github/actions/install-floor.
+      # The list used to live here and nowhere else, so when the floor grew
+      # the release workflow silently fell behind it and every tagged
+      # release would have failed its own preflight.
+      - name: Install the scanner floor
+        uses: ./.github/actions/install-floor
 
       - name: Verify the required scanner toolchain resolves
         run: secure-code-agent --config secure-code-agent.json --preflight

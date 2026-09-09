@@ -12,8 +12,8 @@ from secure_code_audit.findings import Category, Severity
 from secure_code_audit.scanner_status import (
     CoverageStatus,
     ScannerOutcome,
-    classify_execution,
     evaluate_coverage,
+    execution_from_result,
 )
 from secure_code_audit.scanners.checkov_scanner import CheckovScanner
 from secure_code_audit.scanners.hadolint_scanner import HadolintScanner
@@ -38,7 +38,7 @@ def _mock_available(monkeypatch, scanner_cls, available=True):
 
 def test_trivy_unavailable_emits_info(tmp_path, monkeypatch):
     _mock_available(monkeypatch, TrivyScanner, available=False)
-    findings = TrivyScanner().run(tmp_path, Config())
+    findings = TrivyScanner().scan(tmp_path, Config()).findings
     assert len(findings) == 1
     assert findings[0].severity is Severity.INFORMATIONAL
     assert "trivy" in findings[0].rule_id
@@ -92,7 +92,7 @@ def test_trivy_parses_sarif_and_routes_categories(tmp_path, monkeypatch):
         return _proc(code=0)
 
     monkeypatch.setattr(TrivyScanner, "_exec", fake_exec)
-    findings = TrivyScanner().run(tmp_path, Config())
+    findings = TrivyScanner().scan(tmp_path, Config()).findings
     assert {f.canonical_cwe for f in findings} >= {None, "CWE-1104"} or len(findings) == 2
 
     cats = {f.category for f in findings}
@@ -105,7 +105,7 @@ def test_trivy_parses_sarif_and_routes_categories(tmp_path, monkeypatch):
 
 def test_checkov_unavailable_emits_info(tmp_path, monkeypatch):
     _mock_available(monkeypatch, CheckovScanner, available=False)
-    findings = CheckovScanner().run(tmp_path, Config())
+    findings = CheckovScanner().scan(tmp_path, Config()).findings
     assert findings[0].severity is Severity.INFORMATIONAL
 
 
@@ -145,7 +145,7 @@ def test_checkov_parses_sarif_into_config_iac(tmp_path, monkeypatch):
         return _proc(code=0)
 
     monkeypatch.setattr(CheckovScanner, "_exec", fake_exec)
-    findings = CheckovScanner().run(tmp_path, Config())
+    findings = CheckovScanner().scan(tmp_path, Config()).findings
     assert findings
     assert all(f.category is Category.CONFIG_IAC for f in findings)
     assert findings[0].scanner == "checkov"
@@ -156,14 +156,20 @@ def test_checkov_parses_sarif_into_config_iac(tmp_path, monkeypatch):
 
 def test_hadolint_unavailable_emits_info(tmp_path, monkeypatch):
     _mock_available(monkeypatch, HadolintScanner, available=False)
-    findings = HadolintScanner().run(tmp_path, Config())
+    findings = HadolintScanner().scan(tmp_path, Config()).findings
     assert findings[0].severity is Severity.INFORMATIONAL
 
 
-def test_hadolint_no_dockerfiles_returns_empty(tmp_path, monkeypatch):
+def test_hadolint_no_dockerfiles_is_not_applicable_rather_than_a_gap(tmp_path, monkeypatch):
     _mock_available(monkeypatch, HadolintScanner)
-    findings = HadolintScanner().run(tmp_path, Config())
-    assert findings[0].rule_id == "hadolint.no_dockerfiles"
+
+    result = HadolintScanner().scan(tmp_path, Config())
+
+    # A Dockerfile linter with no Dockerfile has proved nothing and failed
+    # nothing. Requiring it of such a repository would make it permanently
+    # incomplete, so the outcome says so and carries the reason.
+    assert result.outcome is ScannerOutcome.NOT_APPLICABLE
+    assert "No Dockerfiles found" in result.reason
 
 
 def test_hadolint_parses_findings(tmp_path, monkeypatch):
@@ -195,7 +201,7 @@ def test_hadolint_parses_findings(tmp_path, monkeypatch):
         return _proc(stdout=output, code=0)
 
     monkeypatch.setattr(HadolintScanner, "_exec", fake_exec)
-    findings = HadolintScanner().run(tmp_path, Config())
+    findings = HadolintScanner().scan(tmp_path, Config()).findings
     assert len(findings) == 2
 
     by_rule = {f.rule_id: f for f in findings}
@@ -208,7 +214,7 @@ def test_hadolint_parses_findings(tmp_path, monkeypatch):
 
 def test_osv_unavailable_emits_info(tmp_path, monkeypatch):
     _mock_available(monkeypatch, OsvScanner, available=False)
-    findings = OsvScanner().run(tmp_path, Config())
+    findings = OsvScanner().scan(tmp_path, Config()).findings
     assert findings[0].severity is Severity.INFORMATIONAL
 
 
@@ -241,7 +247,7 @@ def test_osv_parses_vulnerabilities(tmp_path, monkeypatch):
         return _proc(stdout=json.dumps(payload), code=1)
 
     monkeypatch.setattr(OsvScanner, "_exec", fake_exec)
-    findings = OsvScanner().run(tmp_path, Config())
+    findings = OsvScanner().scan(tmp_path, Config()).findings
     assert len(findings) == 1
     f = findings[0]
     assert f.category is Category.DEPENDENCIES
@@ -255,7 +261,7 @@ def test_osv_parses_vulnerabilities(tmp_path, monkeypatch):
 
 def test_trufflehog_unavailable_emits_info(tmp_path, monkeypatch):
     _mock_available(monkeypatch, TruffleHogScanner, available=False)
-    findings = TruffleHogScanner().run(tmp_path, Config())
+    findings = TruffleHogScanner().scan(tmp_path, Config()).findings
     assert findings[0].severity is Severity.INFORMATIONAL
 
 
@@ -301,7 +307,7 @@ def test_trufflehog_parses_verified_secret_as_critical(tmp_path, monkeypatch):
         return _proc(stdout=jsonl, code=0)
 
     monkeypatch.setattr(TruffleHogScanner, "_exec", fake_exec)
-    findings = TruffleHogScanner().run(tmp_path, Config())
+    findings = TruffleHogScanner().scan(tmp_path, Config()).findings
     assert len(findings) == 2
 
     by_detector = {f.rule_id: f for f in findings}
@@ -316,15 +322,18 @@ def test_trufflehog_parses_verified_secret_as_critical(tmp_path, monkeypatch):
 
 def test_scorecard_unavailable_emits_info(tmp_path, monkeypatch):
     _mock_available(monkeypatch, ScorecardScanner, available=False)
-    findings = ScorecardScanner().run(tmp_path, Config())
+    findings = ScorecardScanner().scan(tmp_path, Config()).findings
     assert findings[0].severity is Severity.INFORMATIONAL
 
 
-def test_scorecard_no_remote_emits_info(tmp_path, monkeypatch):
+def test_scorecard_without_a_remote_is_not_applicable(tmp_path, monkeypatch):
     _mock_available(monkeypatch, ScorecardScanner)
     monkeypatch.setattr(ScorecardScanner, "_infer_repo_url", lambda self, t: None)
-    findings = ScorecardScanner().run(tmp_path, Config())
-    assert findings[0].rule_id.endswith("no_remote")
+
+    result = ScorecardScanner().scan(tmp_path, Config())
+
+    assert result.outcome is ScannerOutcome.NOT_APPLICABLE
+    assert "remote GitHub URL" in result.reason
 
 
 def test_scorecard_score_to_severity():
@@ -365,7 +374,7 @@ def test_scorecard_routes_security_policy_to_policy_docs(tmp_path, monkeypatch):
         return _proc(stdout=json.dumps(payload), code=0)
 
     monkeypatch.setattr(ScorecardScanner, "_exec", fake_exec)
-    findings = ScorecardScanner().run(tmp_path, Config())
+    findings = ScorecardScanner().scan(tmp_path, Config()).findings
     by_name = {f.rule_id: f for f in findings}
     assert by_name["scorecard.Security-Policy"].category is Category.POLICY_DOCS
     assert by_name["scorecard.Pinned-Dependencies"].category is Category.SUPPLY_CHAIN
@@ -383,11 +392,10 @@ def test_trufflehog_findings_exit_with_empty_stdout_fails_instead_of_reading_cle
     scanner = TruffleHogScanner()
     scanner._resolved_command = ("trufflehog",)
 
-    findings = scanner.run(tmp_path, Config())
+    result = scanner.scan(tmp_path, Config())
 
-    assert [f.rule_id for f in findings] == ["trufflehog.tool_error"]
-    execution = classify_execution("trufflehog", findings)
-    assert execution.outcome is ScannerOutcome.FAILED
+    assert result.outcome is ScannerOutcome.FAILED
+    execution = execution_from_result("trufflehog", result)
     assert evaluate_coverage([execution], ["trufflehog"]).status is CoverageStatus.FAILED
 
 
@@ -402,7 +410,9 @@ def test_trufflehog_findings_exit_with_only_blank_lines_also_fails(tmp_path, mon
     scanner = TruffleHogScanner()
     scanner._resolved_command = ("trufflehog",)
 
-    assert [f.rule_id for f in scanner.run(tmp_path, Config())] == ["trufflehog.tool_error"]
+    assert [f.rule_id for f in scanner.scan(tmp_path, Config()).findings] == [
+        "trufflehog.tool_error"
+    ]
 
 
 def test_trufflehog_clean_exit_with_empty_stdout_is_still_a_clean_scan(tmp_path, monkeypatch):
@@ -414,7 +424,7 @@ def test_trufflehog_clean_exit_with_empty_stdout_is_still_a_clean_scan(tmp_path,
     scanner = TruffleHogScanner()
     scanner._resolved_command = ("trufflehog",)
 
-    findings = scanner.run(tmp_path, Config())
+    result = scanner.scan(tmp_path, Config())
 
-    assert findings == []
-    assert classify_execution("trufflehog", findings).outcome is ScannerOutcome.COMPLETED
+    assert result.findings == ()
+    assert result.outcome is ScannerOutcome.COMPLETED

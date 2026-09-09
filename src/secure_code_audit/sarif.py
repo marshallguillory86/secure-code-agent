@@ -1,7 +1,7 @@
 """SARIF 2.1.0 emit + ingest.
 
 Spec: https://www.oasis-open.org/standard/sarif-v2-1-0/
-SARIF JSON schema: https://github.com/oasis-tcs/sarif-spec/blob/main/sarif-2.1/schemas/sarif-schema-2.1.0.json
+SARIF JSON schema (OASIS canonical; the oasis-tcs raw URL 404s): https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def emit(findings: Iterable[Finding], coverage: CoverageReport | None = None) ->
         run["invocations"] = [_invocation(coverage)]
 
     return {
-        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schemas/sarif-schema-2.1.0.json",
+        "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
         "version": "2.1.0",
         "runs": [run],
     }

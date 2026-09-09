@@ -49,6 +49,39 @@ class ScannerExecution:
 
 
 @dataclass(frozen=True)
+class ScanResult:
+    """What an adapter reports: what happened to it, and what it found.
+
+    Adapters used to signal outcome by *naming a finding* — `bandit.tool_error`
+    meant FAILED, anything starting `bandit.no_` meant NOT_APPLICABLE — and
+    `classify_execution` reverse-engineered the intent by prefix matching.
+    Nothing enforced that protocol: no type, no test, no lint. An adapter that
+    named a control finding wrongly silently produced a *security* finding, and
+    a real finding whose id happened to start with the scanner's name plus
+    `no_` became a false NOT_APPLICABLE, which a required-scanner gate then
+    escalated into a hard failure.
+
+    The outcome is now stated rather than inferred, and the control finding is
+    derived from it (see `Scanner._control_result`), so the two cannot
+    disagree. See `docs/architecture.md` §2.
+    """
+
+    outcome: ScannerOutcome
+    findings: tuple[Finding, ...] = ()
+    #: Why, for any outcome that is not COMPLETED. Carried into the report so
+    #: an operator reads a reason rather than an absence.
+    reason: str | None = None
+    #: What this run actually covered — pip-audit's mode and inputs, the
+    #: offline rule profile semgrep used. Declared by the adapter, because the
+    #: orchestrator used to special-case scanners by name to supply it.
+    scope: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.outcome is not ScannerOutcome.COMPLETED and not self.reason:
+            raise ValueError(f"{self.outcome.value} requires a reason")
+
+
+@dataclass(frozen=True)
 class CoverageReport:
     status: CoverageStatus
     required: tuple[str, ...]
@@ -60,61 +93,28 @@ class CoverageReport:
     unverified: tuple[str, ...] = ()
 
 
-def classify_execution(
+def execution_from_result(
     name: str,
-    findings: Iterable[Finding],
+    result: ScanResult,
     *,
     command: tuple[str, ...] = (),
     version: str | None = None,
-    scope: str | None = None,
 ) -> ScannerExecution:
-    """Classify scanner control findings without counting them as coverage."""
-    findings = list(findings)
-    control = {finding.rule_id: finding for finding in findings}
+    """Record what an adapter reported. No inference, no string parsing.
 
-    checks = (
-        (f"{name}.tool_unavailable", ScannerOutcome.UNAVAILABLE),
-        (f"{name}.tool_timeout", ScannerOutcome.TIMED_OUT),
-        (f"{name}.tool_error", ScannerOutcome.FAILED),
-        (f"{name}.parse_error", ScannerOutcome.FAILED),
-    )
-    for rule_id, outcome in checks:
-        if rule_id in control:
-            return ScannerExecution(
-                name=name,
-                outcome=outcome,
-                command=command,
-                version=version,
-                finding_count=0,
-                reason=control[rule_id].message,
-                scope=scope,
-            )
-
-    not_applicable = next(
-        (finding for finding in findings if finding.rule_id.startswith(f"{name}.no_")),
-        None,
-    )
-    if not_applicable is not None:
-        return ScannerExecution(
-            name=name,
-            outcome=ScannerOutcome.NOT_APPLICABLE,
-            command=command,
-            version=version,
-            finding_count=0,
-            reason=not_applicable.message,
-            scope=scope,
-        )
-
-    security_findings = sum(
-        1 for finding in findings if not finding.rule_id.startswith(f"{name}.tool_")
-    )
+    This is what `classify_execution` becomes once the adapter states its own
+    outcome: a copy, not a decoding. `finding_count` counts only a run that
+    completed — a scanner that failed after emitting partial output has not
+    covered its ground, and a count taken from that would read as progress.
+    """
     return ScannerExecution(
         name=name,
-        outcome=ScannerOutcome.COMPLETED,
+        outcome=result.outcome,
         command=command,
         version=version,
-        finding_count=security_findings,
-        scope=scope,
+        finding_count=len(result.findings) if result.outcome is ScannerOutcome.COMPLETED else 0,
+        reason=result.reason,
+        scope=result.scope,
     )
 
 

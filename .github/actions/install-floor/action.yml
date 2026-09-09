@@ -1,0 +1,86 @@
+name: Install the scanner floor
+description: >-
+  Install every tool in scanners/floor.py at a pinned version, so a workflow
+  that audits this repository meets its own declared minimum instead of grading
+  itself with whatever happened to be present.
+
+# Why this is a composite action rather than steps copied into each workflow.
+#
+# The release workflow runs `secure-code-agent --preflight` and
+# `--fail-on-gate` against this repository, and the config requires
+# `["floor"]`. When the floor grew (D7, D12) the CI security job was updated
+# and the release workflow was not, so `python -m pip install -e
+# ".[dev,required-scanners]"` left checkov, osv-scanner, trivy, semgrep and
+# gitleaks unresolved — preflight exits 1, and every tagged release would have
+# failed at that step. Two copies of an install list is the same
+# two-sources-of-truth defect the codebase spent D13 removing; this is the one
+# copy.
+#
+# Versions are pinned because the floor is a claim about what ran, and an
+# unpinned scanner makes that claim unreproducible. The agent never acquires
+# these itself — see docs/scanners.md.
+
+inputs:
+  extras:
+    description: >-
+      Extras to install the project with. Defaults to the set that brings the
+      Python-packaged floor scanners (semgrep, checkov, bandit, pip-audit,
+      njsscan).
+    required: false
+    default: "dev,python-scanners"
+  gitleaks-version:
+    required: false
+    default: "8.30.1"
+  trivy-version:
+    required: false
+    default: "0.74.0"
+  osv-scanner-version:
+    required: false
+    default: "2.5.1"
+  rubocop-version:
+    required: false
+    default: "1.90.0"
+
+runs:
+  using: composite
+  steps:
+    - name: Install the project and its Python-packaged floor scanners
+      shell: bash
+      run: python -m pip install --disable-pip-version-check -e ".[${{ inputs.extras }}]"
+
+    - name: Install the binary floor scanners
+      shell: bash
+      env:
+        GITLEAKS_VERSION: ${{ inputs.gitleaks-version }}
+        TRIVY_VERSION: ${{ inputs.trivy-version }}
+        OSV_VERSION: ${{ inputs.osv-scanner-version }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$HOME/.local/bin"
+        cd "$(mktemp -d)"
+
+        curl -sSfL -o gitleaks.tar.gz \
+          "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+        tar -xzf gitleaks.tar.gz gitleaks && mv gitleaks "$HOME/.local/bin/"
+
+        curl -sSfL -o trivy.tar.gz \
+          "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+        tar -xzf trivy.tar.gz trivy && mv trivy "$HOME/.local/bin/"
+
+        # osv-scanner's asset name carries no version, unlike the others.
+        curl -sSfL -o osv-scanner \
+          "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
+        chmod +x osv-scanner && mv osv-scanner "$HOME/.local/bin/"
+
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    # RuboCop joined the floor in D12 and is a gem, not a binary release.
+    # --user-install because the runner's system gem directory is not writable.
+    - name: Install RuboCop, the Ruby half of the floor
+      shell: bash
+      env:
+        RUBOCOP_VERSION: ${{ inputs.rubocop-version }}
+      run: |
+        set -euo pipefail
+        gem install --user-install --no-document rubocop -v "$RUBOCOP_VERSION"
+        echo "$(ruby -e 'puts Gem.user_dir')/bin" >> "$GITHUB_PATH"

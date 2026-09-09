@@ -19,6 +19,12 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
 | D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
 | D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
+| D9 | Our ruleset is the offline floor, bounded to language primitives | 2026-09-09 | Accepted |
+| D10 | Rules ship as a versioned, digest-identified profile | 2026-09-09 | Accepted |
+| D11 | Author a rule only where no floor scanner already covers it | 2026-09-09 | Accepted |
+| D12 | The coverage check, run for the other four languages | 2026-09-09 | Accepted |
+| D13 | Adapters state their outcome; nothing infers it from a finding's name | 2026-09-09 | Accepted |
+| D14 | Parsers are tested against real captured output, and the gap is declared | 2026-09-09 | Accepted |
 
 ---
 
@@ -74,9 +80,17 @@ never granted. Both deserve an error rather than silence. Keys withdrawn on
 purpose — `asvs_level` — keep their specific reason instead of the generic
 message.
 
-**Consequence.** Two sources of truth remain, and this only aligns them by
-hand. Generating the schema from the loader is still owed
-([`architecture.md`](architecture.md) §3).
+**Consequence.** Two sources of truth remain. Generation was the intended
+fix and was rejected on inspection: the schema is nested where `Config` is
+flat — `paths.include_extensions` and `paths.exclude_patterns` are one JSON
+object and two dataclass fields, and `gates`/`outputs` are free-form dicts with
+no dataclass at all — so generating either from the other means a mapping layer
+that would itself be a third source of truth. They are held in step by
+`tests/unit/test_contract_sync.py` instead, which asserts the loader and the
+schema accept the same keys at both the top level and the per-scanner level,
+and that no `Config` field is settable only by editing source. Enforcement
+rather than generation, and the reason recorded rather than the intent
+restated.
 
 ## D3 — The MA Security pillar is fed by an artifact
 
@@ -193,10 +207,14 @@ gitleaks for detection; AGPL; verification is the genuine gain), `hadolint`
 (overlaps checkov and trivy; GPL), `npm_audit` (osv_scanner covers the same
 advisories with fewer false positives and without needing Node).
 
+> Membership has changed since: [D12](#d12--the-coverage-check-run-for-the-other-four-languages)
+> adds `njsscan` and `rubocop` to the floor and `gosec` to the opt-in set.
+> `scanners/floor.py` is the authority; this paragraph is the reasoning at the
+> time the floor was declared.
+
 `gates.require_scanners: ["floor"]` requires the declared set without
 enumerating it, so the membership stays maintained here rather than copied
 into every repository's config and left to rot.
-
 
 **First run found two defects the old three-scanner setup could not expose.**
 Scorecard timed out at the 600s default because it makes dozens of GitHub API
@@ -238,3 +256,318 @@ that is the failure this project exists to remove.
 **Consequence.** Imported Scorecard coverage is `unverified` per D3: an
 artifact we did not watch being produced. That is the correct label, and it is
 visible in every output.
+
+## D9 — Our ruleset is the offline floor, bounded to language primitives
+
+**Question.** `product-intent.md` §5 principle 2 said *"no parallel ruleset
+competing with Semgrep or Bandit."* We ship two rulesets — the built-in regex
+pack and the offline Semgrep profile — so the principle was already violated
+the day it was written. Meanwhile `--config=auto` fetches registry rules under
+the Semgrep Rules Licence, which permits internal, non-competing, non-SaaS use
+only, and this project is arguably a competing security product.
+
+**Marshall's ruling (2026-09-09):** *"Our ruleset is the offline floor, not a
+competitor. Its job is: when there is no network and no registry, you still get
+the highest-consequence patterns."* Online, the maintained registries do the
+job, because online is where they are available.
+
+**Why an escape hatch was not available.** OpenGrep is a healthy LGPL-2.1 fork
+of the Semgrep engine, but `opengrep/opengrep-rules` — the permissively
+licensed rules fork — has six stars and was last touched in November 2025.
+There is no maintained, permissively licensed community ruleset to adopt, so
+authoring is the only path that resolves the licence question.
+
+**The bound, and why it is enforceable.** Maintenance cost is driven by rule
+*shape*, not rule count:
+
+- **Language primitives** — `shell=True`, `eval`, `pickle.loads`,
+  `hashlib.md5`, `verify=False` — are constructs the language itself provides.
+  They have not changed in a decade and will not. Sixty of them is an asset.
+- **Framework APIs** — Django ORM internals, Express middleware, Spring
+  annotations — rot with every framework release. That is where a funded rules
+  team earns its keep and where a one-maintainer project bleeds.
+
+So the offline profile takes primitives and **refuses framework rules**, and
+`test_the_offline_profile_refuses_framework_rules` fails the build on a rule
+that names one. A bound enforced only in review is not a bound.
+
+**What makes a small set worth having.** Not count. Every rule carries a CWE,
+an OWASP bucket, a confidence and a version, and every rule has a positive
+fixture it must flag *and* a negative fixture it must not. Registry rules
+deliver CWEs inconsistently — before this work every Semgrep finding arrived
+with no CWE at all — and a fully mapped 26-rule set is worth more to a
+standards-anchored tool than a partially mapped 3,000-rule one.
+
+**Parity remains a non-goal.** A stale ruleset claiming to be a standard is
+worse than a small one honestly labelled, and `docs/scanners.md` labels it.
+
+## D10 — Rules ship as a versioned, digest-identified profile
+
+**Question.** "Semgrep found three things" is not a claim anyone can check. A
+result is only reproducible if you can say which rules produced it, and re-run
+against the same baseline later.
+
+**Decision.** The offline rules are a **profile** with an id, a version and a
+digest, cited in scanner provenance as `sca-offline@1.0.0 (cff6cb1e5519)`.
+
+This is the STIG benchmark model: a named baseline, a release number, and rules
+that each carry their own version, so a finding can be cited and re-checked.
+
+**The digest is the part that is evidence.** A version is an assertion by
+whoever edited the file. A digest is computed from the bytes that actually ran.
+Someone editing the ruleset inside an installed wheel leaves the version saying
+1.0.0; the digest notices, and a test asserts it does.
+
+**Bump the version when rules are added, removed, or change meaning.** A rule
+whose pattern is broadened has changed meaning even with an unchanged id, and a
+report citing an unchanged version after that claims a comparison it cannot
+support.
+
+## D11 — Author a rule only where no floor scanner already covers it
+
+**Question.** `CONTRIBUTING.md` has forbidden "shipping a parallel ruleset to
+Semgrep / Bandit / CodeQL" since the first commit. Marshall asked whether that
+principle still made sense, since nobody remembered writing it.
+
+**It made more sense than we credited, and it had just been violated.** The
+principle's target was never rule-writing as such — it sits in a scope-creep
+list beside "writing a new AST analyzer", "SaaS dashboard" and "telemetry". Its
+target is **duplicating detection a scanner already does**, because then you
+have built a worse version of that scanner and now maintain it.
+
+**Measured, not argued.** Running Bandit against the profile's own fixture:
+
+| | |
+| --- | --- |
+| Python rules in the profile | 19 |
+| Fully or partly covered by Bandit | **17** |
+| Genuinely unique | 2 |
+
+Bandit found 23 distinct test types where the profile had 19 rules, including
+`B113 request_without_timeout`, which the profile did not cover at all.
+
+**Why the reasoning failed.** The rules were justified as "the offline floor".
+That argument does not survive the observation that **Bandit is itself
+offline** — Apache-2.0, no network, no registry. The offline/online framing was
+imported from the Semgrep Rules Licence problem, which is real, and applied to
+a language where a different tool had already solved it.
+
+**Decision.** Author a rule only where no floor scanner already covers it. In
+practice that means the profile covers what Bandit cannot read: JavaScript,
+TypeScript, Go, Ruby and Java have no offline SAST in the floor at all. Python
+is admitted only for gaps Bandit measurably leaves, and each such rule must
+declare the gap in a `covers-gap` metadata field.
+
+> **The second sentence was wrong, and D12 is the correction.** "JavaScript,
+> TypeScript, Go, Ruby and Java have no offline SAST in the floor at all" was
+> asserted without running any of those tools. njsscan and RuboCop both exist,
+> both install offline, and both cover rules this decision let stand. The
+> principle here survives intact; only the claim about which languages were
+> uncovered was false. See
+> [D12](#d12--the-coverage-check-run-for-the-other-four-languages).
+
+**Enforced, not remembered.** `test_no_python_rule_duplicates_bandit` runs both
+tools over the fixtures and fails on any Python rule flagging a line Bandit
+already flags. `test_the_profile_covers_languages_the_floor_cannot_read_offline`
+asserts the languages that justify the profile existing. A bound enforced only
+in review is not a bound — the same conclusion D9 reached, applied to the
+mistake D9 did not prevent.
+
+**Consequence.** The profile went from 26 rules to 23, and became more valuable:
+2 Python, 7 JavaScript/TypeScript, 5 Go, 4 Ruby, 5 Java. Smaller, no overlap,
+and every rule covering something nothing else in the floor can see.
+
+**A precision defect fell out of the same pass.** The Java command-execution
+rule flagged `new ProcessBuilder(new String[]{...})` — the *recommended fix* —
+as the defect. A rule that reports the remediation as the problem trains people
+to ignore the rule. It is now narrowed to `Runtime.exec`.
+
+## D12 — The coverage check, run for the other four languages
+
+**Status.** Accepted, 2026-09-09.
+
+D11 shrank the Python rules because Bandit already covered seventeen of
+nineteen. It then justified the remaining twenty-one rules with a sentence that
+was never tested: *"JavaScript, TypeScript, Go, Ruby and Java have no offline
+SAST in the floor at all."* That is an assertion about tools that exist, made
+without running any of them. The standing rule is that a built-in detector
+requires a **proven** gap, and that the evidence is produced before the code,
+not after. It was not. This is that check, run late.
+
+**Method.** For each language, install the candidate FOSS tools and run them
+against the same positive and negative fixtures the profile's own suite uses.
+A rule is a duplicate when the tool flags the same line for the same primitive
+with no framework context required. A tool that needs a framework shape, a
+build, or a toolchain we do not provision does not count as coverage.
+
+**Result.**
+
+| Language | Tool | Licence | Ran | Covers | Leaves |
+| --- | --- | --- | --- | --- | --- |
+| JavaScript | njsscan 1.0.0 | LGPL-3.0-or-later | yes | `md5`, `Math.random`, `NODE_TLS_REJECT_UNAUTHORIZED` | `child_process.exec`, `eval`, `new Function`, `innerHTML` |
+| Ruby | RuboCop 1.28.2 `--only Security` | MIT | yes | `eval`, `Marshal.load`, `YAML.load` | `system()` interpolation, `Digest::MD5` |
+| Ruby | Brakeman | MIT | no | — | Rails-only; does not analyze plain Ruby |
+| Go | gosec 2.29.0 | Apache-2.0 | **no** | — | requires the Go toolchain on the host |
+| Java | PMD 7.7.0 | BSD-2-Clause | jar read | **none of the five** | all five |
+| Java | SpotBugs / find-sec-bugs | LGPL-2.1 | no | — | requires compiled bytecode |
+
+**Two tools cover ground we had written rules for, and both are clean.**
+njsscan and RuboCop each produced zero findings on the negative fixtures, so
+wiring them costs no precision. Under the standing rule the tool wins, so both
+are wired and the rules give way to them: three are deleted outright
+(`javascript.weak-hash`, `javascript.weak-random`,
+`ruby.unsafe-deserialization`) and two are narrowed to the half the tool leaves
+— `ruby.code-injection` drops plain `eval` and keeps `instance_eval` /
+`class_eval`, and `javascript.tls-verification-disabled` drops the env-var form
+and keeps the per-request `{rejectUnauthorized: false}`.
+
+**Three boundaries are real, and each has a mechanism behind it.**
+
+*njsscan's silence is structural, not incidental.* It has rules for `eval`,
+`child_process.exec` and DOM XSS — they did not fire because they are taint
+rules gated on an Express handler shape, `function ($REQ, $RES, ...)` with a
+`$REQ.$QUERY` source. In a CLI script, a library, a build step or a Lambda
+handler there is no such shape and the rules are quiet. Its TLS rule matches
+only `process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'`; the far more common
+per-request `{rejectUnauthorized: false}` is not covered, so that rule of ours
+stays.
+
+*gosec cannot read Go source on its own.* It loads packages through
+`go list` and fails outright without the toolchain — `go command required, not
+found`. The distinction that matters is **running the tool versus reading the
+target**: every floor tool needs some runtime to execute itself, and that is
+unremarkable. gosec is different in that analyzing a target means invoking
+*that target's* build tooling. This is precisely the boundary MA's ADR-012
+draws for SpotBugs, where needing a build makes a tool unavailable rather than
+silently empty. So gosec is wired as an optional tool that declares why it may
+not run, and njsscan and RuboCop — which parse source directly and need only
+themselves — are in the floor.
+
+*Java has no source-level FOSS SAST worth wiring.* PMD parses source and needs
+no bytecode, but its entire Java security category is two rules,
+`HardCodedCryptoKey` and `InsecureCryptoIv`, and neither touches
+`Runtime.exec`, `readObject`, MD5, ECB or `java.util.Random`. Searching every
+PMD Java category for those primitives returns only false leads — a rule about
+`gc()`, one about `exit()`, one about JDBC result sets. Java is a proven gap.
+
+**Consequence.** The profile drops from 23 rules to 20 and the floor gains two
+tools that are better at their own languages than we would be: 5 Java, 5 Go,
+5 JavaScript, 3 Ruby, 2 Python. The gap that remains is now measured rather
+than assumed, and every rule in a language a floor tool can read has to name
+the gap it covers in a `covers-gap` metadata field or fail the build.
+
+**The lesson is the one D11 already recorded and did not generalize.** D11
+caught the Python error and then repeated it in the same paragraph for four
+other languages. Running the check on one language and asserting the result for
+the rest is not evidence. The check is now automated per language in
+`tests/unit/test_offline_ruleset.py`, so the next rule added to a language a
+tool covers fails the build instead of surviving to a later audit.
+
+## D13 — Adapters state their outcome; nothing infers it from a name
+
+**Status.** Accepted, 2026-09-09. Closes [`architecture.md`](architecture.md) §2.
+
+**Question.** An adapter used to signal what happened to it by *naming a
+finding*: `bandit.tool_error` meant FAILED, `bandit.tool_timeout` meant
+TIMED_OUT, and anything starting `pip_audit.no_` meant NOT_APPLICABLE.
+`classify_execution` then reverse-engineered the intent by prefix matching, and
+counted real findings by *exclusion* — everything not starting `<name>.tool_`.
+
+**Why that was worth changing before adding features.** Nothing enforced the
+protocol: no type, no test, no lint. The convention was documented only by
+example, and fifteen adapters had been written at four different times. An
+adapter naming a control finding wrongly produced a *security* finding
+silently; a real finding whose id began with the scanner's name plus `no_`
+became a false NOT_APPLICABLE, which a required-scanner gate escalated into a
+hard build failure. The architecture audit ranked this first on
+defect-elimination per hour, and most defects traded during recent review
+cycles were downstream symptoms of it.
+
+**Decision.** `Scanner.scan()` returns a `ScanResult` — outcome, findings,
+reason, scope. Outcome constructors (`completed`, `failed`, `timed_out`,
+`unavailable`, `not_applicable`) live on the base class and *derive* the
+control finding from the outcome, so the two cannot disagree. A non-COMPLETED
+result without a reason raises: a failed scanner with no reason reaches a
+report as a blank cell, indistinguishable from one nobody asked about.
+
+**`classify_execution` is deleted, not deprecated.** It still worked, and that
+was the problem — a functioning string-parser left in the tree is an invitation
+to wire the next adapter into it. `execution_from_result` replaces it and does
+no decoding at all.
+
+**Scope moved onto the adapter.** `cli.py` carried `if name != "pip_audit":
+return None` because there was nowhere on an adapter to declare what it
+covered. `Scanner.scope()` is that place; `pip_audit` reports its mode and
+inputs, `semgrep` cites the offline rule profile by digest, everything else
+returns None.
+
+**Two live defects surfaced during the migration**, both of the predicted kind.
+`trufflehog` and `npm_audit` could return real findings *alongside* a control
+finding — twenty parsed secrets and three unreadable lines — and the old
+classifier's early return recorded `finding_count=0` while those findings still
+reached the report. The count and the report disagreed because neither was the
+source of truth. `failed()` now takes the partial findings explicitly: they are
+reported, and the outcome stays FAILED, because a partial audit is not an
+audit. Separately, `pip_audit._parse` returned a control finding from a parsing
+helper, making a leaf function the thing that decided the run's outcome; it
+raises now, and the caller states the outcome.
+
+**A regression I introduced and caught.** Folding per-input timeouts into the
+same failure list cost `npm_audit` and `pip_audit` their TIMED_OUT outcome.
+Both fail coverage, so no gate changed — but only one of them tells an operator
+to raise the timeout. Timeouts are tracked separately again.
+
+**Enforced, not remembered.** `tests/unit/test_scan_protocol.py` asserts every
+registered scanner returns `ScanResult`, that a non-COMPLETED result carries a
+reason, that a failed run keeps its findings and loses its count, and — by AST
+walk over every adapter — that none of them hand-builds a control finding. The
+last one was verified against a synthetic offender rather than assumed to work.
+
+## D14 — Parsers are tested against real captured output, and the gap is declared
+
+**Status.** Accepted, 2026-09-09. Closes [`architecture.md`](architecture.md) §4.
+
+**Question.** This tool's entire job is parsing fifteen other tools' output
+formats, and every parser was verified against hand-written mock output — which
+means against *the author's belief about the format*, not the format. Two
+instances of that class had already bitten: the OSV-Scanner v1→v2 CLI change
+and `pip-audit --locked` semantics, both caught by hand during review.
+`tests/integration/` was empty, and `CONTRIBUTING.md` had cited a
+`test_scoring_drift.py` that never existed.
+
+**Decision.** Commit genuine captured output per scanner under
+`tests/fixtures/scanner-output/`, and drive each adapter against it. Captures
+are produced by running the real tool against a small deliberately-vulnerable
+tree; local paths are rewritten to `/repo` and `/home/user` and nothing else is
+edited. On a scanner upgrade, recapture — a fixture hand-edited to make a test
+pass is precisely the belief this stops trusting.
+
+**Six of fifteen, and the other nine are named.** Only tools installable on the
+capture host could produce real output: njsscan, RuboCop, gitleaks, gosec,
+pip-audit and semgrep. Writing plausible-looking output for the rest would
+recreate the defect being fixed, so the remainder sit in
+`SCANNERS_WITHOUT_A_REAL_CAPTURE` with a reason each, and a test fails if that
+list drifts out of step with the fixtures directory. A parser with no real
+capture is a known risk; an undocumented one is the same silence this project
+rejects everywhere else.
+
+**The gosec capture is the valuable one.** It is that tool's genuine output on
+a host with no Go toolchain: exit 1, well-formed JSON, `"Issues": []`,
+`"Stats": {"files": 0}`, and the failure recorded only under `Golang errors`.
+The test asserts the capture still demonstrates that shape before asserting the
+adapter handles it — so if a future gosec stops behaving this way, the fixture
+says so rather than the test quietly passing for a new reason.
+
+**Scoring drift is pinned, not calibrated.** The model is a chain of judgement
+calls — severity weights, the `sqrt(LOC/1000)` dampener, the grade table, the
+letter bands — and changing any of them silently re-grades every repository
+ever scanned, including accepted baselines. The new tests pin the output of
+that chain, plus the properties that must survive any retuning: severity
+ordering is monotonic, informational findings never move the grade, the overall
+grade is the worst category rather than the mean, suppressed findings do not
+count, and more findings never improve the score. A failure there means the
+model changed and should be declared, not that something is broken.
+
+**This is not D5.** Pinning an uncalibrated number does not calibrate it.
+These prove the scale is *stable*; nobody has yet established that A+
+corresponds to anything real. D5 remains open.
