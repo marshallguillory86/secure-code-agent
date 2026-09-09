@@ -14,12 +14,12 @@ clear.
 
 - The offline Semgrep ruleset is now a **versioned profile**: `sca-offline`,
   with a version and a SHA-256 digest of the shipped file, cited in scanner
-  provenance as `sca-offline@1.0.0 (cff6cb1e…)`. A finding can name the rules
+  provenance as `sca-offline@1.1.0 (digest…)`. A finding can name the rules
   that produced it and be re-checked against the same baseline. The digest is
   evidence where the version is only an assertion — editing the ruleset inside
   an installed wheel leaves the version unchanged and the digest does not. See
   [D10](docs/decisions.md).
-- The profile is **23 rules across 5 languages** — JavaScript/TypeScript, Go,
+- The profile is **20 rules across 5 languages** — JavaScript/TypeScript, Go,
   Ruby, Java, and the two Python patterns Bandit measurably misses. Every rule
   declares a CWE, an OWASP bucket, a confidence and a version, and every rule
   is paired-tested: a fixture it must flag and a fixture it must not. Proving a
@@ -31,14 +31,70 @@ clear.
   of them duplicated it. Bandit is in the floor, is Apache-2.0, and is already
   offline — so the "offline coverage" argument that justified them was simply
   wrong, and `CONTRIBUTING.md` has forbidden a parallel ruleset since the first
-  commit. Nothing in the floor reads JavaScript, Go, Ruby or Java without the
-  network, and that is where these rules earn their maintenance. Enforced by
-  `test_no_python_rule_duplicates_bandit`. See [D11](docs/decisions.md).
+  commit. Enforced by `test_no_python_rule_duplicates_bandit`. See
+  [D11](docs/decisions.md).
+
+  That entry originally continued *"nothing in the floor reads JavaScript, Go,
+  Ruby or Java without the network"*. It was asserted without running any of
+  those tools, and two of them existed — see D12 below, which is the same
+  mistake caught a second time and is why the coverage check is now automated
+  per language.
 - `product-intent.md` §5 principle 2 amended. It read as an unqualified refusal
   to author rules, which we already violated twice over. The bound that
   replaces it: our ruleset is the offline floor, not a competitor — language
   primitives in, framework rules out, enforced by a test rather than by review.
   See [D9](docs/decisions.md).
+
+### Added — the coverage check, and the tools it found
+
+- **The floor gained njsscan and RuboCop, and gosec as opt-in.** D11 shrank the
+  Python rules against Bandit, then justified the remaining twenty-one with a
+  sentence nobody tested. Running the check found that njsscan (LGPL-3.0+)
+  covers Node's md5, sha1, `Math.random` and the
+  `NODE_TLS_REJECT_UNAUTHORIZED` form, and RuboCop's Security cops (MIT) cover
+  Ruby's `eval`, `Marshal.load` and `YAML.load` — both offline, both clean on
+  the negative fixtures. Three rules were deleted and two narrowed to the half
+  the tool leaves. See [D12](docs/decisions.md).
+- **The gaps that remain are measured, not assumed.** njsscan's exec/eval/DOM-XSS
+  rules are taint rules gated on an Express `(req, res)` handler shape, so they
+  are silent in a CLI script or a Lambda handler. gosec loads packages through
+  `go list` and cannot read Go without the toolchain — the boundary MA's
+  ADR-012 draws for SpotBugs, and why it is opt-in rather than floor. PMD's
+  entire Java security category is two rules, neither of them ours.
+- **Adapters now return a `ScanResult`** stating what happened, rather than
+  signalling it by naming a finding. `classify_execution` is deleted, not
+  deprecated. See [D13](docs/decisions.md).
+- **Parsers are tested against real captured scanner output**, not against
+  hand-written mocks — six tools captured, the other nine declared in
+  `SCANNERS_WITHOUT_A_REAL_CAPTURE` with reasons. Plus
+  `tests/integration/test_scoring_drift.py`, which `CONTRIBUTING.md` had cited
+  for far longer than it existed. See [D14](docs/decisions.md).
+
+### Fixed — defects found by the tool auditing itself
+
+- **`paths.exclude_patterns` was honoured by five of fifteen adapters.** The
+  rest have no flag for it, and nothing filtered centrally — so a config
+  excluding `tests/` still reported findings from deliberately-vulnerable
+  fixtures. Worse, `exclude_patterns` is also the LOC denominator, so findings
+  from excluded paths were scored against lines that were never counted.
+  Enforced once now, after collection, for every adapter and every SARIF import
+  alike. Control findings are exempt, or a failed scanner would go silent.
+- **Every tagged release would have failed at its own preflight.** The release
+  workflow installed `.[dev,required-scanners]` while the config requires the
+  floor, leaving checkov, osv-scanner, trivy, semgrep and gitleaks unresolved.
+  The floor install now lives in one composite action both workflows use.
+- **Reports named a clean category as the worst one.** `min()` over the grade
+  dict returns the first key in enum order on a tie, and every category grades
+  5.0 when nothing counts against it — so an all-informational finding set
+  reported *"worst category: secrets"* on a repository with zero secrets
+  findings. It is `None` when nothing graded below the ceiling, and ties break
+  by finding count rather than enum order.
+- **The markdown report and PR comment claimed grades the JSON withheld.**
+  `Verdict` decides once whether a run can claim a verified grade, but two
+  renderers were never wired to it and kept a weaker condition, so a run with
+  no `gates.require_scanners` printed a bare **A+** in the two artifacts people
+  actually read while the JSON reported `verified_grade: null`.
+- **The JSON report was the one output missing from `.gitignore`.**
 
 ### Fixed — remaining known defects
 

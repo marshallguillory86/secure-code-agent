@@ -259,3 +259,32 @@ outcomes inferred from weak signals (an empty file, an absent key, an absent
 fix. Closing these blockers tactically is correct for the release; doing the
 `ScanResult` refactor immediately afterward is what stops the class from
 regenerating.
+
+**The refactor was done, 2026-09-09** — see
+[D13](decisions.md#d13--adapters-state-their-outcome-nothing-infers-it-from-a-name).
+It found two more instances of the same class that tactical fixes had not
+reached: adapters returning real findings alongside a control finding, whose
+count was then recorded as zero while the findings still reached the report.
+
+---
+
+## v0.4.0 — defects found after these closed
+
+The v0.4.0 cycle's defects are recorded in [`CHANGELOG.md`](../CHANGELOG.md)
+rather than duplicated here, because this document is the audit of a specific
+commit and re-using it as a running list is how the checklist above got
+corrupted in the first place. Four of them are worth naming here because of
+where they came from: **the tool found them by auditing itself once the floor
+grew.**
+
+- `paths.exclude_patterns` was honoured by five of fifteen adapters, and was
+  simultaneously the LOC denominator — so findings from excluded paths were
+  scored against lines that were never counted.
+- Every tagged release would have failed at its own preflight: the release
+  workflow's install list fell behind the floor it is required to meet.
+- The markdown report and PR comment claimed verified grades the JSON withheld.
+- Reports named a category with zero findings as the worst one.
+
+None of these were reachable by reading the code alone. They surfaced because
+the repository runs its own gate in CI at the floor it declares, which is the
+argument for doing that at all.

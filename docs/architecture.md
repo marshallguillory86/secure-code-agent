@@ -152,7 +152,7 @@ in each case the copies have already drifted.
 | Config shape | [`config.py:99-118`](../src/secure_code_audit/config.py#L99-L118) hand validation (264 lines) **and** `secure-code-agent.schema.json`, not connected at runtime | The schema rejected its own `$schema` key; `require_scanners` minimum had to be enforced separately in both |
 | Score qualification when coverage is incomplete | Five sites: [`cli.py:453`](../src/secure_code_audit/cli.py#L453), [`renderers.py:35`](../src/secure_code_audit/renderers.py#L35), [`:169`](../src/secure_code_audit/renderers.py#L169), [`:348`](../src/secure_code_audit/renderers.py#L348), [`sarif.py:69`](../src/secure_code_audit/sarif.py#L69) | Each was implemented separately; the SARIF site was missed entirely on the first pass |
 | Agent guidance | `instructions.py::_BODY`, `skills/secure-code-agent/SKILL.md`, `skills/secure-code-agent/copilot/*.prompt.md`, `skills/secure-code-agent/agents/*.yaml`, `README.md`, `docs/` | The `--changed-only` deprecation updated four locations and missed two, leaving shipped agent instructions recommending a flag that exits 2 |
-| Packaging | `pyproject.toml:84` declares `package-data = ["data/*.json", "data/*.yaml"]` | `src/secure_code_audit/data/` does not exist |
+| Packaging | `pyproject.toml` `package-data` globs **and** the directory actually existing | The globs once matched nothing at all; now `test_the_offline_ruleset_is_declared_as_package_data` fails if a shipped data file is not matched by one |
 
 ### Fix
 
@@ -281,12 +281,27 @@ it is a product decision, not a refactor.
    defect-elimination per hour, and a prerequisite for §3.
 2. ~~**Real scanner fixtures and the scoring-drift test** (§4).~~ **Done
    2026-09-09** (D14), for the six scanners installable on the capture host.
-3. **Single `ScoreVerdict` view-model** (§3, row 2). Small, and it retires the
-   qualification-duplication class outright.
-4. **Generate the config schema from the dataclasses** (§3, row 1).
-5. **Decide the score model** (§5). Conversation before code.
-6. Resume feature work and defect fixing.
+3. ~~**Single `ScoreVerdict` view-model** (§3, row 2).~~ **Done 2026-09-09.**
+   `Verdict` existed but two renderers were never wired to it and kept a weaker
+   condition, so the markdown report and PR comment claimed grades the JSON
+   withheld. All outputs read the one verdict, and
+   `tests/integration/test_verdict_consistency.py` asserts they agree.
+4. ~~**Generate the config schema from the dataclasses** (§3, row 1).~~
+   **Reconsidered and closed by enforcement, 2026-09-09.** The schema is nested
+   where `Config` is flat, so generating either from the other needs a mapping
+   layer that would itself be a third source of truth.
+   `tests/unit/test_contract_sync.py` holds them in step instead.
+5. **Decide the score model** (§5). Conversation before code. **Still open.**
+6. **Calibrate the condition scale** (D5). Still open — the method is owed, and
+   `test_scoring_drift.py` pins the scale's *stability*, not its correctness.
+7. Resume feature work and defect fixing.
 
-Steps 1–3 are roughly one focused session each. Most defects traded during
-recent review cycles were downstream symptoms of §2 and §3; closing those two
-should end the pattern rather than continue it.
+Steps 1–4 are done as of 2026-09-09. Most defects traded during recent review
+cycles were downstream symptoms of §2 and §3, and closing them did end that
+pattern — the defects found since came from a different place entirely: the
+repository running its own gate in CI at the floor it declares, which surfaced
+four that no amount of reading the code would have.
+
+Steps 5 and 6 are the two open **decisions**, not defects. Both are about
+whether the number this tool reports means anything, and neither can be settled
+by a refactor.

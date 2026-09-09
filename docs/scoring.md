@@ -154,5 +154,17 @@ A future config option will allow `score_mode: "average"` for teams who prefer i
 ## Drift testing
 
 `tests/unit/test_scoring.py` locks the scoring arithmetic and gate semantics.
-The repository does not yet ship a fixture-based, example-repository drift
-suite; changes in scanner output distributions still require release review.
+
+Since 2026-09-09 the repository also ships
+`tests/integration/test_scoring_drift.py`, the drift suite `CONTRIBUTING.md`
+had cited for far longer than it existed. It pins the letter bands and the
+properties that must survive any retuning: severity ordering is monotonic,
+informational findings never move the grade, the overall grade is the worst
+category rather than the mean, suppressed findings do not count, more findings
+never improve the score, and a perfect score sits beside failed coverage
+without either deriving from the other.
+
+**It proves the scale is stable, not that it is correct.** Nobody has
+established that A+ corresponds to anything real — that is D5, still open —
+and pinning an uncalibrated number does not calibrate it. Changes in scanner
+output distributions still require release review.

@@ -80,9 +80,17 @@ never granted. Both deserve an error rather than silence. Keys withdrawn on
 purpose — `asvs_level` — keep their specific reason instead of the generic
 message.
 
-**Consequence.** Two sources of truth remain, and this only aligns them by
-hand. Generating the schema from the loader is still owed
-([`architecture.md`](architecture.md) §3).
+**Consequence.** Two sources of truth remain. Generation was the intended
+fix and was rejected on inspection: the schema is nested where `Config` is
+flat — `paths.include_extensions` and `paths.exclude_patterns` are one JSON
+object and two dataclass fields, and `gates`/`outputs` are free-form dicts with
+no dataclass at all — so generating either from the other means a mapping layer
+that would itself be a third source of truth. They are held in step by
+`tests/unit/test_contract_sync.py` instead, which asserts the loader and the
+schema accept the same keys at both the top level and the per-scanner level,
+and that no `Config` field is settable only by editing source. Enforcement
+rather than generation, and the reason recorded rather than the intent
+restated.
 
 ## D3 — The MA Security pillar is fed by an artifact
 
