@@ -168,6 +168,17 @@ One source each.
 - **Agent guidance:** make `instructions.py` the source and generate `skills/`
   from it, or vice versa. Two hand-maintained copies of the same instructions
   will drift again.
+
+  **Partly closed by enforcement, 2026-09-09.** Generation is still the right
+  end state and is a larger change than it looks — these are different formats
+  for different consumers and the prose in each is shaped for its audience. But
+  the half that actually caused harm is now mechanical:
+  `tests/unit/test_agent_guidance.py` extracts every flag from every line in
+  the shipped guidance that invokes one of our console scripts, and fails if
+  the CLI would reject it. Invocation lines rather than all prose, so the docs
+  can still name another tool's flags — `--only-verified` is TruffleHog's. It
+  also fails if `--changed-only` is mentioned without saying it is reserved and
+  exits 2, which is the exact sentence that shipped wrong.
 - **Packaging:** delete the `package-data` line, or restore the `data/`
   directory if the standards map moves back to data files (see §5).
 
