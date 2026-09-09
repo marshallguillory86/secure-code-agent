@@ -145,6 +145,15 @@ jobs:
 
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # RuboCop joined the floor in D12 and is a gem, not a binary release.
+      # Without it this repository grades itself on PARTIAL coverage, which is
+      # exactly the "scanned by whatever happened to be installed" the floor
+      # exists to prevent.
+      - name: Install RuboCop, the Ruby half of the floor
+        run: |
+          gem install --user-install --no-document rubocop -v 1.90.0
+          echo "$(ruby -e 'puts Gem.user_dir')/bin" >> "$GITHUB_PATH"
+
       - name: Verify the required scanner toolchain resolves
         run: secure-code-agent --config secure-code-agent.json --preflight
 

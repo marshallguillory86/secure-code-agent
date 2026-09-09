@@ -129,9 +129,10 @@ def write_markdown(
     scanners_run: list[str],
     scanners_unavailable: list[str],
     coverage: CoverageReport | None = None,
+    verdict: Verdict | None = None,
 ) -> None:
     path.write_text(
-        _markdown(findings, score, gate, scanners_run, scanners_unavailable, coverage),
+        _markdown(findings, score, gate, scanners_run, scanners_unavailable, coverage, verdict),
         encoding="utf-8",
     )
 
@@ -143,6 +144,7 @@ def _markdown(
     scanners_run: list[str],
     scanners_unavailable: list[str],
     coverage: CoverageReport | None = None,
+    verdict: Verdict | None = None,
 ) -> str:
     lines: list[str] = []
     lines.append("# secure-code-agent report\n")
@@ -151,7 +153,7 @@ def _markdown(
         f"agent v{__version__}\n"
     )
 
-    lines.append(_summary_section(score, gate, coverage))
+    lines.append(_summary_section(score, gate, coverage, verdict))
     lines.append(_categories_table(score))
     lines.append(_severity_table(score))
     lines.append(_scanners_section(scanners_run, scanners_unavailable, coverage))
@@ -160,19 +162,38 @@ def _markdown(
 
 
 def _summary_section(
-    score: ScoreReport, gate: GateResult, coverage: CoverageReport | None = None
+    score: ScoreReport,
+    gate: GateResult,
+    coverage: CoverageReport | None = None,
+    verdict: Verdict | None = None,
 ) -> str:
+    """The human-facing summary. It reads the verdict; it does not re-decide it.
+
+    This section used to caveat the score on `coverage.status != complete`,
+    which is a *different* and weaker condition than the one `Verdict` applies.
+    A run with no `gates.require_scanners` declared has complete coverage of
+    whatever happened to be selected, so the JSON reported
+    `verified_grade: null` while this section printed a bare **A+** — the same
+    run, two answers, and the unqualified one in the artifact a person actually
+    reads. That is the P3 failure this project exists to prevent, surviving in
+    the renderer where it does the most damage.
+    """
     status = "✅ PASS" if gate.passed else "❌ FAIL"
     out = ["## Summary", ""]
     if coverage is not None:
         out.append(f"- **Scanner coverage:** {coverage.status.value.upper()}")
-    if coverage is not None and coverage.status.value != "complete":
+    # No verdict means nobody decided this run could claim a grade, so it
+    # cannot. Falling back to a locally-invented condition here is what put a
+    # second decision rule in the codebase in the first place.
+    if verdict is None or not verdict.is_verified:
         out.append(
-            f"- **Finding score (coverage incomplete):** {score.overall:.2f} / 5.00 — "
+            f"- **Finding score (not a verified grade):** {score.overall:.2f} / 5.00 — "
             f"**{score.letter}**"
         )
+        for reason in verdict.reasons if verdict else ():
+            out.append(f"    - {reason}")
     else:
-        out.append(f"- **Score:** {score.overall:.2f} / 5.00 — **{score.letter}**")
+        out.append(f"- **Verified grade:** {score.overall:.2f} / 5.00 — **{score.letter}**")
     out.append(f"- **Gate:** {status}")
     if not gate.passed:
         out.append("- **Tripped gates:**")
@@ -341,8 +362,9 @@ def write_pr_comment(
     gate: GateResult,
     path: Path,
     coverage: CoverageReport | None = None,
+    verdict: Verdict | None = None,
 ) -> None:
-    path.write_text(_pr_comment(findings, score, gate, coverage), encoding="utf-8")
+    path.write_text(_pr_comment(findings, score, gate, coverage, verdict), encoding="utf-8")
 
 
 def _pr_comment(
@@ -350,14 +372,19 @@ def _pr_comment(
     score: ScoreReport,
     gate: GateResult,
     coverage: CoverageReport | None = None,
+    verdict: Verdict | None = None,
 ) -> str:
     status = "✅" if gate.passed else "❌"
     n_crit = score.per_severity_count.get(Severity.CRITICAL, 0)
     n_high = score.per_severity_count.get(Severity.HIGH, 0)
     n_new = sum(1 for f in findings if f.is_new and not f.suppressed)
 
-    incomplete = coverage is not None and coverage.status.value != "complete"
-    score_label = "finding score; coverage incomplete" if incomplete else "score"
+    # Same single source as every other output, and the same conservative
+    # default. A PR comment is the most widely read artifact this tool produces
+    # and the least likely to be cross-checked against the JSON, so it must
+    # never caveat on its own terms.
+    unverified = verdict is None or not verdict.is_verified
+    score_label = "finding score, not a verified grade" if unverified else "verified grade"
     out = [
         f"### secure-code-agent {status} — {score_label} **{score.letter}** "
         f"({score.overall:.2f}/5.00)",

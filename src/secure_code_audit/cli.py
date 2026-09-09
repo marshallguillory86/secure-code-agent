@@ -485,13 +485,15 @@ def _ingest_sarif_imports(specs: list[str]) -> tuple[list[Finding], list[Scanner
 
 def _write_outputs(paths, findings, score, gate, coverage, ran, unavailable, verdict) -> None:
     if paths.markdown is not None:
-        renderers.write_markdown(findings, score, gate, paths.markdown, ran, unavailable, coverage)
+        renderers.write_markdown(
+            findings, score, gate, paths.markdown, ran, unavailable, coverage, verdict
+        )
     if paths.json_out is not None:
         renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict)
     if paths.sarif is not None:
         sarif.write(findings, paths.sarif, coverage)
     if paths.comment is not None:
-        renderers.write_pr_comment(findings, score, gate, paths.comment, coverage)
+        renderers.write_pr_comment(findings, score, gate, paths.comment, coverage, verdict)
     if paths.prompt is not None:
         remediation.write(findings, paths.prompt)
 
