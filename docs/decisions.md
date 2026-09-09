@@ -15,7 +15,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D2 | Unknown configuration keys are rejected, not ignored | 2026-09-08 | Accepted |
 | D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | Accepted |
 | D4 | A failing security audit fails MA's CI | 2026-09-08 | Accepted |
-| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — method needed |
+| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — [study run](calibration.md); two input decisions owed |
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
 | D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
 | D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
@@ -135,10 +135,32 @@ repository *size*, scoring Django, pytest, black, tornado, httpx, lodash,
 svelte and fastapi all at 0.0/F while a 53-file toy scored 4.6/A. The fix was
 rates, normalized per dimension, calibrated so the corpus median earns a B.
 
-**State: open.** The method is owed, and it should follow MA's shape — a named
-corpus, a measured distribution, bands chosen from it, and the study published
-so the numbers can be argued with. Until then the scale is uncalibrated, and
-anything consuming it (D3, D4) should treat it as such.
+**State: open — but the method now exists and has been run.** See
+[`calibration.md`](calibration.md) for the study and
+[`calibration/`](../calibration/README.md) for the harness and pinned corpus.
+
+**What the study found.** As the tool runs today, ten of fourteen
+well-maintained open-source projects score **F**, and the median repository
+sits *five times* past the point where the grade floors. The ordering is not a
+security ordering: worst-first it reads Python → JavaScript → Go/Ruby → Java,
+which is the order of how talkative each language's scanner is at low severity
+and low confidence. This is MA's 0.5.0 lesson in a new form — there absolute
+counts graded repository size, here raw counts grade scanner verbosity.
+
+**The bands were never the problem.** Excluding test directories and dependency
+findings — changing no weight, no band and no slope — puts the corpus median at
+**3.10, a B**, the target MA calibrated to. Test directories alone are worth
+more than every other lever combined: median `worst_normalized` 50.15 → 4.36,
+where dropping LOW severity is worth only 50.15 → 22.63.
+
+**Two decisions block the rest, and they are product decisions.** Whether test
+directories count, and whether a library's dev-dependency CVEs should sink its
+code-security grade. Both are measured in the study; neither is the harness's
+to assume. Choosing band edges before they are settled would be fitting numbers
+to noise, which is what D5 was raised to prevent.
+
+Until then the scale is uncalibrated, and anything consuming it (D3, D4) should
+treat it as such.
 
 ## D6 — Scanner licences are judged by mechanism, not by name
 

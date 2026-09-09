@@ -1,0 +1,598 @@
+{
+  "corpus": "/Users/marshallguillory/repos/secure-code-agent/calibration/corpus.json",
+  "config": "/Users/marshallguillory/repos/secure-code-agent/calibration/calibration-config.json",
+  "scanner_set": "builtin_rules,bandit,semgrep,njsscan,rubocop,pip_audit,osv_scanner,gitleaks,checkov,trivy",
+  "summary": {
+    "repositories": 14,
+    "measured": 14,
+    "failed": [],
+    "reported_overall": {
+      "min": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 3.0657,
+      "max": 5.0
+    },
+    "unclamped_overall": {
+      "min": -182.5677,
+      "p25": -87.1861,
+      "median": -20.0759,
+      "p75": 3.0657,
+      "max": 5.0
+    },
+    "worst_normalized": {
+      "min": 0.0,
+      "p25": 3.8687,
+      "median": 50.1518,
+      "p75": 184.3721,
+      "max": 375.1354
+    },
+    "loc": {
+      "min": 7764.0,
+      "p25": 17980.0,
+      "median": 23874.5,
+      "p75": 55211.0,
+      "max": 465033.0
+    },
+    "letters": {
+      "A": 1,
+      "A+": 1,
+      "A-": 1,
+      "B": 1,
+      "F": 10
+    },
+    "variants": {
+      "per_repository": {
+        "axios": {
+          "as-run": 14.6358,
+          "no-tests": 4.6094,
+          "no-low": 14.5012,
+          "no-deps": 10.3712,
+          "no-tests-no-deps": 1.1355
+        },
+        "commons-lang": {
+          "as-run": 1.2231,
+          "no-tests": 1.2231,
+          "no-low": 1.2231,
+          "no-deps": 1.2231,
+          "no-tests-no-deps": 1.2231
+        },
+        "django": {
+          "as-run": 93.0734,
+          "no-tests": 33.7684,
+          "no-low": 72.8059,
+          "no-deps": 93.0734,
+          "no-tests-no-deps": 33.7684
+        },
+        "express": {
+          "as-run": 94.8492,
+          "no-tests": 0.0,
+          "no-low": 94.8492,
+          "no-deps": 94.8492,
+          "no-tests-no-deps": 0.0
+        },
+        "fastapi": {
+          "as-run": 375.1354,
+          "no-tests": 31.116,
+          "no-low": 38.4374,
+          "no-deps": 375.1354,
+          "no-tests-no-deps": 31.116
+        },
+        "flask": {
+          "as-run": 222.6988,
+          "no-tests": 29.6866,
+          "no-low": 29.6866,
+          "no-deps": 222.6988,
+          "no-tests-no-deps": 29.6866
+        },
+        "gin": {
+          "as-run": 16.4231,
+          "no-tests": 4.1058,
+          "no-low": 16.4231,
+          "no-deps": 16.4231,
+          "no-tests-no-deps": 4.1058
+        },
+        "gson": {
+          "as-run": 0.0,
+          "no-tests": 0.0,
+          "no-low": 0.0,
+          "no-deps": 0.0,
+          "no-tests-no-deps": 0.0
+        },
+        "httpx": {
+          "as-run": 206.3689,
+          "no-tests": 29.1096,
+          "no-low": 28.8305,
+          "no-deps": 206.3689,
+          "no-tests-no-deps": 5.4438
+        },
+        "jekyll": {
+          "as-run": 3.8687,
+          "no-tests": 3.8687,
+          "no-low": 3.8687,
+          "no-deps": 3.8687,
+          "no-tests-no-deps": 3.8687
+        },
+        "lodash": {
+          "as-run": 83.8805,
+          "no-tests": 83.8805,
+          "no-low": 83.7364,
+          "no-deps": 0.8512,
+          "no-tests-no-deps": 0.8512
+        },
+        "logrus": {
+          "as-run": 0.6729,
+          "no-tests": 0.6729,
+          "no-low": 0.5383,
+          "no-deps": 0.0,
+          "no-tests-no-deps": 0.0
+        },
+        "requests": {
+          "as-run": 184.3721,
+          "no-tests": 3.7484,
+          "no-low": 48.3186,
+          "no-deps": 184.3721,
+          "no-tests-no-deps": 3.7484
+        },
+        "sinatra": {
+          "as-run": 12.1828,
+          "no-tests": 5.5376,
+          "no-low": 12.1828,
+          "no-deps": 12.1828,
+          "no-tests-no-deps": 5.5376
+        }
+      },
+      "median_worst_normalized": {
+        "as-run": 50.1518,
+        "no-tests": 4.3576,
+        "no-low": 22.6268,
+        "no-deps": 14.303,
+        "no-tests-no-deps": 3.8086
+      },
+      "median_grade_at_current_slope": {
+        "as-run": 0.0,
+        "no-tests": 2.82,
+        "no-low": 0.0,
+        "no-deps": 0.0,
+        "no-tests-no-deps": 3.1
+      }
+    }
+  },
+  "rows": [
+    {
+      "name": "django",
+      "commit": "2b30f6255b5ef84afbd827993643d52ef2c0963a",
+      "language": "python",
+      "measure": {
+        "loc_scanned": 465033,
+        "subtotals": {
+          "secrets": 150.0,
+          "dependencies": 3.0,
+          "code_vulnerabilities": 2007.094,
+          "crypto": 31.5
+        },
+        "normalized": {
+          "secrets": 6.9558,
+          "dependencies": 0.1391,
+          "code_vulnerabilities": 93.0734,
+          "crypto": 1.4607
+        },
+        "worst_normalized": 93.0734,
+        "unclamped_overall": -41.5367,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "code_vulnerabilities",
+        "finding_count": 1352,
+        "per_severity": {
+          "critical": 8,
+          "high": 82,
+          "medium": 549,
+          "low": 711,
+          "informational": 2
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "flask",
+      "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+      "language": "python",
+      "measure": {
+        "loc_scanned": 14361,
+        "subtotals": {
+          "secrets": 112.5,
+          "dependencies": 107.5,
+          "code_vulnerabilities": 843.938,
+          "crypto": 4.5
+        },
+        "normalized": {
+          "secrets": 29.6866,
+          "dependencies": 28.3672,
+          "code_vulnerabilities": 222.6988,
+          "crypto": 1.1875
+        },
+        "worst_normalized": 222.6988,
+        "unclamped_overall": -106.3494,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "code_vulnerabilities",
+        "finding_count": 1139,
+        "per_severity": {
+          "critical": 6,
+          "high": 24,
+          "medium": 31,
+          "low": 1076,
+          "informational": 2
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "requests",
+      "commit": "dae7ef63b4df6eded86637f251fc4e3a06c3b479",
+      "language": "python",
+      "measure": {
+        "loc_scanned": 10249,
+        "subtotals": {
+          "secrets": 75.0,
+          "dependencies": 3.0,
+          "code_vulnerabilities": 590.25
+        },
+        "normalized": {
+          "secrets": 23.4272,
+          "dependencies": 0.9371,
+          "code_vulnerabilities": 184.3721
+        },
+        "worst_normalized": 184.3721,
+        "unclamped_overall": -87.1861,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "code_vulnerabilities",
+        "finding_count": 715,
+        "per_severity": {
+          "critical": 4,
+          "high": 0,
+          "medium": 129,
+          "low": 581,
+          "informational": 1
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "httpx",
+      "commit": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254",
+      "language": "python",
+      "measure": {
+        "loc_scanned": 24259,
+        "subtotals": {
+          "dependencies": 143.375,
+          "code_vulnerabilities": 1016.438,
+          "crypto": 4.5
+        },
+        "normalized": {
+          "dependencies": 29.1096,
+          "code_vulnerabilities": 206.3689,
+          "crypto": 0.9136
+        },
+        "worst_normalized": 206.3689,
+        "unclamped_overall": -98.1844,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "code_vulnerabilities",
+        "finding_count": 1389,
+        "per_severity": {
+          "critical": 1,
+          "high": 27,
+          "medium": 33,
+          "low": 1327,
+          "informational": 1
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "fastapi",
+      "commit": "50113da16fec53b66b80d75e80a89296de4fa5a5",
+      "language": "python",
+      "measure": {
+        "loc_scanned": 104938,
+        "subtotals": {
+          "secrets": 393.75,
+          "dependencies": 18.0,
+          "code_vulnerabilities": 3842.859
+        },
+        "normalized": {
+          "secrets": 38.4374,
+          "dependencies": 1.7571,
+          "code_vulnerabilities": 375.1354
+        },
+        "worst_normalized": 375.1354,
+        "unclamped_overall": -182.5677,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "code_vulnerabilities",
+        "finding_count": 5153,
+        "per_severity": {
+          "critical": 21,
+          "high": 7,
+          "medium": 12,
+          "low": 5112,
+          "informational": 1
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "express",
+      "commit": "bed501c695a61886399ee622875f3be933c716d8",
+      "language": "javascript",
+      "measure": {
+        "loc_scanned": 17980,
+        "subtotals": {
+          "code_vulnerabilities": 402.188
+        },
+        "normalized": {
+          "code_vulnerabilities": 94.8492
+        },
+        "worst_normalized": 94.8492,
+        "unclamped_overall": -42.4246,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "code_vulnerabilities",
+        "finding_count": 93,
+        "per_severity": {
+          "critical": 0,
+          "high": 89,
+          "medium": 1,
+          "low": 0,
+          "informational": 3
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "axios",
+      "commit": "1226e6c53eeb0e9d7159bea83556c2ff117b5f2e",
+      "language": "javascript",
+      "measure": {
+        "loc_scanned": 55211,
+        "subtotals": {
+          "secrets": 18.75,
+          "dependencies": 108.75,
+          "code_vulnerabilities": 77.062
+        },
+        "normalized": {
+          "secrets": 2.5234,
+          "dependencies": 14.6358,
+          "code_vulnerabilities": 10.3712
+        },
+        "worst_normalized": 14.6358,
+        "unclamped_overall": -2.3179,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "dependencies",
+        "finding_count": 66,
+        "per_severity": {
+          "critical": 1,
+          "high": 35,
+          "medium": 26,
+          "low": 2,
+          "informational": 2
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "lodash",
+      "commit": "0f79302eaf53618079118dc9663f731e8faa40b7",
+      "language": "javascript",
+      "measure": {
+        "loc_scanned": 48142,
+        "subtotals": {
+          "dependencies": 582.0,
+          "code_vulnerabilities": 5.906
+        },
+        "normalized": {
+          "dependencies": 83.8805,
+          "code_vulnerabilities": 0.8512
+        },
+        "worst_normalized": 83.8805,
+        "unclamped_overall": -36.9402,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "dependencies",
+        "finding_count": 159,
+        "per_severity": {
+          "critical": 18,
+          "high": 80,
+          "medium": 57,
+          "low": 2,
+          "informational": 2
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "gin",
+      "commit": "dcaa4296d111981ffb31ac3eba90bb63e1eb5ab9",
+      "language": "go",
+      "measure": {
+        "loc_scanned": 20855,
+        "subtotals": {
+          "secrets": 75.0,
+          "dependencies": 11.625
+        },
+        "normalized": {
+          "secrets": 16.4231,
+          "dependencies": 2.5456
+        },
+        "worst_normalized": 16.4231,
+        "unclamped_overall": -3.2116,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "secrets",
+        "finding_count": 14,
+        "per_severity": {
+          "critical": 4,
+          "high": 1,
+          "medium": 6,
+          "low": 1,
+          "informational": 2
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "logrus",
+      "commit": "6d6a132bc03324d4ceb78e1b927f995d014cda20",
+      "language": "go",
+      "measure": {
+        "loc_scanned": 7764,
+        "subtotals": {
+          "dependencies": 1.875
+        },
+        "normalized": {
+          "dependencies": 0.6729
+        },
+        "worst_normalized": 0.6729,
+        "unclamped_overall": 4.6635,
+        "reported_overall": 4.663543817487092,
+        "reported_letter": "A",
+        "worst_category": "dependencies",
+        "finding_count": 4,
+        "per_severity": {
+          "critical": 0,
+          "high": 0,
+          "medium": 1,
+          "low": 1,
+          "informational": 2
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "sinatra",
+      "commit": "cb22afd7902b566b6eaba6c4ea89739494a65d12",
+      "language": "ruby",
+      "measure": {
+        "loc_scanned": 20894,
+        "subtotals": {
+          "secrets": 18.75,
+          "code_vulnerabilities": 55.688
+        },
+        "normalized": {
+          "secrets": 4.102,
+          "code_vulnerabilities": 12.1828
+        },
+        "worst_normalized": 12.1828,
+        "unclamped_overall": -1.0914,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "code_vulnerabilities",
+        "finding_count": 18,
+        "per_severity": {
+          "critical": 1,
+          "high": 11,
+          "medium": 3,
+          "low": 0,
+          "informational": 3
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "jekyll",
+      "commit": "74d751339d3e534aa51d5d7b0640e9bd743509e4",
+      "language": "ruby",
+      "measure": {
+        "loc_scanned": 23490,
+        "subtotals": {
+          "secrets": 18.75,
+          "dependencies": 3.375,
+          "code_vulnerabilities": 5.062,
+          "supply_chain": 3.0
+        },
+        "normalized": {
+          "secrets": 3.8687,
+          "dependencies": 0.6964,
+          "code_vulnerabilities": 1.0445,
+          "supply_chain": 0.619
+        },
+        "worst_normalized": 3.8687,
+        "unclamped_overall": 3.0657,
+        "reported_overall": 3.0656735606557097,
+        "reported_letter": "B",
+        "worst_category": "secrets",
+        "finding_count": 10,
+        "per_severity": {
+          "critical": 1,
+          "high": 2,
+          "medium": 3,
+          "low": 1,
+          "informational": 3
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "gson",
+      "commit": "8b4b55051489132190cb8d1c61eb9dc7f5381295",
+      "language": "java",
+      "measure": {
+        "loc_scanned": 50871,
+        "subtotals": {},
+        "normalized": {},
+        "worst_normalized": 0.0,
+        "unclamped_overall": 5.0,
+        "reported_overall": 5.0,
+        "reported_letter": "A+",
+        "worst_category": null,
+        "finding_count": 4,
+        "per_severity": {
+          "critical": 0,
+          "high": 0,
+          "medium": 0,
+          "low": 0,
+          "informational": 4
+        },
+        "coverage_status": "partial"
+      }
+    },
+    {
+      "name": "commons-lang",
+      "commit": "62620f371b9c6ed337854e066d8916e56942d9af",
+      "language": "java",
+      "measure": {
+        "loc_scanned": 190344,
+        "subtotals": {
+          "code_vulnerabilities": 16.875
+        },
+        "normalized": {
+          "code_vulnerabilities": 1.2231
+        },
+        "worst_normalized": 1.2231,
+        "unclamped_overall": 4.3884,
+        "reported_overall": 4.388432792867379,
+        "reported_letter": "A-",
+        "worst_category": "code_vulnerabilities",
+        "finding_count": 7,
+        "per_severity": {
+          "critical": 0,
+          "high": 3,
+          "medium": 0,
+          "low": 0,
+          "informational": 4
+        },
+        "coverage_status": "partial"
+      }
+    }
+  ],
+  "run_notes": {
+    "date": "2026-09-09",
+    "host": "darwin/arm64, local run",
+    "semgrep_mode": "online (--config=auto, the product default); registry rules are not pinned, so an exact re-run is not possible",
+    "scanners_present": "builtin_rules, bandit 1.9.4, semgrep, njsscan 1.0.0, rubocop 1.28.2, pip-audit, osv-scanner 2.5.1, gitleaks, checkov 3.3.16, trivy 0.74.0",
+    "clone_depth": "shallow (--depth 1), so gitleaks sees one commit of history rather than the full log"
+  }
+}
