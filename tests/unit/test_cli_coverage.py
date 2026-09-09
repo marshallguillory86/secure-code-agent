@@ -28,6 +28,10 @@ def _write_config(tmp_path, *, required: bool):
     }
     path = tmp_path / "secure-code-agent.json"
     path.write_text(json.dumps(config), encoding="utf-8")
+    # Trivy is only required where it has something to read. Without this the
+    # tree is a lone JSON file and the applicability filter — correctly —
+    # drops trivy from the required set.
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
     return path
 
 
@@ -140,6 +144,7 @@ def test_preflight_json_names_the_remedy_without_installing_anything(tmp_path, c
 
 
 def test_preflight_reports_a_required_scanner_that_is_not_even_enabled(tmp_path, capsys):
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
     config = tmp_path / "secure-code-agent.json"
     config.write_text(
         json.dumps(

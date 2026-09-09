@@ -171,3 +171,61 @@ def test_a_config_file_cannot_grant_itself_trust(tmp_path):
 
 def test_defaults_never_allow_executables_from_the_tree(tmp_path):
     assert target_executables_allowed(Config(), tmp_path) is False
+
+
+def test_the_floor_and_optional_sets_are_disjoint_and_complete():
+    from secure_code_audit.scanners import SCANNERS, floor
+
+    declared = set(floor.FLOOR_NAMES) | set(floor.OPTIONAL_NAMES)
+    assert not set(floor.FLOOR_NAMES) & set(floor.OPTIONAL_NAMES)
+    # Every registered scanner has a stated position. A tool nobody decided
+    # about is the gap this floor exists to remove.
+    assert declared == set(SCANNERS), f"undeclared: {set(SCANNERS) ^ declared}"
+
+
+def test_every_declared_tool_records_a_licence_and_a_reason():
+    from secure_code_audit.scanners import floor
+
+    for policy in (*floor.FLOOR, *floor.OPTIONAL):
+        assert policy.licence, f"{policy.name} has no licence recorded"
+        assert policy.rationale, f"{policy.name} has no rationale"
+    for policy in floor.OPTIONAL:
+        # "We left it out" and "we never considered it" are different
+        # statements, and only one of them is useful.
+        assert policy.optional_because, f"{policy.name} is optional with no reason"
+
+
+def test_optional_tools_are_off_by_default_and_floor_tools_are_on():
+    from secure_code_audit.scanners import floor
+
+    assert all(floor.default_enabled(n) for n in floor.FLOOR_NAMES)
+    assert not any(floor.default_enabled(n) for n in floor.OPTIONAL_NAMES)
+
+
+def test_agpl_tools_are_never_in_the_floor():
+    # D6 criterion 2: AGPL stays opt-in so a hosted-service source-offer
+    # obligation is never imposed on an adopter by default.
+    from secure_code_audit.scanners import floor
+
+    for policy in floor.FLOOR:
+        assert "AGPL" not in policy.licence, f"{policy.name} is AGPL and in the floor"
+
+
+def test_the_floor_token_expands_and_deduplicates():
+    from secure_code_audit.scanners import floor
+
+    assert floor.expand_required(["floor"]) == list(floor.FLOOR_NAMES)
+    assert floor.expand_required(["bandit", "floor", "bandit"])[0] == "bandit"
+    assert len(floor.expand_required(["floor", "floor"])) == len(floor.FLOOR_NAMES)
+
+
+def test_a_tool_with_nothing_to_scan_is_not_a_coverage_gap():
+    from secure_code_audit.scanners import floor
+
+    # A pure-Python tree: the Dockerfile/IaC tools have nothing to read.
+    python_only = ({".py"}, {"main.py"})
+    assert floor.applies_to_repository("bandit", *python_only)
+    assert not floor.applies_to_repository("trivy", *python_only)
+    # Secrets and supply chain are not tied to a language.
+    assert floor.applies_to_repository("gitleaks", *python_only)
+    assert floor.applies_to_repository("scorecard", *python_only)

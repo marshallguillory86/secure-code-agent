@@ -32,6 +32,7 @@ from secure_code_audit.scanner_status import (
     classify_execution,
     evaluate_coverage,
 )
+from secure_code_audit.scanners import floor
 from secure_code_audit.scoring import active_gates, evaluate_gates
 from secure_code_audit.scoring import score as score_findings
 from secure_code_audit.scoring import verdict as build_verdict
@@ -167,7 +168,12 @@ def _do_preflight(args: argparse.Namespace) -> int:
     cached from this command.
     """
     cfg, target, _ = _prepare_audit(args)
-    required = set(cfg.gates.get("require_scanners", []))
+    inventory = _repository_inventory(target, cfg)
+    required = {
+        name
+        for name in floor.expand_required(cfg.gates.get("require_scanners", []))
+        if floor.applies_to_repository(name, *inventory)
+    }
     selected = _selected_scanners(args, cfg)
 
     rows: list[dict] = []
@@ -284,8 +290,17 @@ def _do_audit(args: argparse.Namespace) -> int:
     score = score_findings(all_findings, loc)
     # Naming an import on the command line asserts that it contributes coverage,
     # so a broken one fails the gate even if no config requires that scanner.
+    # Requiring a tool that has nothing to look at would make every
+    # single-language repository permanently incomplete, and an alarm that is
+    # always on is not an alarm. Applicability is decided from what the tree
+    # actually contains, before the requirement is asserted.
+    inventory = _repository_inventory(target, cfg)
     required = [
-        *cfg.gates.get("require_scanners", []),
+        *(
+            name
+            for name in floor.expand_required(cfg.gates.get("require_scanners", []))
+            if floor.applies_to_repository(name, *inventory)
+        ),
         *(execution.name for execution in imported_executions),
     ]
     coverage = evaluate_coverage(executions, required)
@@ -372,6 +387,38 @@ class _ScanResult:
     executions: list[ScannerExecution]
 
 
+def _repository_inventory(target: Path, cfg: config_mod.Config) -> tuple[set[str], set[str]]:
+    """Extensions and notable filenames present in the tree, for applicability.
+
+    Bounded by the same exclusions the scan uses, so a vendored manifest does
+    not make a whole ecosystem look present.
+    """
+    from secure_code_audit.git_tools import is_excluded
+
+    extensions: set[str] = set()
+    filenames: set[str] = set()
+    for path in target.rglob("*"):
+        if not path.is_file() or is_excluded(path, target, cfg.exclude_patterns):
+            continue
+        extensions.add(path.suffix)
+        filenames.add(path.name)
+    return extensions, filenames
+
+
+def _scanner_enabled(cfg: config_mod.Config, name: str) -> bool:
+    """Whether this scanner runs, with the floor supplying the default.
+
+    A configuration that says nothing about a scanner gets the project's
+    declared opinion: floor tools run, opt-in tools do not. Previously every
+    registered scanner defaulted to enabled, which quietly turned overlapping
+    and copyleft tools on for operators who never chose them.
+    """
+    configured = cfg.scanners.get(name)
+    # `cfg.scanners` only holds scanners the configuration actually named, so
+    # presence here is the operator having an opinion.
+    return configured.enabled if configured is not None else floor.default_enabled(name)
+
+
 def _selected_scanners(args: argparse.Namespace, cfg: config_mod.Config) -> list[str]:
     """Names the operator actually asked for, in registry order."""
     skip = set(filter(None, (args.skip_scanners or "").split(",")))
@@ -379,9 +426,7 @@ def _selected_scanners(args: argparse.Namespace, cfg: config_mod.Config) -> list
     return [
         name
         for name in scanners.SCANNERS
-        if not (only and name not in only)
-        and name not in skip
-        and (cfg.scanners.get(name) or config_mod.ScannerConfig()).enabled
+        if not (only and name not in only) and name not in skip and _scanner_enabled(cfg, name)
     ]
 
 
@@ -530,7 +575,9 @@ def _validate_scanner_config(cfg: config_mod.Config) -> None:
     unknown = sorted(set(cfg.scanners) - known)
     if unknown:
         raise ValueError(f"unknown scanner configuration: {', '.join(unknown)}")
-    required = set(cfg.gates.get("require_scanners", []))
+    # Expand the `floor` token before validating, so requiring the declared
+    # minimum does not read as a typo'd scanner name.
+    required = set(floor.expand_required(cfg.gates.get("require_scanners", [])))
     unknown_required = sorted(required - known)
     if unknown_required:
         raise ValueError(f"unknown required scanner: {', '.join(unknown_required)}")
