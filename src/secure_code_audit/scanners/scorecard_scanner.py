@@ -41,6 +41,12 @@ class ScorecardScanner(Scanner):
     binary = "scorecard"
     default_category = Category.SUPPLY_CHAIN
     install_hint = "brew install scorecard, or a pinned release from github.com/ossf/scorecard"
+    # `scorecard --version` is not a flag; the subcommand is `scorecard version`.
+    version_flag = "version"
+    # Scorecard makes dozens of GitHub API calls for one repository, so it
+    # runs far longer than the file-tree scanners and timed out at 600s the
+    # first time the floor made it required.
+    default_timeout_seconds = 1800
 
     def run(self, target: Path, config: Config) -> list[Finding]:
         if not self.is_available():

@@ -16,6 +16,9 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | Accepted |
 | D4 | A failing security audit fails MA's CI | 2026-09-08 | Accepted |
 | D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — method needed |
+| D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
+| D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
+| D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
 
 ---
 
@@ -122,3 +125,116 @@ rates, normalized per dimension, calibrated so the corpus median earns a B.
 corpus, a measured distribution, bands chosen from it, and the study published
 so the numbers can be argued with. Until then the scale is uncalibrated, and
 anything consuming it (D3, D4) should treat it as such.
+
+## D6 — Scanner licences are judged by mechanism, not by name
+
+**Question.** `CONTRIBUTING.md` required every scanner to be
+*"MIT/Apache-2.0/BSD licensed (no GPL — license-surface contamination)"*. Two
+shipped tools violated it — TruffleHog is AGPL-3.0, Hadolint is GPL-3.0 — and
+neither caused a problem. A rule that is stated, violated, and harmless is
+worse than no rule: it teaches people that the rules are decorative.
+
+**Was the rule right?** No, for this architecture. Copyleft reaches a combined
+work through linking, vendoring or bundling. This tool does none of those — it
+runs `subprocess.run(args=[...], shell=False)` and reads JSON back. Separate
+processes exchanging arguments and output are separate programs. The
+"never install anything" principle compounds it: the operator installs the
+scanner, so there is no distribution by us at all, and most copyleft
+obligations attach at distribution.
+
+**Decision.** Three criteria keyed to mechanism:
+
+1. Any OSI-approved licence is acceptable for a tool invoked as a subprocess
+   and never distributed. Linking, vendoring or bundling still requires a
+   permissive licence.
+2. AGPL tools are optional and off by default — so we do not silently hand a
+   hosted-service source-offer obligation to an adopter, and so adopters whose
+   policy excludes AGPL are not blocked.
+3. Rule content and data are licensed separately from engines and checked
+   separately.
+
+**Criterion 3 exists because of a live case the old rule missed entirely.**
+Semgrep's engine is LGPL-2.1, but Semgrep-maintained registry rules moved to
+the Semgrep Rules Licence in December 2024 — internal, non-competing, non-SaaS
+use only. `--config=auto` fetches those. A security tool that is arguably a
+competing product, and that someone may run as a service, was pulling rules
+under a licence restricting exactly those two uses. A licence rule about
+engines could never have caught it. The offline ruleset this project ships is
+its own work and is unaffected.
+
+**Consequence.** TruffleHog and Hadolint become documented opt-in choices
+rather than silent violations. This is engineering reasoning about how the
+licences apply to this architecture, not legal advice; the Semgrep rules
+licence in particular is worth confirming with counsel before it is relied on
+commercially.
+
+## D7 — The project declares a minimum tool floor, and defaults to it
+
+**Question.** Every registered scanner defaulted to enabled, `require_scanners`
+was per-repository config with no floor, and this repository's own audit ran
+three of twelve tools. A tool whose purpose is determining whether code is
+secure was checking itself with Bandit, pip-audit and a regex pack — and
+nothing in the product said that was too few.
+
+**Decision.** `scanners/floor.py` declares the minimum set, the tools
+deliberately left out, and the reason for each. Two rules keep it honest:
+
+- **A floor tool that does not apply is not a gap.** Applicability is declared
+  per tool and evaluated against what the tree actually contains, so a
+  single-language repository is not permanently incomplete. An alarm that is
+  always on is not an alarm.
+- **Overlap must earn its place.** Four tools reporting one CVE is not four
+  times the assurance; it is one finding counted four times in a score that
+  normalizes over findings.
+
+The floor: `builtin_rules`, `bandit`, `semgrep`, `pip_audit`, `osv_scanner`,
+`gitleaks`, `checkov`, `trivy`, `scorecard`. Opt-in: `trufflehog` (duplicates
+gitleaks for detection; AGPL; verification is the genuine gain), `hadolint`
+(overlaps checkov and trivy; GPL), `npm_audit` (osv_scanner covers the same
+advisories with fewer false positives and without needing Node).
+
+`gates.require_scanners: ["floor"]` requires the declared set without
+enumerating it, so the membership stays maintained here rather than copied
+into every repository's config and left to rot.
+
+
+**First run found two defects the old three-scanner setup could not expose.**
+Scorecard timed out at the 600s default because it makes dozens of GitHub API
+calls, and its version probe printed `Error: unknown flag: --version` into the
+version column of a report that otherwise claimed it ran fine. Adapters now
+declare their own timeout default, and a nonzero version probe reports no
+version rather than an error string. That is the floor doing its job on day
+one: more tools running is more of the tool under test.
+
+## D8 — Floor tools have a cadence, and repository-level ones arrive by import
+
+**Question.** The floor's first CI run failed on Scorecard, twice. It timed out
+at 600s, and again at 1800s: against this repository it takes over half an
+hour, because it makes dozens of GitHub API calls. Raising the timeout again
+would have made every pull request wait thirty minutes.
+
+**The timeout was never the problem.** Scorecard answers questions about the
+*repository* — branch protection, release signing, token scopes, dependency
+pinning. Those answers do not move between commits. Asking them on every change
+is asking the wrong question at the wrong rate, and no timeout value fixes a
+cadence mismatch.
+
+**Decision.** `ToolPolicy` gains a cadence. `commit` tools answer questions
+about the code in front of them and run in the per-change gate. `repository`
+tools run on their own schedule and reach the audit as an imported SARIF —
+which is D3's rule applied to ourselves rather than only to consumers.
+
+Scorecard is the first repository-cadence tool. It stays **in the floor** —
+demoting it to optional would concede the supply-chain domain by default, which
+is what the floor exists to prevent. `.github/workflows/supply-chain.yml` runs
+it weekly and on pushes to `main`, publishes SARIF to code scanning, and
+retains the artifact for `--sarif-import scorecard=…`.
+
+**Deferred is not silent.** A floor tool a run does not evaluate is named in
+preflight and in the report — `· scorecard deferred repository cadence` —
+because an omission the reader cannot see is indistinguishable from a pass, and
+that is the failure this project exists to remove.
+
+**Consequence.** Imported Scorecard coverage is `unverified` per D3: an
+artifact we did not watch being produced. That is the correct label, and it is
+visible in every output.

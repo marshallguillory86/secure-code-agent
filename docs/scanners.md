@@ -2,6 +2,31 @@
 
 The agent is an orchestrator — it shells out to each scanner, parses canonical output, and maps to the unified `Finding` schema. We don't reimplement SAST.
 
+## The declared floor
+
+`src/secure_code_audit/scanners/floor.py` is the minimum set this project
+asserts, with the licence and rationale for every tool and the reason each
+excluded one is opt-in. `gates.require_scanners: ["floor"]` requires it without
+enumerating it.
+
+**Floor, commit cadence** — evaluated on every run: `builtin_rules`, `bandit`,
+`semgrep`, `pip_audit`, `osv_scanner`, `gitleaks`, `checkov`, `trivy`.
+
+**Floor, repository cadence** — `scorecard`. It answers questions about the
+project rather than the change, and takes over half an hour, so it runs in
+[`supply-chain.yml`](../.github/workflows/supply-chain.yml) on a schedule and
+reaches an audit by SARIF import. Reports name it as deferred rather than
+omitting it.
+
+**Opt-in** — `trufflehog` (duplicates gitleaks for detection; AGPL; live
+verification is the genuine gain), `hadolint` (overlaps checkov and trivy on
+Dockerfiles; GPL), `npm_audit` (osv_scanner covers the same advisories with
+fewer false positives and without needing Node).
+
+A floor tool with nothing to scan is `not_applicable` with a reason, never a
+coverage gap: requiring a Terraform scanner of a pure-Python repository would
+make every such repository permanently incomplete.
+
 ## Obtaining scanners
 
 **The agent never installs a scanner for you.** A security gate that downloads
