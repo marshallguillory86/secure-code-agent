@@ -28,6 +28,33 @@ DEFAULT_EXCLUDES: tuple[str, ...] = (
     "**/*.lock",
 )
 
+#: Conventional test-tree locations across the languages the floor reads.
+#: Deliberately conservative: a false positive here moves real findings out of
+#: the score, so `src/` layouts and single `*_test.go` files are matched by
+#: name rather than by guessing at directory intent.
+DEFAULT_TEST_PATTERNS: tuple[str, ...] = (
+    "test/",
+    "tests/",
+    "spec/",
+    "specs/",
+    "testing/",
+    "__tests__/",
+    "**/test/",
+    "**/tests/",
+    "**/spec/",
+    "**/__tests__/",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/*_test.go",
+    "**/*_test.rb",
+    "**/*.test.js",
+    "**/*.spec.js",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/*Test.java",
+    "**/*Tests.java",
+)
+
 DEFAULT_INCLUDE_EXTS: tuple[str, ...] = (
     ".py",
     ".js",
@@ -89,6 +116,13 @@ class Config:
     version: int = 1
     include_extensions: tuple[str, ...] = DEFAULT_INCLUDE_EXTS
     exclude_patterns: tuple[str, ...] = DEFAULT_EXCLUDES
+    #: Paths that are the repository's *own* test tree. Findings there are
+    #: reported separately rather than scored, because a project graded on its
+    #: test fixtures is graded on the wrong thing — measured at 50.15 vs 4.36
+    #: median normalized subtotal, see docs/calibration.md. Not an exclusion:
+    #: the findings are still collected, still reported, and secrets among them
+    #: still score and still gate.
+    test_patterns: tuple[str, ...] = DEFAULT_TEST_PATTERNS
     scanners: dict[str, ScannerConfig] = field(default_factory=dict)
     severity_overrides: dict[str, str] = field(default_factory=dict)
     category_overrides: dict[str, str] = field(default_factory=dict)
@@ -216,6 +250,8 @@ def _from_dict(raw: dict[str, Any]) -> Config:
         cfg.exclude_patterns = tuple(
             _string_list(paths["exclude_patterns"], "paths.exclude_patterns")
         )
+    if "test_patterns" in paths:
+        cfg.test_patterns = tuple(_string_list(paths["test_patterns"], "paths.test_patterns"))
 
     scanners_raw = raw.get("scanners", {})
     if not isinstance(scanners_raw, dict):

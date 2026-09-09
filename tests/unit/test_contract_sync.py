@@ -79,6 +79,24 @@ def _schema_scanner_properties() -> set[str]:
     raise AssertionError("could not locate per-scanner properties in the schema")
 
 
+def test_the_paths_block_agrees_between_loader_and_schema():
+    """`paths` is nested, so the top-level key check does not reach it.
+
+    `test_patterns` was added to the dataclass, the loader and the schema in
+    one change and this test still had to be told about it — which is the point:
+    a `paths` sub-key that exists in only one of the three is exactly the drift
+    §3 row 1 recorded, one level down where it is harder to see.
+    """
+    schema_paths = set(SCHEMA["properties"]["paths"]["properties"])
+    loader_paths = {"include_extensions", "exclude_patterns", "test_patterns"}
+
+    assert schema_paths == loader_paths, {
+        "only in schema": sorted(schema_paths - loader_paths),
+        "only in loader": sorted(loader_paths - schema_paths),
+    }
+    assert SCHEMA["properties"]["paths"].get("additionalProperties") is False
+
+
 def test_the_scanner_config_dataclass_and_the_schema_agree():
     """The nested level drifts as easily as the top one, and less visibly."""
     code_fields = {field.name for field in dataclasses.fields(ScannerConfig)}
@@ -98,7 +116,7 @@ def test_every_config_dataclass_field_is_reachable_from_a_known_key():
     `paths` — everything else must correspond to a key an operator can write.
     """
     loader_populated = {"raw", "source_path", "trust_target_config"}
-    nested_under_paths = {"include_extensions", "exclude_patterns"}
+    nested_under_paths = {"include_extensions", "exclude_patterns", "test_patterns"}
 
     for field in dataclasses.fields(Config):
         if field.name in loader_populated or field.name in nested_under_paths:
