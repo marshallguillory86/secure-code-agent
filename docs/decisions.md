@@ -22,6 +22,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D9 | Our ruleset is the offline floor, bounded to language primitives | 2026-09-09 | Accepted |
 | D10 | Rules ship as a versioned, digest-identified profile | 2026-09-09 | Accepted |
 | D11 | Author a rule only where no floor scanner already covers it | 2026-09-09 | Accepted |
+| D12 | The coverage check, run for the other four languages | 2026-09-09 | Accepted |
 
 ---
 
@@ -196,10 +197,14 @@ gitleaks for detection; AGPL; verification is the genuine gain), `hadolint`
 (overlaps checkov and trivy; GPL), `npm_audit` (osv_scanner covers the same
 advisories with fewer false positives and without needing Node).
 
+> Membership has changed since: [D12](#d12--the-coverage-check-run-for-the-other-four-languages)
+> adds `njsscan` and `rubocop` to the floor and `gosec` to the opt-in set.
+> `scanners/floor.py` is the authority; this paragraph is the reasoning at the
+> time the floor was declared.
+
 `gates.require_scanners: ["floor"]` requires the declared set without
 enumerating it, so the membership stays maintained here rather than copied
 into every repository's config and left to rot.
-
 
 **First run found two defects the old three-scanner setup could not expose.**
 Scorecard timed out at the 600s default because it makes dozens of GitHub API
@@ -343,6 +348,14 @@ TypeScript, Go, Ruby and Java have no offline SAST in the floor at all. Python
 is admitted only for gaps Bandit measurably leaves, and each such rule must
 declare the gap in a `covers-gap` metadata field.
 
+> **The second sentence was wrong, and D12 is the correction.** "JavaScript,
+> TypeScript, Go, Ruby and Java have no offline SAST in the floor at all" was
+> asserted without running any of those tools. njsscan and RuboCop both exist,
+> both install offline, and both cover rules this decision let stand. The
+> principle here survives intact; only the claim about which languages were
+> uncovered was false. See
+> [D12](#d12--the-coverage-check-run-for-the-other-four-languages).
+
 **Enforced, not remembered.** `test_no_python_rule_duplicates_bandit` runs both
 tools over the fixtures and fails on any Python rule flagging a line Bandit
 already flags. `test_the_profile_covers_languages_the_floor_cannot_read_offline`
@@ -358,3 +371,84 @@ and every rule covering something nothing else in the floor can see.
 rule flagged `new ProcessBuilder(new String[]{...})` — the *recommended fix* —
 as the defect. A rule that reports the remediation as the problem trains people
 to ignore the rule. It is now narrowed to `Runtime.exec`.
+
+## D12 — The coverage check, run for the other four languages
+
+**Status.** Accepted, 2026-09-09.
+
+D11 shrank the Python rules because Bandit already covered seventeen of
+nineteen. It then justified the remaining twenty-one rules with a sentence that
+was never tested: *"JavaScript, TypeScript, Go, Ruby and Java have no offline
+SAST in the floor at all."* That is an assertion about tools that exist, made
+without running any of them. The standing rule is that a built-in detector
+requires a **proven** gap, and that the evidence is produced before the code,
+not after. It was not. This is that check, run late.
+
+**Method.** For each language, install the candidate FOSS tools and run them
+against the same positive and negative fixtures the profile's own suite uses.
+A rule is a duplicate when the tool flags the same line for the same primitive
+with no framework context required. A tool that needs a framework shape, a
+build, or a toolchain we do not provision does not count as coverage.
+
+**Result.**
+
+| Language | Tool | Licence | Ran | Covers | Leaves |
+| --- | --- | --- | --- | --- | --- |
+| JavaScript | njsscan 1.0.0 | LGPL-3.0-or-later | yes | `md5`, `Math.random`, `NODE_TLS_REJECT_UNAUTHORIZED` | `child_process.exec`, `eval`, `new Function`, `innerHTML` |
+| Ruby | RuboCop 1.28.2 `--only Security` | MIT | yes | `eval`, `Marshal.load`, `YAML.load` | `system()` interpolation, `Digest::MD5` |
+| Ruby | Brakeman | MIT | no | — | Rails-only; does not analyze plain Ruby |
+| Go | gosec 2.29.0 | Apache-2.0 | **no** | — | requires the Go toolchain on the host |
+| Java | PMD 7.7.0 | BSD-2-Clause | jar read | **none of the five** | all five |
+| Java | SpotBugs / find-sec-bugs | LGPL-2.1 | no | — | requires compiled bytecode |
+
+**Two tools cover ground we had written rules for, and both are clean.**
+njsscan and RuboCop each produced zero findings on the negative fixtures, so
+wiring them costs no precision. Under the standing rule the tool wins, so both
+are wired and the rules give way to them: three are deleted outright
+(`javascript.weak-hash`, `javascript.weak-random`,
+`ruby.unsafe-deserialization`) and two are narrowed to the half the tool leaves
+— `ruby.code-injection` drops plain `eval` and keeps `instance_eval` /
+`class_eval`, and `javascript.tls-verification-disabled` drops the env-var form
+and keeps the per-request `{rejectUnauthorized: false}`.
+
+**Three boundaries are real, and each has a mechanism behind it.**
+
+*njsscan's silence is structural, not incidental.* It has rules for `eval`,
+`child_process.exec` and DOM XSS — they did not fire because they are taint
+rules gated on an Express handler shape, `function ($REQ, $RES, ...)` with a
+`$REQ.$QUERY` source. In a CLI script, a library, a build step or a Lambda
+handler there is no such shape and the rules are quiet. Its TLS rule matches
+only `process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'`; the far more common
+per-request `{rejectUnauthorized: false}` is not covered, so that rule of ours
+stays.
+
+*gosec cannot read Go source on its own.* It loads packages through
+`go list` and fails outright without the toolchain — `go command required, not
+found`. The distinction that matters is **running the tool versus reading the
+target**: every floor tool needs some runtime to execute itself, and that is
+unremarkable. gosec is different in that analyzing a target means invoking
+*that target's* build tooling. This is precisely the boundary MA's ADR-012
+draws for SpotBugs, where needing a build makes a tool unavailable rather than
+silently empty. So gosec is wired as an optional tool that declares why it may
+not run, and njsscan and RuboCop — which parse source directly and need only
+themselves — are in the floor.
+
+*Java has no source-level FOSS SAST worth wiring.* PMD parses source and needs
+no bytecode, but its entire Java security category is two rules,
+`HardCodedCryptoKey` and `InsecureCryptoIv`, and neither touches
+`Runtime.exec`, `readObject`, MD5, ECB or `java.util.Random`. Searching every
+PMD Java category for those primitives returns only false leads — a rule about
+`gc()`, one about `exit()`, one about JDBC result sets. Java is a proven gap.
+
+**Consequence.** The profile drops from 23 rules to 20 and the floor gains two
+tools that are better at their own languages than we would be: 5 Java, 5 Go,
+5 JavaScript, 3 Ruby, 2 Python. The gap that remains is now measured rather
+than assumed, and every rule in a language a floor tool can read has to name
+the gap it covers in a `covers-gap` metadata field or fail the build.
+
+**The lesson is the one D11 already recorded and did not generalize.** D11
+caught the Python error and then repeated it in the same paragraph for four
+other languages. Running the check on one language and asserting the result for
+the rest is not evidence. The check is now automated per language in
+`tests/unit/test_offline_ruleset.py`, so the next rule added to a language a
+tool covers fails the build instead of surviving to a later audit.

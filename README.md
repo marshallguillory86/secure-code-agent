@@ -128,7 +128,9 @@ collapsed before scoring; reports preserve the original scanner evidence.
         ├── Hadolint          (Dockerfile lint)
         ├── OSV-Scanner       (multi-ecosystem SCA via osv.dev)
         ├── OpenSSF Scorecard (repo hygiene + supply chain)
-        ├── eslint-plugin-security  (JS/TS SAST)                     [v0.3]
+        ├── njsscan           (JS/TS SAST, offline, no Node needed)
+        ├── RuboCop           (Ruby security cops, --only Security)
+        ├── gosec             (Go SAST — opt-in; needs the Go toolchain)
         ├── CodeQL SARIF      (ingest GitHub-hosted analysis)
         └── Built-in regex rules (high-confidence, low-FP)
 ```

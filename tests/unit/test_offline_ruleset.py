@@ -263,18 +263,164 @@ def test_no_python_rule_duplicates_bandit(tmp_path):
 def test_the_profile_covers_languages_the_floor_cannot_read_offline():
     """The justification for authoring rules at all, asserted.
 
-    Bandit covers Python offline. Nothing in the floor reads JavaScript, Go,
-    Ruby or Java without the network, so that is where these rules earn their
-    maintenance.
+    Three languages in the floor have an offline scanner of their own — Bandit
+    for Python, njsscan for JavaScript, RuboCop's Security cops for Ruby — so a
+    rule in one of those languages is only justified by a gap the tool leaves,
+    and has to name it. Go and Java have no such tool: gosec needs the audited
+    project's own toolchain and find-sec-bugs needs compiled bytecode, so rules
+    there stand on their own (D12).
     """
     languages = {rule["id"].split(".")[2] for rule in _declared_rules()}
 
     assert {"javascript", "go", "ruby", "java"} <= languages
-    # Python is allowed only for the gaps Bandit measurably leaves, and each
-    # such rule has to say which gap.
     for rule in _declared_rules():
-        if rule["id"].split(".")[2] != "python":
+        language = rule["id"].split(".")[2]
+        if language not in _LANGUAGES_WITH_AN_OFFLINE_TOOL:
             continue
         assert (rule.get("metadata") or {}).get("covers-gap"), (
-            f"{rule['id']} is a Python rule with no stated gap in Bandit's coverage"
+            f"{rule['id']} is a {language} rule, and "
+            f"{_LANGUAGES_WITH_AN_OFFLINE_TOOL[language]} already scans "
+            f"{language} offline. State the gap it leaves in a `covers-gap` "
+            f"metadata field, or delete the rule."
         )
+
+
+#: A language here has a floor tool that reads it offline, so a rule we write
+#: for it must justify itself against that tool rather than against silence.
+#: Measured in D12; JavaScript's entry is why four JS rules survived and three
+#: did not.
+_LANGUAGES_WITH_AN_OFFLINE_TOOL = {
+    "python": "bandit",
+    "javascript": "njsscan",
+    "ruby": "rubocop",
+}
+
+
+def _njsscan() -> list[str] | None:
+    found = shutil.which("njsscan")
+    if found:
+        return [found]
+    try:
+        import njsscan  # noqa: F401
+    except ImportError:
+        return None
+    return [sys.executable, "-m", "njsscan"]
+
+
+def _copied_fixtures(tmp_path: Path, which: str = "positive") -> Path:
+    target = tmp_path / "tree"
+    target.mkdir()
+    for path in (FIXTURES / which).iterdir():
+        shutil.copy(path, target / path.name)
+    return target
+
+
+def _our_findings(target: Path, language: str) -> dict[str, int]:
+    """Our rule ids for one language, mapped to the line each fired on."""
+    result = subprocess.run(
+        [
+            *_semgrep(),
+            "--config",
+            str(offline_ruleset_path()),
+            "--no-rewrite-rule-ids",
+            "--metrics=off",
+            "--json",
+            "--quiet",
+            str(target),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    return {
+        f["check_id"]: f["start"]["line"]
+        for f in json.loads(result.stdout)["results"]
+        if f".{language}." in f["check_id"]
+    }
+
+
+@pytest.mark.skipif(
+    _semgrep() is None or _njsscan() is None, reason="needs both semgrep and njsscan"
+)
+def test_no_javascript_rule_duplicates_njsscan(tmp_path):
+    """D12, made enforceable for JavaScript.
+
+    njsscan is in the floor, installs as a Python package and needs no network
+    and no Node runtime. Three of our JavaScript rules duplicated it and were
+    deleted; this fails the build if another one is added.
+
+    The four that remain survive because njsscan's exec / eval / DOM-XSS rules
+    are taint rules gated on an Express `function ($REQ, $RES, ...)` shape, and
+    its TLS rule matches only the `NODE_TLS_REJECT_UNAUTHORIZED` env form.
+    """
+    target = _copied_fixtures(tmp_path)
+
+    result = subprocess.run(
+        [*_njsscan(), "--json", str(target)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    payload = json.loads(result.stdout)
+    their_lines: set[int] = set()
+    for bucket in ("nodejs", "templates"):
+        for entry in (payload.get(bucket) or {}).values():
+            for occurrence in entry.get("files") or []:
+                their_lines.update(occurrence.get("match_lines") or [])
+
+    duplicated = {
+        rule_id
+        for rule_id, line in _our_findings(target, "javascript").items()
+        if line in their_lines
+    }
+
+    assert duplicated == set(), (
+        f"these JavaScript rules duplicate njsscan, which is already in the "
+        f"floor and already offline: {sorted(duplicated)}"
+    )
+
+
+@pytest.mark.skipif(
+    _semgrep() is None or shutil.which("rubocop") is None, reason="needs both semgrep and rubocop"
+)
+def test_no_ruby_rule_duplicates_rubocop(tmp_path):
+    """D12, made enforceable for Ruby.
+
+    Run as `--only Security`, the same invocation the adapter uses. Two rules
+    were deleted against this and one was narrowed: RuboCop's Security/Eval
+    covers plain `eval` but reports nothing for `instance_eval` or
+    `class_eval`, which is the ground our remaining rule stands on.
+    """
+    target = _copied_fixtures(tmp_path)
+
+    result = subprocess.run(
+        [
+            "rubocop",
+            "--only",
+            "Security",
+            "--format",
+            "json",
+            "--force-default-config",
+            str(target),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    their_lines = {
+        offense["location"]["start_line"]
+        for entry in json.loads(result.stdout).get("files", [])
+        for offense in entry.get("offenses", [])
+    }
+
+    duplicated = {
+        rule_id for rule_id, line in _our_findings(target, "ruby").items() if line in their_lines
+    }
+
+    assert duplicated == set(), (
+        f"these Ruby rules duplicate RuboCop's Security cops, which are "
+        f"already in the floor and already offline: {sorted(duplicated)}"
+    )

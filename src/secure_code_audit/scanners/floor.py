@@ -131,6 +131,31 @@ FLOOR: tuple[ToolPolicy, ...] = (
         rationale="repository and supply-chain hygiene; no other tool here asks these questions",
         cadence="repository",
     ),
+    ToolPolicy(
+        name="njsscan",
+        licence="LGPL-3.0-or-later",
+        domain="code_vulnerabilities",
+        rationale=(
+            "offline Node/JavaScript SAST that needs no registry and no Node "
+            "runtime — it is a Python package carrying its own rules, so it "
+            "installs alongside this tool. Measured against our fixtures it "
+            "covers md5, sha1, Math.random and the NODE_TLS_REJECT_UNAUTHORIZED "
+            "form with no false positives (D12)"
+        ),
+        applies_to=(".js", ".jsx", ".ts", ".tsx"),
+    ),
+    ToolPolicy(
+        name="rubocop",
+        licence="MIT",
+        domain="code_vulnerabilities",
+        rationale=(
+            "its Security department is the only FOSS tool that flags Ruby "
+            "security primitives in plain source — Brakeman analyzes Rails "
+            "applications and nothing else. Run as `--only Security`, so the "
+            "style cops it is better known for never reach a report (D12)"
+        ),
+        applies_to=(".rb",),
+    ),
 )
 
 #: Deliberately outside the floor. Each carries the reason it is opt-in rather
@@ -158,6 +183,22 @@ OPTIONAL: tuple[ToolPolicy, ...] = (
             "overlaps checkov and trivy on Dockerfiles; GPL is fine for a tool "
             "we invoke and never distribute, but some adopters' policies "
             "exclude it outright"
+        ),
+    ),
+    ToolPolicy(
+        name="gosec",
+        licence="Apache-2.0",
+        domain="code_vulnerabilities",
+        rationale="the Go ecosystem's standard SAST, and far deeper on Go than any generalist",
+        applies_to=(".go",),
+        optional_because=(
+            "it cannot read Go source on its own. gosec loads packages through "
+            "`go list`, so analyzing a target means invoking that target's own "
+            "toolchain — the boundary MA's ADR-012 draws for SpotBugs, where "
+            "needing a build makes a tool unavailable rather than silent. "
+            "Every other floor tool parses source directly and needs only "
+            "itself to run. Enable it where the Go toolchain is present, which "
+            "in a Go project's own CI it usually is"
         ),
     ),
     ToolPolicy(

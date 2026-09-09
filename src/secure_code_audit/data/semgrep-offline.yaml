@@ -2,18 +2,33 @@
 #
 # Used when `scanners.semgrep.online` is false. Shipped inside the wheel.
 #
-# WHAT THIS IS. Cover for the languages the floor cannot see offline. Bandit is
-# in the floor, is Apache-2.0, and is already offline — it needs no network and
-# no registry — so Python is not the gap. Everything Bandit cannot read is:
-# JavaScript, TypeScript, Go, Ruby and Java have no offline SAST in the floor
-# at all, and that is what these rules are for.
+# WHAT THIS IS. Cover for what no floor scanner can see offline — measured,
+# not assumed. Every language here has had the candidate FOSS tools installed
+# and run against these same fixtures; what survived is what none of them flag.
 #
-# An earlier revision of this file carried nineteen Python rules. Seventeen of
-# them duplicated Bandit, which is exactly what `CONTRIBUTING.md` has forbidden
-# since the first commit — "shipping a parallel ruleset to Semgrep / Bandit /
-# CodeQL" — and the "offline floor" argument used to justify them does not
-# survive the observation that Bandit is itself offline. The two Python rules
-# that remain are the two Bandit measurably misses.
+# An earlier revision carried nineteen Python rules. Seventeen duplicated
+# Bandit, which is exactly what `CONTRIBUTING.md` has forbidden since the first
+# commit — "shipping a parallel ruleset to Semgrep / Bandit / CodeQL" — and the
+# "offline floor" argument used to justify them does not survive the
+# observation that Bandit is itself offline (D11).
+#
+# The revision after that repeated the mistake in the other direction: having
+# checked Python, it *asserted* that "JavaScript, TypeScript, Go, Ruby and Java
+# have no offline SAST in the floor at all" without running one. Two of them
+# did. njsscan covers Node's md5, sha1, Math.random and the
+# NODE_TLS_REJECT_UNAUTHORIZED form; RuboCop's Security department covers
+# Ruby's eval, Marshal.load and YAML.load. Both are now in the floor and those
+# rules are gone (D12).
+#
+# What the tools genuinely leave, and why:
+#   - njsscan's exec / eval / DOM-XSS rules are taint rules gated on an Express
+#     `function ($REQ, $RES, ...)` shape with a `$REQ.$QUERY` source. A CLI
+#     script, a library or a Lambda handler has no such shape, so they are
+#     silent there. Its TLS rule matches only the env-var form.
+#   - gosec needs `go list`; without the Go toolchain it cannot parse Go at all.
+#   - Java has no source-level FOSS SAST worth wiring. PMD's entire Java
+#     security category is two rules and neither is one of ours; find-sec-bugs
+#     needs compiled bytecode, which this agent does not produce (MA ADR-012).
 #
 # WHAT GOES IN. Language primitives — constructs the language itself provides,
 # which do not change between releases and cost almost nothing to keep correct.
@@ -23,7 +38,7 @@
 # framework-specific: Django ORM internals, Express middleware, Rails helpers,
 # Spring annotations. Framework rules rot with every framework release, and
 # framework breadth is what the online registry path is for. Both bounds are
-# enforced by tests, not by review. See D9 and D11.
+# enforced by tests, not by review. See D9, D11 and D12.
 #
 # EVERY RULE CARRIES a stable id, a version, a CWE, an OWASP bucket and a
 # confidence — the mapping is the point, because registry rules deliver CWEs
@@ -68,7 +83,8 @@ rules:
       - pattern: Crypto.Cipher.AES.new($K, Crypto.Cipher.AES.MODE_ECB, ...)
 
   # =========================================================================
-  # JavaScript / TypeScript — no offline SAST in the floor reads these.
+  # JavaScript / TypeScript — njsscan is in the floor and covers the
+  # context-free primitives. These are what its Express-gated taint rules miss.
   # =========================================================================
   - id: sca.offline.javascript.child-process-exec
     message: >-
@@ -81,6 +97,7 @@ rules:
       owasp: "A03:2021-Injection"
       confidence: HIGH
       version: "1.0.0"
+      covers-gap: "njsscan's generic_os_command_exec is a taint rule requiring an Express (req, res) handler and a req.query source"
     pattern-either:
       - pattern: child_process.exec(...)
       - pattern: child_process.execSync(...)
@@ -97,6 +114,7 @@ rules:
       owasp: "A03:2021-Injection"
       confidence: MEDIUM
       version: "1.0.0"
+      covers-gap: "njsscan's eval_nodejs is a taint rule requiring an Express (req, res) handler and a req.query source"
     pattern: eval(...)
 
   - id: sca.offline.javascript.dynamic-code-construction
@@ -110,52 +128,28 @@ rules:
       owasp: "A03:2021-Injection"
       confidence: MEDIUM
       version: "1.0.0"
+      covers-gap: "njsscan's eval_nodejs covers new Function only inside an Express handler taint path"
     pattern-either:
       - pattern: new Function(...)
       - pattern: setTimeout("...", ...)
       - pattern: setInterval("...", ...)
 
-  - id: sca.offline.javascript.weak-hash
-    message: >-
-      MD5 and SHA-1 are broken for security use. Use SHA-256 or better.
-    languages: [javascript, typescript]
-    severity: WARNING
-    metadata:
-      cwe: "CWE-327"
-      owasp: "A02:2021-Cryptographic Failures"
-      confidence: MEDIUM
-      version: "1.0.0"
-    pattern-either:
-      - pattern: crypto.createHash("md5")
-      - pattern: crypto.createHash("sha1")
-
-  - id: sca.offline.javascript.weak-random
-    message: >-
-      Math.random() is not cryptographically secure. Use crypto.randomBytes or
-      crypto.getRandomValues for anything security-bearing.
-    languages: [javascript, typescript]
-    severity: WARNING
-    metadata:
-      cwe: "CWE-330"
-      owasp: "A02:2021-Cryptographic Failures"
-      confidence: LOW
-      version: "1.0.0"
-    pattern: Math.random(...)
-
   - id: sca.offline.javascript.tls-verification-disabled
     message: >-
-      Setting NODE_TLS_REJECT_UNAUTHORIZED to "0", or rejectUnauthorized to
-      false, disables certificate validation.
+      Setting rejectUnauthorized to false disables certificate validation for
+      the request, which defeats TLS entirely.
     languages: [javascript, typescript]
     severity: ERROR
     metadata:
       cwe: "CWE-295"
       owasp: "A02:2021-Cryptographic Failures"
       confidence: HIGH
-      version: "1.0.0"
-    pattern-either:
-      - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
-      - pattern: "{rejectUnauthorized: false}"
+      version: "1.1.0"
+      covers-gap: "njsscan's node_tls_reject matches only the NODE_TLS_REJECT_UNAUTHORIZED env form, not the per-request {rejectUnauthorized: false}"
+    # The env-var form belongs to njsscan's node_tls_reject, which is in the
+    # floor (D12). This is the per-request half it does not match — and the
+    # more common one, since it needs no process-wide change to appear.
+    pattern: "{rejectUnauthorized: false}"
 
   - id: sca.offline.javascript.html-sink-assignment
     message: >-
@@ -169,6 +163,7 @@ rules:
       owasp: "A03:2021-Injection"
       confidence: MEDIUM
       version: "1.0.0"
+      covers-gap: "njsscan's dom_xss is a taint rule requiring a document.location / location.hash style source"
     pattern-either:
       - pattern: $EL.innerHTML = $VALUE
       - pattern: $EL.outerHTML = $VALUE
@@ -176,7 +171,8 @@ rules:
       - pattern: document.writeln(...)
 
   # =========================================================================
-  # Go — gosec is not in the floor, so offline Go has no coverage at all.
+  # Go — gosec is optional, not floor: it needs the audited project's own
+  # toolchain to read Go at all, so a host without it has no Go coverage.
   # =========================================================================
   - id: sca.offline.go.command-injection
     message: >-
@@ -258,7 +254,9 @@ rules:
       - pattern: rand.Float64()
 
   # =========================================================================
-  # Ruby — Brakeman is not in the floor, so offline Ruby has no coverage.
+  # Ruby — RuboCop's Security cops are in the floor and cover eval,
+  # Marshal.load and YAML.load. These are what they leave. (Brakeman analyzes
+  # Rails applications and reports nothing on plain Ruby.)
   # =========================================================================
   - id: sca.offline.ruby.command-injection
     message: >-
@@ -271,6 +269,7 @@ rules:
       owasp: "A03:2021-Injection"
       confidence: MEDIUM
       version: "1.0.0"
+      covers-gap: "RuboCop's Security department has no cop for system/exec/backtick interpolation"
     pattern-either:
       - pattern: Kernel.system("...#{...}...")
       - pattern: system("...#{...}...")
@@ -279,34 +278,24 @@ rules:
 
   - id: sca.offline.ruby.code-injection
     message: >-
-      eval and its relatives execute their argument as code. If any part is
-      attacker-influenced this is code injection.
+      instance_eval and class_eval execute their argument as code in the
+      receiver's context. If any part is attacker-influenced this is code
+      injection.
     languages: [ruby]
     severity: ERROR
     metadata:
       cwe: "CWE-95"
       owasp: "A03:2021-Injection"
       confidence: MEDIUM
-      version: "1.0.0"
+      version: "1.1.0"
+      # D12: RuboCop's Security/Eval covers plain `eval` and is wired in the
+      # floor, so this rule no longer matches it. Measured 2026-09-09: RuboCop
+      # reports zero offenses for instance_eval and class_eval, which is the
+      # ground left over.
+      covers-gap: "RuboCop Security/Eval does not flag instance_eval or class_eval"
     pattern-either:
-      - pattern: eval(...)
       - pattern: instance_eval(...)
       - pattern: class_eval(...)
-
-  - id: sca.offline.ruby.unsafe-deserialization
-    message: >-
-      Marshal.load and YAML.load construct arbitrary objects from their input.
-      Use JSON, or YAML.safe_load.
-    languages: [ruby]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-502"
-      owasp: "A08:2021-Software and Data Integrity Failures"
-      confidence: HIGH
-      version: "1.0.0"
-    pattern-either:
-      - pattern: Marshal.load(...)
-      - pattern: YAML.load(...)
 
   - id: sca.offline.ruby.weak-hash
     message: >-
@@ -318,12 +307,15 @@ rules:
       owasp: "A02:2021-Cryptographic Failures"
       confidence: MEDIUM
       version: "1.0.0"
+      covers-gap: "RuboCop's Security department has no cop for Digest::MD5 or Digest::SHA1"
     pattern-either:
       - pattern: Digest::MD5.$M(...)
       - pattern: Digest::SHA1.$M(...)
 
   # =========================================================================
-  # Java — SpotBugs is not in the floor, so offline Java has no coverage.
+  # Java — a proven gap, and the only one. find-sec-bugs needs compiled
+  # bytecode (MA ADR-012) and PMD's entire Java security category is two rules,
+  # neither of them one of these. Nothing in the floor reads Java.
   # =========================================================================
   - id: sca.offline.java.command-execution
     message: >-

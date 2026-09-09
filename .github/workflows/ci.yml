@@ -67,11 +67,29 @@ jobs:
 
       # The paired-fixture tests skip without semgrep, and a skip nobody
       # notices is how a ruleset rots. This job exists so they always run.
+      # `python-scanners` brings semgrep, bandit and njsscan; RuboCop is a gem.
       - name: Install project with the Semgrep engine
         run: python -m pip install --disable-pip-version-check -e ".[dev,python-scanners]"
 
-      - name: Every rule fires, and none fires on safe code
+      # The overlap tests are the enforceable half of D11 and D12: a rule that
+      # duplicates a floor tool fails the build instead of surviving to a later
+      # audit. Each needs the tool it checks against actually installed, or it
+      # skips and proves nothing.
+      - name: Install RuboCop for the Ruby overlap check
+        run: gem install --no-document rubocop -v 1.90.0
+
+      - name: Every rule fires, none fires on safe code, and none duplicates a tool
         run: python -m pytest tests/unit/test_offline_ruleset.py -v --no-header
+
+      # A skip here means the check did not run. Fail loudly rather than let a
+      # green tick stand for an assertion nobody made.
+      - name: No overlap check was skipped
+        run: |
+          python -m pytest tests/unit/test_offline_ruleset.py -q --no-header -rs 2>&1 | tee out.txt
+          if grep -q "skipped" out.txt; then
+            echo "::error::an offline-ruleset test skipped; the tool it needs is missing"
+            exit 1
+          fi
 
   security:
     name: Required scanner coverage

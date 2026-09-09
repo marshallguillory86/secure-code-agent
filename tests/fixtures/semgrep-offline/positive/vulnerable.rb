@@ -5,8 +5,10 @@ def command_injection(user_input)
   system("ls #{user_input}")
 end
 
+# Plain `eval` belongs to RuboCop's Security/Eval, which is in the floor (D12).
+# What is left to us is the receiver-context pair RuboCop does not cover.
 def code_injection(payload)
-  eval(payload)
+  instance_eval(payload)
 end
 
 def unsafe_deserialization(blob)

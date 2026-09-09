@@ -7,5 +7,6 @@ function codeInjection(input) { return eval(input); }
 function dynamicCode(src) { return new Function(src); }
 function weakHash(data) { return crypto.createHash('md5').update(data); }
 function predictable() { return Math.random(); }
-function disableTls() { process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; }
+// The env-var form is njsscan's (D12); ours is the per-request half.
+function disableTls(url) { return https.request(url, {rejectUnauthorized: false}); }
 function htmlSink(el, value) { el.innerHTML = value; }
