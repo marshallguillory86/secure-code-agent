@@ -7,8 +7,8 @@ from secure_code_audit.findings import Category, Severity
 from secure_code_audit.scanner_status import (
     CoverageStatus,
     ScannerOutcome,
-    classify_execution,
     evaluate_coverage,
+    execution_from_result,
 )
 from secure_code_audit.scanners import semgrep_scanner
 from secure_code_audit.scanners.bandit_scanner import BanditScanner
@@ -46,16 +46,16 @@ def test_bandit_parses_finding_and_control_failures(tmp_path, monkeypatch):
         scanner, "_exec", lambda *args, **kwargs: _proc(json.dumps(payload), code=1)
     )
 
-    findings = scanner.run(tmp_path, Config())
+    findings = scanner.scan(tmp_path, Config()).findings
 
     assert findings[0].rule_id == "B608"
     assert findings[0].severity is Severity.HIGH
     assert findings[0].line_end == 9
 
     monkeypatch.setattr(scanner, "_exec", lambda *args, **kwargs: _proc(stderr="slow", code=124))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "bandit.tool_timeout"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "bandit.tool_timeout"
     monkeypatch.setattr(scanner, "_exec", lambda *args, **kwargs: _proc(stdout="bad json"))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "bandit.tool_error"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "bandit.tool_error"
 
 
 def test_bandit_requests_quiet_json_and_combines_excludes(tmp_path, monkeypatch):
@@ -69,7 +69,7 @@ def test_bandit_requests_quiet_json_and_combines_excludes(tmp_path, monkeypatch)
     monkeypatch.setattr(scanner, "_exec", fake_exec)
     config = Config(exclude_patterns=["tests", "build", ".venv"])
 
-    assert scanner.run(tmp_path, config) == []
+    assert scanner.scan(tmp_path, config).findings == ()
     assert "--quiet" in captured
     assert captured.count("--exclude") == 1
     assert captured[captured.index("--exclude") + 1] == ",".join(
@@ -109,7 +109,7 @@ def test_gitleaks_parses_redacted_secret_and_failures(tmp_path, monkeypatch):
         return _proc(code=1)
 
     monkeypatch.setattr(GitleaksScanner, "_exec", fake_exec)
-    findings = scanner.run(tmp_path, Config())
+    findings = scanner.scan(tmp_path, Config()).findings
     assert findings[0].severity is Severity.CRITICAL
     assert findings[0].category is Category.SECRETS
     assert "REDACTED" in findings[0].message
@@ -117,7 +117,7 @@ def test_gitleaks_parses_redacted_secret_and_failures(tmp_path, monkeypatch):
     monkeypatch.setattr(
         GitleaksScanner, "_exec", lambda *args, **kwargs: _proc(stderr="boom", code=2)
     )
-    assert scanner.run(tmp_path, Config())[0].rule_id == "gitleaks.tool_error"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "gitleaks.tool_error"
 
 
 def test_gitleaks_invalid_json_is_parse_failure(tmp_path, monkeypatch):
@@ -129,7 +129,10 @@ def test_gitleaks_invalid_json_is_parse_failure(tmp_path, monkeypatch):
         return _proc()
 
     monkeypatch.setattr(GitleaksScanner, "_exec", fake_exec)
-    assert scanner.run(tmp_path, Config())[0].rule_id == "gitleaks.parse_error"
+    result = scanner.scan(tmp_path, Config())
+
+    assert result.outcome is ScannerOutcome.FAILED
+    assert "JSON parse failure" in result.reason
 
 
 def test_npm_audit_discovers_projects_and_parses_direct_and_indirect(tmp_path, monkeypatch):
@@ -150,7 +153,7 @@ def test_npm_audit_discovers_projects_and_parses_direct_and_indirect(tmp_path, m
         scanner, "_exec", lambda *args, **kwargs: _proc(json.dumps(payload), code=1)
     )
 
-    findings = scanner.run(tmp_path, Config())
+    findings = scanner.scan(tmp_path, Config()).findings
 
     assert {finding.severity for finding in findings} == {Severity.CRITICAL, Severity.MEDIUM}
     assert all(finding.file_path == project / "package-lock.json" for finding in findings)
@@ -161,11 +164,13 @@ def test_npm_audit_reports_timeout_error_and_parse_failure(tmp_path, monkeypatch
     scanner = _configured(NpmAuditScanner(), "npm")
 
     monkeypatch.setattr(scanner, "_exec", lambda *args, **kwargs: _proc(code=124))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "npm_audit.tool_timeout"
+    # A timeout keeps its own outcome even though every branch here fails
+    # coverage — only this one means "raise the timeout".
+    assert scanner.scan(tmp_path, Config()).outcome is ScannerOutcome.TIMED_OUT
     monkeypatch.setattr(scanner, "_exec", lambda *args, **kwargs: _proc(stderr="boom", code=2))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "npm_audit.tool_error"
+    assert scanner.scan(tmp_path, Config()).outcome is ScannerOutcome.FAILED
     monkeypatch.setattr(scanner, "_exec", lambda *args, **kwargs: _proc(stdout="bad"))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "npm_audit.parse_error"
+    assert scanner.scan(tmp_path, Config()).outcome is ScannerOutcome.FAILED
 
 
 def test_semgrep_parses_sarif_and_reports_invalid_output(tmp_path, monkeypatch):
@@ -213,7 +218,7 @@ def test_semgrep_parses_sarif_and_reports_invalid_output(tmp_path, monkeypatch):
         return _proc(code=1)
 
     monkeypatch.setattr(SemgrepScanner, "_exec", fake_exec)
-    findings = scanner.run(tmp_path, Config())
+    findings = scanner.scan(tmp_path, Config()).findings
     assert findings[0].canonical_cwe == "CWE-95"
     assert findings[0].severity is Severity.HIGH
 
@@ -223,7 +228,7 @@ def test_semgrep_parses_sarif_and_reports_invalid_output(tmp_path, monkeypatch):
         return _proc()
 
     monkeypatch.setattr(SemgrepScanner, "_exec", invalid_exec)
-    assert scanner.run(tmp_path, Config())[0].rule_id == "semgrep.tool_error"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "semgrep.tool_error"
 
 
 def test_gitleaks_findings_exit_with_empty_report_fails_instead_of_reading_clean(
@@ -237,11 +242,10 @@ def test_gitleaks_findings_exit_with_empty_report_fails_instead_of_reading_clean
         return _proc(code=1)
 
     monkeypatch.setattr(GitleaksScanner, "_exec", fake_exec)
-    findings = _configured(GitleaksScanner(), "gitleaks").run(tmp_path, Config())
+    result = _configured(GitleaksScanner(), "gitleaks").scan(tmp_path, Config())
 
-    assert [f.rule_id for f in findings] == ["gitleaks.tool_error"]
-    execution = classify_execution("gitleaks", findings)
-    assert execution.outcome is ScannerOutcome.FAILED
+    assert result.outcome is ScannerOutcome.FAILED
+    execution = execution_from_result("gitleaks", result)
     assert evaluate_coverage([execution], ["gitleaks"]).status is CoverageStatus.FAILED
 
 
@@ -251,7 +255,7 @@ def test_gitleaks_findings_exit_with_empty_array_report_also_fails(tmp_path, mon
         return _proc(code=1)
 
     monkeypatch.setattr(GitleaksScanner, "_exec", fake_exec)
-    findings = _configured(GitleaksScanner(), "gitleaks").run(tmp_path, Config())
+    findings = _configured(GitleaksScanner(), "gitleaks").scan(tmp_path, Config()).findings
 
     assert [f.rule_id for f in findings] == ["gitleaks.tool_error"]
 
@@ -262,21 +266,24 @@ def test_gitleaks_clean_exit_with_empty_report_is_still_a_clean_scan(tmp_path, m
         return _proc(code=0)
 
     monkeypatch.setattr(GitleaksScanner, "_exec", fake_exec)
-    findings = _configured(GitleaksScanner(), "gitleaks").run(tmp_path, Config())
+    result = _configured(GitleaksScanner(), "gitleaks").scan(tmp_path, Config())
 
-    assert findings == []
-    assert classify_execution("gitleaks", findings).outcome is ScannerOutcome.COMPLETED
+    assert result.findings == ()
+    assert result.outcome is ScannerOutcome.COMPLETED
 
 
-def test_gitleaks_non_array_report_is_a_parse_error(tmp_path, monkeypatch):
+def test_gitleaks_non_array_report_is_a_failure_not_a_clean_scan(tmp_path, monkeypatch):
+    """Exit 0 and an unreadable report is not zero secrets."""
+
     def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
         Path(args[args.index("--report-path") + 1]).write_text('{"oops": 1}', encoding="utf-8")
         return _proc(code=0)
 
     monkeypatch.setattr(GitleaksScanner, "_exec", fake_exec)
-    findings = _configured(GitleaksScanner(), "gitleaks").run(tmp_path, Config())
+    result = _configured(GitleaksScanner(), "gitleaks").scan(tmp_path, Config())
 
-    assert [f.rule_id for f in findings] == ["gitleaks.parse_error"]
+    assert result.outcome is ScannerOutcome.FAILED
+    assert "must be a JSON array" in result.reason
 
 
 def test_semgrep_offline_uses_the_packaged_ruleset_not_the_registry(tmp_path, monkeypatch):
@@ -295,7 +302,7 @@ def test_semgrep_offline_uses_the_packaged_ruleset_not_the_registry(tmp_path, mo
     monkeypatch.setattr(SemgrepScanner, "_exec", fake_exec)
     config = Config()
     config.scanners["semgrep"] = ScannerConfig(online=False)
-    _configured(SemgrepScanner(), "semgrep").run(tmp_path, config)
+    _configured(SemgrepScanner(), "semgrep").scan(tmp_path, config)
 
     config_arg = captured["args"][captured["args"].index("--config") + 1]
     assert config_arg.endswith("semgrep-offline.yaml")
@@ -310,11 +317,10 @@ def test_semgrep_offline_fails_closed_when_the_ruleset_is_missing(tmp_path, monk
     config = Config()
     config.scanners["semgrep"] = ScannerConfig(online=False)
 
-    findings = _configured(SemgrepScanner(), "semgrep").run(tmp_path, config)
+    result = _configured(SemgrepScanner(), "semgrep").scan(tmp_path, config)
 
-    assert [f.rule_id for f in findings] == ["semgrep.tool_error"]
-    assert "packaged ruleset" in findings[0].message
-    assert classify_execution("semgrep", findings).outcome is ScannerOutcome.FAILED
+    assert result.outcome is ScannerOutcome.FAILED
+    assert "packaged ruleset" in result.reason
 
 
 def test_semgrep_recovers_cwe_from_tags_as_well_as_properties():

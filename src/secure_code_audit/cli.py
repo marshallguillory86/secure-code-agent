@@ -25,12 +25,12 @@ from secure_code_audit import (
 from secure_code_audit import baseline as baseline_mod
 from secure_code_audit import config as config_mod
 from secure_code_audit.findings import Category, Finding, Severity
-from secure_code_audit.git_tools import find_repo_root, loc_under
+from secure_code_audit.git_tools import find_repo_root, is_excluded, loc_under
 from secure_code_audit.scanner_status import (
     ScannerExecution,
     ScannerOutcome,
-    classify_execution,
     evaluate_coverage,
+    execution_from_result,
 )
 from secure_code_audit.scanners import floor
 from secure_code_audit.scoring import active_gates, evaluate_gates
@@ -251,6 +251,9 @@ def _do_audit(args: argparse.Namespace) -> int:
     all_findings.extend(imported)
     executions.extend(imported_executions)
 
+    # ----- scan scope, enforced once -----
+    all_findings = _drop_excluded(all_findings, target, cfg)
+
     # ----- overrides from config -----
     all_findings = _apply_overrides(all_findings, cfg)
 
@@ -333,18 +336,19 @@ def _prepare_audit(
     args: argparse.Namespace,
 ) -> tuple[config_mod.Config, Path, Path]:
     """Load config and resolve the single scan root, or refuse."""
-    cfg = config_mod.load(args.config)
-    # Set from the command line only. Threading it through the loaded config
-    # would let a repository-supplied file assert its own trustworthiness.
-    cfg.trust_target_config = bool(getattr(args, "trust_target_config", False))
-    _validate_scanner_config(cfg)
     if args.changed_only:
         raise ValueError(
             "--changed-only is not implemented safely; refusing to claim a scoped audit"
         )
     if len(args.paths) > 1:
         raise ValueError("multiple scan roots are not supported; provide one repository root")
+    # The target is resolved first because the default config belongs to it.
     target = Path(args.paths[0]).resolve()
+    cfg = config_mod.load(args.config, default_root=target)
+    # Set from the command line only. Threading it through the loaded config
+    # would let a repository-supplied file assert its own trustworthiness.
+    cfg.trust_target_config = bool(getattr(args, "trust_target_config", False))
+    _validate_scanner_config(cfg)
     return cfg, target, find_repo_root(target)
 
 
@@ -434,24 +438,59 @@ def _selected_scanners(args: argparse.Namespace, cfg: config_mod.Config) -> list
     ]
 
 
+def _drop_excluded(findings: list[Finding], target: Path, cfg: config_mod.Config) -> list[Finding]:
+    """Enforce `paths.exclude_patterns` on findings, not just on file discovery.
+
+    Five of fifteen adapters push the exclusion down to their tool; the rest
+    have no flag for it, or read it from a config file in the audited tree that
+    D1 forbids us honouring. So the setting was true for Bandit and a polite
+    fiction for Checkov, RuboCop, Trivy, Semgrep and the others.
+
+    That is worse than cosmetic, because `exclude_patterns` is *also* the
+    denominator: `loc_under()` counts only non-excluded files while the
+    findings counted against them came from everywhere. A repository excluding
+    its vendored tree was scored on vendored findings over first-party lines —
+    the numerator and denominator measuring different repositories.
+
+    Pushing the exclusion into each adapter is still worth doing for speed and
+    for smaller tool output. Correctness is enforced here, once, where every
+    finding passes regardless of which adapter or SARIF import produced it.
+
+    Control findings are exempt: they carry the scan root as their path, and
+    dropping "bandit could not run" because the root matched a pattern would
+    turn a failed scanner back into a silent one — the defect this whole
+    project exists to prevent.
+    """
+    if not cfg.exclude_patterns:
+        return findings
+
+    root = target if target.is_dir() else target.parent
+    kept: list[Finding] = []
+    for finding in findings:
+        path = finding.file_path
+        is_control = path in (target, root)
+        if not is_control and is_excluded(path, root, cfg.exclude_patterns):
+            continue
+        kept.append(finding)
+    return kept
+
+
 def _run_scanners(args: argparse.Namespace, cfg: config_mod.Config, target: Path) -> _ScanResult:
     result = _ScanResult(findings=[], ran=[], unavailable=[], executions=[])
     for name in _selected_scanners(args, cfg):
-        sc_cfg = cfg.scanners.get(name) or config_mod.ScannerConfig()
         scanner = scanners.SCANNERS[name]()
         scanner.configure(target, cfg)
         available = scanner.is_available()
         if not available:
             result.unavailable.append(name)
         version = scanner.binary_version() if available else None
-        findings = scanner.run(target, cfg)
-        result.findings.extend(findings)
-        execution = classify_execution(
+        scan = scanner.scan(target, cfg)
+        result.findings.extend(scan.findings)
+        execution = execution_from_result(
             name,
-            findings,
+            scan,
             command=scanner.command if available else (),
             version=version,
-            scope=_scanner_scope(name, sc_cfg),
         )
         result.executions.append(execution)
         if execution.outcome is ScannerOutcome.COMPLETED:
@@ -486,13 +525,15 @@ def _ingest_sarif_imports(specs: list[str]) -> tuple[list[Finding], list[Scanner
 
 def _write_outputs(paths, findings, score, gate, coverage, ran, unavailable, verdict) -> None:
     if paths.markdown is not None:
-        renderers.write_markdown(findings, score, gate, paths.markdown, ran, unavailable, coverage)
+        renderers.write_markdown(
+            findings, score, gate, paths.markdown, ran, unavailable, coverage, verdict
+        )
     if paths.json_out is not None:
         renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict)
     if paths.sarif is not None:
         sarif.write(findings, paths.sarif, coverage)
     if paths.comment is not None:
-        renderers.write_pr_comment(findings, score, gate, paths.comment, coverage)
+        renderers.write_pr_comment(findings, score, gate, paths.comment, coverage, verdict)
     if paths.prompt is not None:
         remediation.write(findings, paths.prompt)
 
@@ -585,18 +626,6 @@ def _validate_scanner_config(cfg: config_mod.Config) -> None:
     unknown_required = sorted(required - known)
     if unknown_required:
         raise ValueError(f"unknown required scanner: {', '.join(unknown_required)}")
-
-
-def _scanner_scope(name: str, cfg: config_mod.ScannerConfig) -> str | None:
-    """Describe configured audit scope without changing scanner semantics."""
-    if name != "pip_audit":
-        return None
-    parts = [f"mode={cfg.mode}"]
-    if cfg.inputs:
-        parts.append(f"inputs={','.join(cfg.inputs)}")
-    if cfg.extra_args:
-        parts.append(f"extra_args={' '.join(cfg.extra_args)}")
-    return "; ".join(parts)
 
 
 if __name__ == "__main__":

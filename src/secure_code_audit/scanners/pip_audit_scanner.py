@@ -6,9 +6,10 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from secure_code_audit.config import Config
+from secure_code_audit.config import Config, ScannerConfig
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.git_tools import is_excluded
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 _MODES = {"auto", "requirements", "project", "locked", "environment"}
@@ -27,40 +28,48 @@ class PipAuditScanner(Scanner):
     default_category = Category.DEPENDENCIES
     install_hint = "pip install 'secure-code-agent[required-scanners]'"
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scope(self, config: ScannerConfig) -> str | None:
+        """What this run audited: the mode, its inputs, any extra arguments.
+
+        pip-audit's answer depends entirely on what it was pointed at, so a
+        report that omits this is not reproducible. The orchestrator used to
+        special-case this scanner by name to supply it.
+        """
+        parts = [f"mode={config.mode}"]
+        if config.inputs:
+            parts.append(f"inputs={','.join(config.inputs)}")
+        if config.extra_args:
+            parts.append(f"extra_args={' '.join(config.extra_args)}")
+        return "; ".join(parts)
+
+    def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
-            return [self._unavailable_finding(target)]
+            return self.unavailable(target)
 
         sc_cfg = self.cfg(config)
         if sc_cfg.mode not in _MODES:
-            return [
-                self._control_finding(
-                    target,
-                    "tool_error",
-                    f"unsupported pip_audit mode {sc_cfg.mode!r}; choose one of {sorted(_MODES)}",
-                )
-            ]
+            return self.failed(
+                target,
+                f"unsupported pip_audit mode {sc_cfg.mode!r}; choose one of {sorted(_MODES)}",
+            )
 
         try:
             audit_inputs = self._audit_inputs(target, config)
         except ValueError as exc:
-            return [self._control_finding(target, "tool_error", str(exc))]
+            return self.failed(target, str(exc))
         if not audit_inputs:
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.no_dependency_input",
-                    message="No supported Python dependency input found; pip-audit skipped.",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                    category=Category.DEPENDENCIES,
-                )
-            ]
+            return self.not_applicable(
+                target, "No supported Python dependency input found; pip-audit skipped."
+            )
 
         findings: list[Finding] = []
+        # Each input can fail independently, and a partial audit is not an
+        # audit. Failures are collected and the findings are kept. Timeouts are
+        # tracked apart from other failures so a slow input still reports
+        # TIMED_OUT — both fail coverage, but only one tells you to raise the
+        # timeout.
+        failures: list[str] = []
+        timeouts: list[str] = []
         for audit_input in audit_inputs:
             args = [*self.command, *audit_input.args, "--format=json", *sc_cfg.extra_args]
             result = self._exec(
@@ -70,45 +79,30 @@ class PipAuditScanner(Scanner):
                 allowed_exits=(0, 1),
             )
             if result.returncode == 124:
-                findings.append(
-                    self._control_finding(
-                        audit_input.path,
-                        "tool_timeout",
-                        f"pip-audit timed out on {audit_input.path}",
-                    )
-                )
+                timeouts.append(f"pip-audit timed out on {audit_input.path}")
                 continue
             if result.returncode not in (0, 1):
-                findings.append(
-                    self._control_finding(
-                        audit_input.path,
-                        "tool_error",
-                        f"pip-audit failed on {audit_input.path}: {result.stderr[:300]}",
-                    )
-                )
+                failures.append(f"pip-audit failed on {audit_input.path}: {result.stderr[:300]}")
                 continue
             if not result.stdout.strip():
-                findings.append(
-                    self._control_finding(
-                        audit_input.path,
-                        "tool_error",
-                        f"pip-audit emitted no JSON for {audit_input.path}",
-                    )
-                )
+                failures.append(f"pip-audit emitted no JSON for {audit_input.path}")
                 continue
             try:
                 payload = json.loads(result.stdout)
+                findings.extend(self._parse(payload, audit_input.path))
             except json.JSONDecodeError as exc:
-                findings.append(
-                    self._control_finding(
-                        audit_input.path,
-                        "parse_error",
-                        f"pip-audit JSON parse failure for {audit_input.path}: {exc}",
-                    )
-                )
+                failures.append(f"pip-audit JSON parse failure for {audit_input.path}: {exc}")
                 continue
-            findings.extend(self._parse(payload, audit_input.path))
-        return findings
+            except ValueError as exc:
+                # JSONDecodeError subclasses ValueError, so it is caught above
+                # first; this is _parse rejecting a shape it cannot read.
+                failures.append(f"{exc} (for {audit_input.path})")
+                continue
+        if failures:
+            return self.failed(target, "; ".join(failures + timeouts), findings=findings)
+        if timeouts:
+            return self.timed_out(target, "; ".join(timeouts))
+        return self.completed(findings, scope=self.scope(sc_cfg))
 
     def _audit_inputs(self, target: Path, config: Config) -> list[_AuditInput]:
         sc_cfg = self.cfg(config)
@@ -184,16 +178,18 @@ class PipAuditScanner(Scanner):
         return _AuditInput(path=path, args=args)
 
     def _parse(self, payload: object, source: Path) -> list[Finding]:
+        """Raises ValueError on a payload shape we cannot read.
+
+        The caller turns that into a recorded failure. Returning a control
+        finding from here would have made this function the thing that decides
+        the run's outcome, which is what `ScanResult` exists to stop.
+        """
         if isinstance(payload, dict):
             dependencies = payload.get("dependencies", [])
         elif isinstance(payload, list):
             dependencies = payload
         else:
-            return [
-                self._control_finding(
-                    source, "parse_error", "pip-audit JSON root must be an object or array"
-                )
-            ]
+            raise ValueError("pip-audit JSON root must be an object or array")
 
         findings: list[Finding] = []
         for dependency in dependencies:
@@ -218,16 +214,3 @@ class PipAuditScanner(Scanner):
                     )
                 )
         return findings
-
-    def _control_finding(self, source: Path, suffix: str, message: str) -> Finding:
-        return self._make_finding(
-            rule_id=f"{self.name}.{suffix}",
-            message=message,
-            file_path=source,
-            line_start=0,
-            line_end=None,
-            code_snippet=None,
-            severity=Severity.INFORMATIONAL,
-            confidence=Confidence.HIGH,
-            category=Category.DEPENDENCIES,
-        )

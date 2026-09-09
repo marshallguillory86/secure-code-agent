@@ -14,7 +14,7 @@ def _write(tmp_path, name, content):
 def _run(tmp_path):
     scanner = BuiltinRulesScanner()
     cfg = Config()
-    return scanner.run(tmp_path, cfg)
+    return scanner.scan(tmp_path, cfg).findings
 
 
 # --- eval / exec ----------------------------------------------------------

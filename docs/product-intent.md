@@ -111,9 +111,30 @@ here.
 
 2. **Orchestrate, do not reimplement.** We shell out to best-in-class scanners
    and normalize their output. *Consequence:* no custom AST analysis, and no
-   parallel ruleset competing with Semgrep or Bandit. The built-in regex rules
-   are a deliberately small, high-precision floor for repositories with no
-   scanners installed — not a SAST engine.
+   parallel ruleset competing with Semgrep or Bandit.
+
+   **Amended 2026-09-09 — the line is a bound, not a refusal.** This read as a
+   blanket ban on authoring rules, and we author rules: the built-in regex pack,
+   and the offline Semgrep ruleset that exists because the registry rules an
+   online run fetches are licensed for internal, non-competing, non-SaaS use
+   only. Left unqualified, the principle would have been violated the moment we
+   shipped either.
+
+   The bound that replaces the ban: **our ruleset is the offline floor, not a
+   competitor.** Online, the maintained registries do the job, because online is
+   where they are available. Offline, our rules answer the highest-consequence
+   patterns so that "no network" does not mean "no coverage."
+
+   That bound is enforceable because it is about rule *shape*: the offline set
+   takes **language primitives** — `shell=True`, `eval`, `pickle.loads`,
+   `hashlib.md5`, `verify=False` — and **refuses framework-specific rules**.
+   Primitives do not change and cost almost nothing to keep correct. Framework
+   rules rot with every framework release, and framework breadth is exactly what
+   the online path is for. See [D9](decisions.md).
+
+   Parity with a registry remains a non-goal. A one-maintainer project cannot
+   maintain thousands of rules, and a stale ruleset claiming to be a standard is
+   worse than a small one honestly labelled.
 
 3. **Never overstate coverage.** Findings and scanner coverage are separate
    axes and are reported separately. A scanner that was unavailable, timed out,

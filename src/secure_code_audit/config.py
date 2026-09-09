@@ -107,14 +107,22 @@ class Config:
     trust_target_config: bool = False
 
 
-def load(path: Path | str | None = None) -> Config:
+def load(path: Path | str | None = None, default_root: Path | None = None) -> Config:
     """Load config from path.
 
     An omitted default config is optional. An explicitly named config is an
     operator assertion and must exist so a typo cannot silently disable gates.
+
+    `default_root` is the audited tree. The default config is *that project's*
+    policy, so it is looked for there rather than in whatever directory the
+    shell happened to be in — auditing /tmp/other-project from this repository
+    used to apply this repository's required scanners to it, silently.
     """
     explicit = path is not None
-    p = Path(path) if explicit else DEFAULT_CONFIG_PATH
+    if explicit:
+        p = Path(path)
+    else:
+        p = (Path(default_root) / DEFAULT_CONFIG_PATH) if default_root else DEFAULT_CONFIG_PATH
     if not p.exists():
         if explicit:
             raise ValueError(f"configuration file does not exist: {p}")

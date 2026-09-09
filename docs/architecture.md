@@ -57,7 +57,7 @@ replacing.
 
 ## 2. Problem 1 — scanner outcomes are encoded in strings
 
-**Severity: high. Fix first.**
+**Severity: high. Fix first. — CLOSED 2026-09-09, see D13.**
 
 An adapter signals what happened to it by *naming a finding*:
 
@@ -123,6 +123,22 @@ name check in the orchestrator.
 Estimated cost: one focused session across twelve adapters. This is a
 prerequisite for cleanly fixing §3.
 
+**Done.** All fifteen adapters return `ScanResult`; the outcome constructors
+live on `Scanner` so the control finding is derived from the outcome rather
+than being the thing an outcome is inferred from. `classify_execution` is
+deleted — not deprecated — because a working string-parser left in the tree is
+an invitation to wire the next adapter into it. `_scanner_scope`'s name check
+is gone: adapters answer `scope()` for themselves. `tests/unit/test_scan_protocol.py`
+is the lint that blocks the class, including an AST check that fails any
+adapter hand-building a control finding.
+
+Two live defects fell out of the migration. `trufflehog` and `npm_audit` could
+return real findings *alongside* a control finding; the old classifier's early
+return then recorded `finding_count=0` for a run whose findings did reach the
+report, so the count and the report disagreed. And `pip_audit._parse` returned
+a control finding from a parsing helper, which made a leaf function the thing
+that decided the run's outcome. Both are structurally impossible now.
+
 ## 3. Problem 2 — every contract has two or more sources of truth
 
 **Severity: high. Fix second.**
@@ -136,7 +152,7 @@ in each case the copies have already drifted.
 | Config shape | [`config.py:99-118`](../src/secure_code_audit/config.py#L99-L118) hand validation (264 lines) **and** `secure-code-agent.schema.json`, not connected at runtime | The schema rejected its own `$schema` key; `require_scanners` minimum had to be enforced separately in both |
 | Score qualification when coverage is incomplete | Five sites: [`cli.py:453`](../src/secure_code_audit/cli.py#L453), [`renderers.py:35`](../src/secure_code_audit/renderers.py#L35), [`:169`](../src/secure_code_audit/renderers.py#L169), [`:348`](../src/secure_code_audit/renderers.py#L348), [`sarif.py:69`](../src/secure_code_audit/sarif.py#L69) | Each was implemented separately; the SARIF site was missed entirely on the first pass |
 | Agent guidance | `instructions.py::_BODY`, `skills/secure-code-agent/SKILL.md`, `skills/secure-code-agent/copilot/*.prompt.md`, `skills/secure-code-agent/agents/*.yaml`, `README.md`, `docs/` | The `--changed-only` deprecation updated four locations and missed two, leaving shipped agent instructions recommending a flag that exits 2 |
-| Packaging | `pyproject.toml:84` declares `package-data = ["data/*.json", "data/*.yaml"]` | `src/secure_code_audit/data/` does not exist |
+| Packaging | `pyproject.toml` `package-data` globs **and** the directory actually existing | The globs once matched nothing at all; now `test_the_offline_ruleset_is_declared_as_package_data` fails if a shipped data file is not matched by one |
 
 ### Fix
 
@@ -152,12 +168,23 @@ One source each.
 - **Agent guidance:** make `instructions.py` the source and generate `skills/`
   from it, or vice versa. Two hand-maintained copies of the same instructions
   will drift again.
+
+  **Partly closed by enforcement, 2026-09-09.** Generation is still the right
+  end state and is a larger change than it looks — these are different formats
+  for different consumers and the prose in each is shaped for its audience. But
+  the half that actually caused harm is now mechanical:
+  `tests/unit/test_agent_guidance.py` extracts every flag from every line in
+  the shipped guidance that invokes one of our console scripts, and fails if
+  the CLI would reject it. Invocation lines rather than all prose, so the docs
+  can still name another tool's flags — `--only-verified` is TruffleHog's. It
+  also fails if `--changed-only` is mentioned without saying it is reserved and
+  exits 2, which is the exact sentence that shipped wrong.
 - **Packaging:** delete the `package-data` line, or restore the `data/`
   directory if the standards map moves back to data files (see §5).
 
 ## 4. Problem 3 — no integration tests and no real scanner fixtures
 
-**Severity: high. Fix third — cheapest of the three.**
+**Severity: high. Fix third — cheapest of the three. — CLOSED 2026-09-09, see D14.**
 
 `tests/fixtures/` and `tests/integration/` **exist and are empty.**
 `CONTRIBUTING.md` mandates per-scanner fixtures ("at least one HIGH true
@@ -180,6 +207,24 @@ refreshed deliberately when a scanner is upgraded. Add the scoring-drift
 regression test that `CONTRIBUTING.md` already promises. This converts a whole
 class of "the upstream format changed" defect from a production surprise into a
 test failure.
+
+**Done, partially and explicitly so.** `tests/fixtures/scanner-output/` holds
+genuine output from njsscan, RuboCop, gitleaks, gosec, pip-audit and semgrep,
+captured against a deliberately-vulnerable tree with local paths rewritten and
+nothing else edited. `tests/integration/test_scanner_output_fixtures.py` drives
+each adapter against its real capture.
+
+Six of fifteen scanners are covered, because only tools installable on the
+capture host could produce real output — fabricating the rest would recreate
+the exact defect this fixes. The remainder are named in
+`SCANNERS_WITHOUT_A_REAL_CAPTURE` with the reason, and a test fails if that
+list drifts out of step with the directory, so the gap stays visible rather
+than becoming folklore.
+
+`tests/integration/test_scoring_drift.py` now exists. It pins the letter bands,
+the severity ordering, the worst-category rule, and the property that a perfect
+score sits beside failed coverage without either deriving from the other. It
+proves the scale is *stable*, not that it is *correct* — D5 is still open.
 
 ## 5. Problem 4 — the score's null state is "perfect"
 
@@ -243,16 +288,31 @@ it is a product decision, not a refactor.
 
 ## 7. Recommended sequence
 
-1. **`ScanResult` for adapters** (§2). Highest defect-elimination per hour, and
-   a prerequisite for §3.
-2. **Real scanner fixtures and the scoring-drift test** (§4). Cheapest of the
-   three; immediately catches upstream format drift.
-3. **Single `ScoreVerdict` view-model** (§3, row 2). Small, and it retires the
-   qualification-duplication class outright.
-4. **Generate the config schema from the dataclasses** (§3, row 1).
-5. **Decide the score model** (§5). Conversation before code.
-6. Resume feature work and defect fixing.
+1. ~~**`ScanResult` for adapters** (§2).~~ **Done 2026-09-09** (D13). Highest
+   defect-elimination per hour, and a prerequisite for §3.
+2. ~~**Real scanner fixtures and the scoring-drift test** (§4).~~ **Done
+   2026-09-09** (D14), for the six scanners installable on the capture host.
+3. ~~**Single `ScoreVerdict` view-model** (§3, row 2).~~ **Done 2026-09-09.**
+   `Verdict` existed but two renderers were never wired to it and kept a weaker
+   condition, so the markdown report and PR comment claimed grades the JSON
+   withheld. All outputs read the one verdict, and
+   `tests/integration/test_verdict_consistency.py` asserts they agree.
+4. ~~**Generate the config schema from the dataclasses** (§3, row 1).~~
+   **Reconsidered and closed by enforcement, 2026-09-09.** The schema is nested
+   where `Config` is flat, so generating either from the other needs a mapping
+   layer that would itself be a third source of truth.
+   `tests/unit/test_contract_sync.py` holds them in step instead.
+5. **Decide the score model** (§5). Conversation before code. **Still open.**
+6. **Calibrate the condition scale** (D5). Still open — the method is owed, and
+   `test_scoring_drift.py` pins the scale's *stability*, not its correctness.
+7. Resume feature work and defect fixing.
 
-Steps 1–3 are roughly one focused session each. Most defects traded during
-recent review cycles were downstream symptoms of §2 and §3; closing those two
-should end the pattern rather than continue it.
+Steps 1–4 are done as of 2026-09-09. Most defects traded during recent review
+cycles were downstream symptoms of §2 and §3, and closing them did end that
+pattern — the defects found since came from a different place entirely: the
+repository running its own gate in CI at the floor it declares, which surfaced
+four that no amount of reading the code would have.
+
+Steps 5 and 6 are the two open **decisions**, not defects. Both are about
+whether the number this tool reports means anything, and neither can be settled
+by a refactor.

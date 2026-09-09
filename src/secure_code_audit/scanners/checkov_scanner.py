@@ -15,8 +15,9 @@ from dataclasses import replace
 from pathlib import Path
 
 from secure_code_audit.config import Config
-from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.findings import Category
 from secure_code_audit.sarif import ingest as sarif_ingest
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 
@@ -27,9 +28,9 @@ class CheckovScanner(Scanner):
     default_category = Category.CONFIG_IAC
     install_hint = "pip install 'secure-code-agent[python-scanners]'"
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
-            return [self._unavailable_finding(target)]
+            return self.unavailable(target)
 
         sc_cfg = self.cfg(config)
         # Checkov writes to a directory and names the file itself.
@@ -53,31 +54,9 @@ class CheckovScanner(Scanner):
                 args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1, 2)
             )
             if r.returncode == 124:
-                return [
-                    self._make_finding(
-                        rule_id=f"{self.name}.tool_timeout",
-                        message=f"checkov timed out: {r.stderr[:200]}",
-                        file_path=target,
-                        line_start=0,
-                        line_end=None,
-                        code_snippet=None,
-                        severity=Severity.INFORMATIONAL,
-                        confidence=Confidence.HIGH,
-                    )
-                ]
+                return self.timed_out(target, f"checkov timed out: {r.stderr[:200]}")
             if r.returncode not in (0, 1, 2):
-                return [
-                    self._make_finding(
-                        rule_id=f"{self.name}.tool_error",
-                        message=f"checkov failed: {r.stderr[:300]}",
-                        file_path=target,
-                        line_start=0,
-                        line_end=None,
-                        code_snippet=None,
-                        severity=Severity.INFORMATIONAL,
-                        confidence=Confidence.HIGH,
-                    )
-                ]
+                return self.failed(target, f"checkov failed: {r.stderr[:300]}")
 
             # Checkov writes results.sarif into the output directory.
             sarif_path = tmpdir_path / "results_sarif.sarif"
@@ -86,20 +65,11 @@ class CheckovScanner(Scanner):
                 alt = tmpdir_path / "results.sarif"
                 sarif_path = alt if alt.exists() else sarif_path
             if not sarif_path.exists():
-                return [
-                    self._make_finding(
-                        rule_id=f"{self.name}.tool_error",
-                        message="checkov emitted no SARIF output",
-                        file_path=target,
-                        line_start=0,
-                        line_end=None,
-                        code_snippet=None,
-                        severity=Severity.INFORMATIONAL,
-                        confidence=Confidence.HIGH,
-                    )
-                ]
+                return self.failed(target, "checkov emitted no SARIF output")
 
             ingested = sarif_ingest(sarif_path, default_scanner="checkov")
             # All Checkov findings are config_iac by rule family. Preserve
             # the adapter identity after generic SARIF normalization.
-            return [replace(f, scanner="checkov", category=Category.CONFIG_IAC) for f in ingested]
+            return self.completed(
+                replace(f, scanner="checkov", category=Category.CONFIG_IAC) for f in ingested
+            )

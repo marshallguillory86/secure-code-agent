@@ -15,6 +15,7 @@ from pathlib import Path
 
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Confidence, Finding, Severity
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 
@@ -24,9 +25,9 @@ class BanditScanner(Scanner):
     python_module = "bandit"
     install_hint = "pip install 'secure-code-agent[required-scanners]'"
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
-            return [self._unavailable_finding(target)]
+            return self.unavailable(target)
 
         sc_cfg = self.cfg(config)
         args = [
@@ -53,14 +54,14 @@ class BanditScanner(Scanner):
             args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
         )
         if r.returncode == 124:
-            return [self._timeout_finding(target, r.stderr)]
+            return self.timed_out(target, f"bandit timed out: {r.stderr}")
         if not r.stdout.strip():
-            return [self._error_finding(target, "bandit emitted no output")]
+            return self.failed(target, "bandit emitted no output")
 
         try:
             payload = json.loads(r.stdout)
         except json.JSONDecodeError as e:
-            return [self._error_finding(target, f"bandit JSON parse failure: {e}")]
+            return self.failed(target, f"bandit JSON parse failure: {e}")
 
         findings: list[Finding] = []
         for result in payload.get("results", []):
@@ -79,7 +80,7 @@ class BanditScanner(Scanner):
                     confidence=Confidence.from_string(result.get("issue_confidence", "")),
                 )
             )
-        return findings
+        return self.completed(findings)
 
     @staticmethod
     def _bandit_excludes(target: Path, patterns: tuple[str, ...]) -> list[str]:
@@ -95,27 +96,3 @@ class BanditScanner(Scanner):
                 value += "/*"
             excludes.append(value)
         return excludes
-
-    def _timeout_finding(self, target: Path, stderr: str) -> Finding:
-        return self._make_finding(
-            rule_id=f"{self.name}.tool_timeout",
-            message=f"bandit timed out: {stderr}",
-            file_path=target,
-            line_start=0,
-            line_end=None,
-            code_snippet=None,
-            severity=Severity.INFORMATIONAL,
-            confidence=Confidence.HIGH,
-        )
-
-    def _error_finding(self, target: Path, message: str) -> Finding:
-        return self._make_finding(
-            rule_id=f"{self.name}.tool_error",
-            message=message,
-            file_path=target,
-            line_start=0,
-            line_end=None,
-            code_snippet=None,
-            severity=Severity.INFORMATIONAL,
-            confidence=Confidence.HIGH,
-        )

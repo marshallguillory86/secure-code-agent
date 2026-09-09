@@ -10,7 +10,8 @@ excluded one is opt-in. `gates.require_scanners: ["floor"]` requires it without
 enumerating it.
 
 **Floor, commit cadence** — evaluated on every run: `builtin_rules`, `bandit`,
-`semgrep`, `pip_audit`, `osv_scanner`, `gitleaks`, `checkov`, `trivy`.
+`semgrep`, `njsscan`, `rubocop`, `pip_audit`, `osv_scanner`, `gitleaks`,
+`checkov`, `trivy`.
 
 **Floor, repository cadence** — `scorecard`. It answers questions about the
 project rather than the change, and takes over half an hour, so it runs in
@@ -21,7 +22,15 @@ omitting it.
 **Opt-in** — `trufflehog` (duplicates gitleaks for detection; AGPL; live
 verification is the genuine gain), `hadolint` (overlaps checkov and trivy on
 Dockerfiles; GPL), `npm_audit` (osv_scanner covers the same advisories with
-fewer false positives and without needing Node).
+fewer false positives and without needing Node), `gosec` (the Go SAST, but it
+loads packages through `go list`, so reading a target means invoking that
+target's own toolchain — the MA ADR-012 boundary; enable it where Go is
+present).
+
+Why njsscan and RuboCop are in the floor and gosec is not: every floor tool
+parses source directly and needs only itself to run. See
+[D12](decisions.md#d12--the-coverage-check-run-for-the-other-four-languages)
+for the measurements behind all three.
 
 A floor tool with nothing to scan is `not_applicable` with a reason, never a
 coverage gap: requiring a Terraform scanner of a pure-Python repository would
@@ -48,7 +57,7 @@ Installable as extras, so the version is pinned alongside the agent:
 
 | Extra | Scanners | Command |
 | --- | --- | --- |
-| `required-scanners` | Bandit, pip-audit | `pip install 'secure-code-agent[required-scanners]'` |
+| `required-scanners` | Bandit, pip-audit, njsscan | `pip install 'secure-code-agent[required-scanners]'` |
 | `python-scanners` | the above plus Semgrep, Checkov | `pip install 'secure-code-agent[python-scanners]'` |
 
 `required-scanners` is pinned exactly because the default configuration lists
@@ -71,6 +80,8 @@ SARIF (see [SARIF import](#sarif-import)).
 | **Hadolint** | `brew install hadolint` | `hadolint/hadolint-action` |
 | **TruffleHog** | `brew install trufflehog` | `trufflesecurity/trufflehog` |
 | **npm audit** | install Node.js | any Node setup action |
+| **RuboCop** | `gem install rubocop` | any Ruby setup action |
+| **gosec** | `go install github.com/securego/gosec/v2/cmd/gosec@latest` | `securego/gosec` |
 
 Non-Homebrew hosts should take a pinned release archive from each project's
 GitHub releases rather than piping an installer script to a shell.
@@ -87,7 +98,7 @@ All Tier-1 scanners are wired and emit canonical findings.
 | **npm audit**         | `dependencies`         | `npm audit --json`                                               | JSON        | CWE-1104, OWASP A06                               |
 | **Gitleaks**          | `secrets`              | `gitleaks detect --no-banner --report-format=json --report-path=`| JSON        | CWE-798, OWASP A07                                |
 | **TruffleHog**        | `secrets`              | `trufflehog filesystem --json --no-update <path>`                | JSON Lines  | CWE-798, OWASP A07                                |
-| **eslint-plugin-security** | `code_vulnerabilities` | `eslint --no-eslintrc --plugin security --format=json ...`     | JSON        | CWE-89/79/22/78 (JS/TS)                           |
+| **njsscan**           | `code_vulnerabilities` | `njsscan --json <target>`                                        | JSON        | CWE-327/330/295/79/78 (JS/TS)                     |
 | **Built-in regex rules** | `multiple`           | Internal — no subprocess                                         | (in-proc)   | CWE-798, CWE-89, CWE-78, CWE-22, CWE-918          |
 | **SARIF import**      | `multiple`             | `--sarif-import path/to/file.sarif`                              | SARIF       | Whatever the upstream emitted                     |
 
@@ -103,6 +114,8 @@ All Tier-2 scanners are wired and emit canonical findings.
 | **OSV-Scanner**        | `dependencies`                            | `osv-scanner scan source --format=json --recursive <target>`       | JSON       | CWE-1104, OWASP A06                                     |
 | **TruffleHog**         | `secrets`                                 | `trufflehog filesystem --json --only-verified <target>`            | JSON Lines | CWE-798, OWASP A07                                      |
 | **OpenSSF Scorecard**  | `supply_chain`, `policy_docs`             | `scorecard --repo=<github-url> --format=json --show-details`       | JSON       | CWE-732, CWE-345, CWE-829, CWE-272 (per-check)          |
+| **RuboCop**            | `code_vulnerabilities`                    | `rubocop --only Security --format json --force-default-config`     | JSON       | CWE-95 (eval), CWE-502 (Marshal/YAML load)              |
+| **gosec**              | `code_vulnerabilities`                    | `gosec -fmt=json -no-fail <target>/...`                            | JSON       | CWE per rule (G1xx–G5xx), OWASP A02/A03                 |
 
 ### Per-scanner caveats (Tier 2)
 
@@ -177,9 +190,29 @@ class Scanner(Protocol):
 - `--severity-level low --confidence-level low` and we filter ourselves (Bandit's own filtering is too coarse for our scoring model).
 - Bandit's `B101 (assert_used)` is noisy in tests; the repository example excludes `tests/`. Consumers should make that choice explicitly in their own config.
 
+### njsscan
+- A Python package that carries its own rules, so a JavaScript repository can be scanned on a host with no Node runtime and no registry access.
+- Groups output by rule, not by finding: `nodejs` and `templates` each map a rule id to one object holding shared `metadata` and a `files` list of occurrences. The adapter flattens that to one finding per occurrence — otherwise the same defect in ten places reports as one.
+- Reports no per-finding confidence, so every finding is recorded MEDIUM rather than inventing a signal the tool never sent.
+- **What it does not cover.** Its `eval`, `child_process.exec` and DOM-XSS rules are taint rules gated on an Express handler shape — `function ($REQ, $RES, ...)` with a `$REQ.$QUERY` source — and are silent in a CLI script, a library or a Lambda handler. Its TLS rule matches only `NODE_TLS_REJECT_UNAUTHORIZED`. That residue is what the offline profile's four JavaScript rules cover (D12).
+
+### RuboCop
+- Invoked as `--only Security`. RuboCop is a style linter that ships a Security department; running it whole would bury three real findings under a thousand formatting opinions.
+- `--force-default-config` is deliberate and is D1: the audited tree's `.rubocop.yml` can disable cops and `require:` Ruby that RuboCop would then load and execute. A scanned repository does not get to choose what is found in it.
+- Most Security cops report severity `convention`, a linter's mildest level. The adapter maps it to MEDIUM: leaving it INFORMATIONAL would put `eval` in the report and out of the gate.
+- Brakeman is the tool people name first for Ruby and is not used here — it analyzes Rails applications and reports nothing on plain Ruby.
+
+### gosec
+- **It cannot read Go without Go.** gosec loads packages through `go list`; on a host with no toolchain it exits 1 having emitted well-formed JSON with `"Issues": []`, `"Stats": {"files": 0}` and the real failure recorded only under `"Golang errors"`. An adapter that parsed `Issues` would report a clean scan of a repository gosec never opened.
+- The adapter therefore treats package-load errors, and any run reporting zero files read, as a tool failure that fails required coverage. This is why gosec is opt-in rather than floor: analyzing a target means invoking that target's own build tooling, the boundary MA's ADR-012 draws for SpotBugs.
+- `-no-fail` is passed so that findings alone do not read as a crash; real failures are detected from the payload, not the exit status.
+
 ### Semgrep
 - `scanners.semgrep.online: true` (the default) uses `--config=auto`, the curated Registry pack. **This reaches the network.**
 - `scanners.semgrep.online: false` uses the ruleset shipped in the wheel at `secure_code_audit/data/semgrep-offline.yaml`. No registry fetch, no rule server.
+- The offline set is the profile `sca-offline`, cited in reports by id, version and digest — `sca-offline@1.0.0 (cff6cb1e…)` — so a finding names the rules that produced it and can be re-checked against the same baseline (D10).
+- It carries **20 rules across 5 languages** — JavaScript/TypeScript, Go, Ruby, Java, and the two Python patterns Bandit measurably misses. It deliberately does *not* cover Python broadly: Bandit is in the floor and is already offline, so duplicating it would be a parallel ruleset maintained for nothing (D11). Every rule declares a CWE, an OWASP bucket, a confidence and a version, and every rule is paired-tested: a fixture it must flag and a fixture it must not. CI runs both halves in a dedicated job.
+- **It refuses framework-specific rules by design** (D9). Framework rules rot with every framework release; framework breadth is what the online registry path is for. A rule naming a framework fails the build.
 - **The offline set is deliberately narrower than the Registry packs — it is not equivalent, and you should not read a clean offline run as equivalent to a clean `auto` run.** It is ten high-precision rules covering command injection, unsafe deserialization, weak hashes, disabled TLS verification, debug mode, `eval`, and DOM XSS, across Python and JavaScript/TypeScript. Every rule carries a CWE, and each is regression-tested to actually match its target pattern.
 - If the packaged ruleset is missing from an installation, offline Semgrep fails with a `tool_error` rather than falling back to anything that would reach the network.
 - We pass `--no-rewrite-rule-ids`. Semgrep otherwise prefixes rule ids with the config file's path, which would vary by install location and destabilize baseline fingerprints.

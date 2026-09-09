@@ -19,6 +19,7 @@ from typing import NamedTuple
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Confidence, Finding, Severity
 from secure_code_audit.git_tools import in_scope, is_excluded
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 
@@ -138,7 +139,7 @@ class BuiltinRulesScanner(Scanner):
 
         return f"builtin/{__version__}"
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scan(self, target: Path, config: Config) -> ScanResult:
         findings: list[Finding] = []
         for path in self._candidate_files(target, config):
             try:
@@ -164,7 +165,7 @@ class BuiltinRulesScanner(Scanner):
                             confidence=Confidence.MEDIUM,
                         )
                     )
-        return findings
+        return self.completed(findings)
 
     def _applies_to(self, path: Path, rule: _Rule) -> bool:
         name = path.name

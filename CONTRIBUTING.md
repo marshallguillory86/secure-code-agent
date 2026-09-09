@@ -8,7 +8,21 @@ This project is an **orchestrator + scoring + remediation-prompt layer**.
 It is NOT a SAST engine. PRs that propose:
 
 - writing a new AST analyzer in Python
-- shipping a parallel ruleset to Semgrep / Bandit / CodeQL
+- shipping a parallel ruleset to Semgrep / Bandit / CodeQL — meaning **rules
+  that duplicate detection a floor scanner already does**. Authoring rules for
+  a gap no floor scanner covers is not this, and is how the offline profile
+  exists at all; see [D11 and D12](docs/decisions.md). The test is measured,
+  not argued: `test_no_python_rule_duplicates_bandit`,
+  `test_no_javascript_rule_duplicates_njsscan` and
+  `test_no_ruby_rule_duplicates_rubocop` each run the tool and fail the build
+  on a rule flagging a line it already flags.
+
+  **Before writing a rule, run the check.** Name the language, install the
+  candidate FOSS tools, run them against the fixtures, and record the result.
+  A gap has to be proven, not asserted — D11 was written after nineteen Python
+  rules turned out to duplicate Bandit seventeen times, and D12 after the same
+  mistake was repeated by *asserting* that four other languages had no offline
+  tool. Two of them did.
 - adding a SaaS dashboard
 - adding telemetry
 
@@ -102,6 +116,13 @@ Built-in rules are deliberately small + high-precision. Each new rule:
 - Unit tests for everything except subprocess-shelling-out (mock those).
 - Integration tests for the SARIF emit/ingest roundtrip.
 - Regression tests for scoring drift (`tests/integration/test_scoring_drift.py`).
+- **A new adapter needs a real captured output fixture**, not only a mock.
+  Run the tool against a deliberately-vulnerable tree, commit the output under
+  `tests/fixtures/scanner-output/`, rewrite local paths, and edit nothing else.
+  Mock output tests the parser against what you believe the format is; that
+  belief has already been wrong twice (D14). If the tool cannot be installed,
+  add it to `SCANNERS_WITHOUT_A_REAL_CAPTURE` with the reason — a declared gap
+  is acceptable, an undeclared one is not, and a test enforces the difference.
 
 ## Commit messages
 

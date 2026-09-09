@@ -25,8 +25,9 @@ from dataclasses import replace
 from pathlib import Path
 
 from secure_code_audit.config import Config
-from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.sarif import ingest as sarif_ingest
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 
@@ -36,9 +37,9 @@ class TrivyScanner(Scanner):
     default_category = Category.CONFIG_IAC
     install_hint = "brew install trivy, or follow trivy.dev/latest/getting-started/installation"
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
-            return [self._unavailable_finding(target)]
+            return self.unavailable(target)
 
         sc_cfg = self.cfg(config)
         with tempfile.NamedTemporaryFile(suffix=".sarif", delete=False) as tmp:
@@ -64,49 +65,16 @@ class TrivyScanner(Scanner):
                 args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
             )
             if r.returncode == 124:
-                return [
-                    self._make_finding(
-                        rule_id=f"{self.name}.tool_timeout",
-                        message=f"trivy timed out: {r.stderr[:200]}",
-                        file_path=target,
-                        line_start=0,
-                        line_end=None,
-                        code_snippet=None,
-                        severity=Severity.INFORMATIONAL,
-                        confidence=Confidence.HIGH,
-                    )
-                ]
+                return self.timed_out(target, f"trivy timed out: {r.stderr[:200]}")
             if r.returncode not in (0, 1):
-                return [
-                    self._make_finding(
-                        rule_id=f"{self.name}.tool_error",
-                        message=f"trivy failed: {r.stderr[:300]}",
-                        file_path=target,
-                        line_start=0,
-                        line_end=None,
-                        code_snippet=None,
-                        severity=Severity.INFORMATIONAL,
-                        confidence=Confidence.HIGH,
-                    )
-                ]
+                return self.failed(target, f"trivy failed: {r.stderr[:300]}")
             if not sarif_path.exists() or sarif_path.stat().st_size == 0:
-                return [
-                    self._make_finding(
-                        rule_id=f"{self.name}.tool_error",
-                        message="trivy emitted no SARIF output",
-                        file_path=target,
-                        line_start=0,
-                        line_end=None,
-                        code_snippet=None,
-                        severity=Severity.INFORMATIONAL,
-                        confidence=Confidence.HIGH,
-                    )
-                ]
+                return self.failed(target, "trivy emitted no SARIF output")
 
             ingested = sarif_ingest(sarif_path, default_scanner="trivy")
             # Trivy tags its rules with a category prefix (CVE-, AVD-, etc.);
             # route them into the right Category bucket.
-            return [self._route_category(f) for f in ingested]
+            return self.completed(self._route_category(f) for f in ingested)
         finally:
             sarif_path.unlink(missing_ok=True)
 

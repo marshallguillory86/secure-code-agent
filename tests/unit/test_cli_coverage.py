@@ -4,10 +4,11 @@ from pathlib import Path
 from secure_code_audit import config as config_mod
 from secure_code_audit.cli import (
     _parse_sarif_import,
-    _scanner_scope,
     _under_root,
     main,
 )
+from secure_code_audit.scanners.bandit_scanner import BanditScanner
+from secure_code_audit.scanners.pip_audit_scanner import PipAuditScanner
 
 
 def _write_config(tmp_path, *, required: bool):
@@ -106,14 +107,20 @@ def test_repository_policy_paths_resolve_from_scan_root(tmp_path):
 
 
 def test_pip_audit_scope_discloses_bounded_inputs_and_flags():
+    """Scope is declared by the adapter, not inferred from its name.
+
+    The orchestrator used to carry `if name != "pip_audit": return None`,
+    because there was nowhere on an adapter to say what it covered
+    (architecture.md §2). Asking the adapter is the fix.
+    """
     scanner_config = config_mod.ScannerConfig(
         mode="requirements",
         inputs=["requirements-audit.txt"],
         extra_args=["--no-deps"],
     )
 
-    assert _scanner_scope("bandit", scanner_config) is None
-    assert _scanner_scope("pip_audit", scanner_config) == (
+    assert BanditScanner().scope(scanner_config) is None
+    assert PipAuditScanner().scope(scanner_config) == (
         "mode=requirements; inputs=requirements-audit.txt; extra_args=--no-deps"
     )
 
@@ -241,6 +248,7 @@ def test_sarif_import_name_prefix_is_split_from_paths_that_contain_equals(tmp_pa
 
 def _vulnerable_repo(tmp_path):
     """A target the built-in rules will flag HIGH (CWE-78)."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "vuln.py").write_text(
         "import subprocess\n\n\ndef run(user_input):\n    subprocess.run(user_input, shell=True)\n",
         encoding="utf-8",
@@ -367,3 +375,32 @@ def test_a_grade_is_issued_only_when_a_declared_scanner_set_actually_ran(tmp_pat
     assert payload["verified_grade"] == payload["letter"]
     assert payload["evidence_status"] == "complete"
     assert payload["evidence_reasons"] == []
+
+
+def test_the_default_config_belongs_to_the_target_not_the_shell(tmp_path, monkeypatch):
+    """§7: auditing another project used to apply *this* project's policy.
+
+    `config_mod.load` was called before the target was resolved, so the default
+    `secure-code-agent.json` came from the shell's working directory. Running
+    the audit from a repository with strict gates against an unrelated tree
+    silently enforced the wrong policy — and, read the other way, a tree with
+    its own config was audited without it.
+    """
+    caller = tmp_path / "caller"
+    caller.mkdir()
+    (caller / "secure-code-agent.json").write_text(
+        json.dumps({"gates": {"require_scanners": ["trivy"]}}), encoding="utf-8"
+    )
+    target = _vulnerable_repo(tmp_path / "target")
+    (target / "secure-code-agent.json").write_text(
+        json.dumps({"gates": {"fail_on_severity": ["critical"]}}), encoding="utf-8"
+    )
+    out = tmp_path / "report.json"
+
+    monkeypatch.chdir(caller)
+    main([str(target), "--only-scanners", "builtin_rules", "--json-output", str(out)])
+    payload = json.loads(out.read_text(encoding="utf-8"))
+
+    # The target's own policy, not the caller's.
+    assert payload["coverage"]["required"] == []
+    assert "trivy" not in json.dumps(payload["coverage"])

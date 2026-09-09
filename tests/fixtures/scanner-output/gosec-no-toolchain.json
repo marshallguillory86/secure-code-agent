@@ -1,0 +1,19 @@
+{
+	"Golang errors": {
+		"/repo": [
+			{
+				"line": 0,
+				"column": 0,
+				"error": "loading files from package \"/repo\": err: go command required, not found: exec: \"go\": executable file not found in $PATH: stderr: "
+			}
+		]
+	},
+	"Issues": [],
+	"Stats": {
+		"files": 0,
+		"lines": 0,
+		"nosec": 0,
+		"found": 0
+	},
+	"GosecVersion": "2.29.0"
+}

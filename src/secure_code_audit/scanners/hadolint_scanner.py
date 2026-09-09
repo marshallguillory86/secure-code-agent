@@ -20,6 +20,7 @@ from pathlib import Path
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.git_tools import is_excluded
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 # Hadolint rule ids whose semantics are security-relevant. The category
@@ -46,25 +47,13 @@ class HadolintScanner(Scanner):
     default_category = Category.CONFIG_IAC
     install_hint = "brew install hadolint, or a pinned release from github.com/hadolint/hadolint"
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
-            return [self._unavailable_finding(target)]
+            return self.unavailable(target)
 
         dockerfiles = self._find_dockerfiles(target, config.exclude_patterns)
         if not dockerfiles:
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.no_dockerfiles",
-                    message="No Dockerfiles found in scope; hadolint skipped.",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                    category=Category.CONFIG_IAC,
-                )
-            ]
+            return self.not_applicable(target, "No Dockerfiles found in scope; hadolint skipped.")
 
         sc_cfg = self.cfg(config)
         args = [*self.command, "--no-fail", "--format", "json"]
@@ -73,64 +62,20 @@ class HadolintScanner(Scanner):
 
         r = self._exec(args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0,))
         if r.returncode == 124:
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.tool_timeout",
-                    message=f"hadolint timed out: {r.stderr[:200]}",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                )
-            ]
+            return self.timed_out(target, f"hadolint timed out: {r.stderr[:200]}")
         if r.returncode != 0:
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.tool_error",
-                    message=f"hadolint failed: {r.stderr[:300]}",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                )
-            ]
+            return self.failed(target, f"hadolint failed: {r.stderr[:300]}")
         if not r.stdout.strip():
-            return []
+            return self.completed([])
 
         try:
             payload = json.loads(r.stdout)
         except json.JSONDecodeError as exc:
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.parse_error",
-                    message=f"hadolint JSON parse failure: {exc}",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                )
-            ]
+            return self.failed(target, f"hadolint JSON parse failure: {exc}")
         if not isinstance(payload, list):
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.parse_error",
-                    message="hadolint JSON root must be an array",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                )
-            ]
+            return self.failed(target, "hadolint JSON root must be an array")
 
-        return [self._parse_one(item) for item in payload if isinstance(item, dict)]
+        return self.completed(self._parse_one(item) for item in payload if isinstance(item, dict))
 
     def _find_dockerfiles(self, target: Path, excludes) -> list[Path]:
         out: list[Path] = []

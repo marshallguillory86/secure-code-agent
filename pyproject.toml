@@ -47,12 +47,18 @@ dependencies = [
 required-scanners = [
   "bandit==1.9.4",
   "pip-audit==2.10.1",
+  # njsscan is in the floor (D12) and is a Python package carrying its own
+  # rules, so a JavaScript repository can be scanned on a host with no Node.
+  # Pinned for the same reason as the rest: the floor is a claim about what
+  # ran, and an unpinned ruleset makes that claim unreproducible.
+  "njsscan==1.0.0",
 ]
 # The remaining Python-packaged scanners. Bounded rather than pinned because
 # they are optional; the coverage gate does not require them by default.
-# Scanners distributed as standalone binaries (gitleaks, hadolint, npm,
-# osv-scanner, scorecard, trivy, trufflehog) cannot be installed from PyPI —
-# see docs/scanners.md for their install commands and the SARIF-import route.
+# Scanners distributed as standalone binaries or through another language's
+# package manager (gitleaks, gosec, hadolint, npm, osv-scanner, rubocop,
+# scorecard, trivy, trufflehog) cannot be installed from PyPI — see
+# docs/scanners.md for their install commands and the SARIF-import route.
 python-scanners = [
   "secure-code-agent[required-scanners]",
   "semgrep>=1.172,<2",
@@ -92,7 +98,12 @@ target-version = "py310"
 # Ruff 0.16 formats Python blocks embedded in Markdown. Our docs use those
 # blocks illustratively — excerpted statements, aligned-comment schemas — and
 # reformatting them damages the documentation without improving any code.
-extend-exclude = ["**/*.md"]
+extend-exclude = [
+  "**/*.md",
+  # Scanner fixtures are deliberately vulnerable sample code. Linting them
+  # would demand we fix the very patterns the rules exist to detect.
+  "tests/fixtures/**",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "C4"]

@@ -1,8 +1,10 @@
 # v0.3.0 Release Blockers
 
-> Status: **open — do not tag v0.3.0.** Raised by hostile audit against
-> `a65527c`, 2026-08-10. All eight findings independently verified against the
-> source before being recorded here. None are fixed.
+> Status: **all eight closed, 2026-09-09.** Raised by hostile audit against
+> `a65527c`, 2026-08-10, and each independently verified against the source
+> before being recorded. The six release blockers closed in #12–#17; §7 and §8
+> closed after. Tagging is now gated on the release prerequisites at the foot
+> of this document, not on these findings.
 > Related: [`architecture.md`](architecture.md) for the structural causes,
 > [`product-intent.md`](product-intent.md) §4 for the success criteria these
 > violate.
@@ -19,23 +21,22 @@ Two of these (§3, §4) were introduced by the v0.3.0 SARIF-import work itself.
 
 ## Release boundary
 
-The minimum set that must close before `v0.3.0` is tagged:
+The minimum set that must close before `v0.3.0` is tagged. **All six are
+closed.**
 
-- [ ] **§1** — absent gate configuration cannot read as a passing gate
-- [x] **§2** — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage ([#13](https://github.com/marshallguillory86/secure-code-agent/issues/13))
 - [x] **§1** — absent gate configuration cannot read as a passing gate ([#12](https://github.com/marshallguillory86/secure-code-agent/issues/12))
-- [ ] **§2** — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage
-- [ ] **§3** — trust model for SARIF imports decided and enforced
-- [ ] **§4** — malformed SARIF contained as failed coverage, not a traceback
-- [ ] **§2** — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage
+- [x] **§2** — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage ([#13](https://github.com/marshallguillory86/secure-code-agent/issues/13))
 - [x] **§3** — trust model for SARIF imports decided and enforced ([#14](https://github.com/marshallguillory86/secure-code-agent/issues/14))
 - [x] **§4** — malformed SARIF contained as failed coverage, not a traceback ([#15](https://github.com/marshallguillory86/secure-code-agent/issues/15))
-- [ ] **§5** — offline Semgrep is genuinely offline
-- [x] **§6** — failed-coverage SARIF reaches Code Scanning ([#17](https://github.com/marshallguillory86/secure-code-agent/issues/17))
 - [x] **§5** — offline Semgrep is genuinely offline ([#16](https://github.com/marshallguillory86/secure-code-agent/issues/16))
-- [ ] **§6** — failed-coverage SARIF reaches Code Scanning
+- [x] **§6** — failed-coverage SARIF reaches Code Scanning ([#17](https://github.com/marshallguillory86/secure-code-agent/issues/17))
 
-§7 and §8 are not release blockers but should land in the same cycle.
+This list was duplicated — every row appearing twice, once ticked and once
+not — by a keep-both conflict resolution during a rebase. A checklist that
+says an item is both done and not done is worse than no checklist, and it
+survived several reviews because nobody reads a list they believe they wrote.
+
+§7 and §8 were not release blockers and landed in the same cycle. Both are closed.
 
 ---
 
@@ -224,6 +225,13 @@ the wrong security policy silently.
 **Bounded fix:** resolve the target first, then look for the default config
 under the target root.
 
+**Resolved.** `_prepare_audit` resolves the target before loading, and
+`config.load` takes a `default_root`. The default `secure-code-agent.json` is
+now the *audited project's* policy rather than whatever the shell was sitting
+in. This composes with D1 rather than fighting it: a default config found in
+the target is repository content, so it already cannot name executables from
+that tree.
+
 ## 8. Low — emitted SARIF declares a broken schema URL
 
 `sarif.py` emits a `$schema` pointing at an `oasis-tcs` path containing
@@ -236,6 +244,10 @@ schema, so the document shape is sound — only the declared locator is broken.
 
 **Bounded fix:** point `$schema` at the OASIS canonical URL.
 
+**Resolved.** Both URLs were checked rather than assumed: the `oasis-tcs` raw
+path returns 404, the OASIS canonical URL returns 200. The emitted `$schema`
+and the module's own docstring reference now use the canonical one.
+
 ---
 
 ## Sequencing note
@@ -247,3 +259,32 @@ outcomes inferred from weak signals (an empty file, an absent key, an absent
 fix. Closing these blockers tactically is correct for the release; doing the
 `ScanResult` refactor immediately afterward is what stops the class from
 regenerating.
+
+**The refactor was done, 2026-09-09** — see
+[D13](decisions.md#d13--adapters-state-their-outcome-nothing-infers-it-from-a-name).
+It found two more instances of the same class that tactical fixes had not
+reached: adapters returning real findings alongside a control finding, whose
+count was then recorded as zero while the findings still reached the report.
+
+---
+
+## v0.4.0 — defects found after these closed
+
+The v0.4.0 cycle's defects are recorded in [`CHANGELOG.md`](../CHANGELOG.md)
+rather than duplicated here, because this document is the audit of a specific
+commit and re-using it as a running list is how the checklist above got
+corrupted in the first place. Four of them are worth naming here because of
+where they came from: **the tool found them by auditing itself once the floor
+grew.**
+
+- `paths.exclude_patterns` was honoured by five of fifteen adapters, and was
+  simultaneously the LOC denominator — so findings from excluded paths were
+  scored against lines that were never counted.
+- Every tagged release would have failed at its own preflight: the release
+  workflow's install list fell behind the floor it is required to meet.
+- The markdown report and PR comment claimed verified grades the JSON withheld.
+- Reports named a category with zero findings as the worst one.
+
+None of these were reachable by reading the code alone. They surfaced because
+the repository runs its own gate in CI at the floor it declares, which is the
+argument for doing that at all.
