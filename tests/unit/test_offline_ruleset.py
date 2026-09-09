@@ -180,3 +180,101 @@ def test_a_changed_ruleset_changes_the_digest(tmp_path):
 
 def test_a_missing_ruleset_is_labelled_not_raised(tmp_path):
     assert ruleset.describe(tmp_path / "absent.yaml") is None
+
+
+def _bandit() -> list[str] | None:
+    found = shutil.which("bandit")
+    if found:
+        return [found]
+    try:
+        import bandit  # noqa: F401
+    except ImportError:
+        return None
+    return [sys.executable, "-m", "bandit"]
+
+
+@pytest.mark.skipif(_semgrep() is None or _bandit() is None, reason="needs both semgrep and bandit")
+def test_no_python_rule_duplicates_bandit(tmp_path):
+    """CONTRIBUTING has forbidden a parallel ruleset since the first commit.
+
+    An earlier revision of this profile carried nineteen Python rules;
+    seventeen duplicated Bandit, which is in the floor and is *already offline*
+    — so the "offline coverage" argument that justified them was wrong. This
+    test is that bound made enforceable: a Python rule flagging a line Bandit
+    already flags is a rule we are maintaining for nothing.
+
+    The gap this profile covers is the languages Bandit cannot read.
+    """
+    target = tmp_path / "tree"
+    target.mkdir()
+    for path in (FIXTURES / "positive").iterdir():
+        shutil.copy(path, target / path.name)
+
+    bandit_lines: set[int] = set()
+    result = subprocess.run(
+        [
+            *_bandit(),
+            "-r",
+            str(target),
+            "-f",
+            "json",
+            "-q",
+            "--severity-level",
+            "low",
+            "--confidence-level",
+            "low",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    if result.stdout:
+        bandit_lines = {r["line_number"] for r in json.loads(result.stdout)["results"]}
+
+    ours = subprocess.run(
+        [
+            *_semgrep(),
+            "--config",
+            str(offline_ruleset_path()),
+            "--no-rewrite-rule-ids",
+            "--metrics=off",
+            "--json",
+            "--quiet",
+            str(target),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    duplicated = {
+        finding["check_id"]
+        for finding in json.loads(ours.stdout)["results"]
+        if ".python." in finding["check_id"] and finding["start"]["line"] in bandit_lines
+    }
+
+    assert duplicated == set(), (
+        f"these Python rules duplicate Bandit, which is already in the floor "
+        f"and already offline: {sorted(duplicated)}"
+    )
+
+
+def test_the_profile_covers_languages_the_floor_cannot_read_offline():
+    """The justification for authoring rules at all, asserted.
+
+    Bandit covers Python offline. Nothing in the floor reads JavaScript, Go,
+    Ruby or Java without the network, so that is where these rules earn their
+    maintenance.
+    """
+    languages = {rule["id"].split(".")[2] for rule in _declared_rules()}
+
+    assert {"javascript", "go", "ruby", "java"} <= languages
+    # Python is allowed only for the gaps Bandit measurably leaves, and each
+    # such rule has to say which gap.
+    for rule in _declared_rules():
+        if rule["id"].split(".")[2] != "python":
+            continue
+        assert (rule.get("metadata") or {}).get("covers-gap"), (
+            f"{rule['id']} is a Python rule with no stated gap in Bandit's coverage"
+        )

@@ -1,68 +1,75 @@
 # secure-code-agent offline ruleset — profile `sca-offline`
 #
-# Shipped inside the wheel and used when `scanners.semgrep.online` is false.
+# Used when `scanners.semgrep.online` is false. Shipped inside the wheel.
 #
-# WHAT THIS IS. The offline floor: when there is no network and no registry,
-# these are the highest-consequence patterns you still get. It is deliberately
-# not parity with the Semgrep registry, and `docs/scanners.md` says so rather
-# than implying otherwise.
+# WHAT THIS IS. Cover for the languages the floor cannot see offline. Bandit is
+# in the floor, is Apache-2.0, and is already offline — it needs no network and
+# no registry — so Python is not the gap. Everything Bandit cannot read is:
+# JavaScript, TypeScript, Go, Ruby and Java have no offline SAST in the floor
+# at all, and that is what these rules are for.
 #
-# WHAT GOES IN. Language primitives only — `shell=True`, `eval`,
-# `pickle.loads`, `hashlib.md5`, `verify=False`. Constructs the language itself
-# provides, which do not change between releases and therefore cost almost
-# nothing to keep correct.
+# An earlier revision of this file carried nineteen Python rules. Seventeen of
+# them duplicated Bandit, which is exactly what `CONTRIBUTING.md` has forbidden
+# since the first commit — "shipping a parallel ruleset to Semgrep / Bandit /
+# CodeQL" — and the "offline floor" argument used to justify them does not
+# survive the observation that Bandit is itself offline. The two Python rules
+# that remain are the two Bandit measurably misses.
 #
-# WHAT STAYS OUT. Framework-specific rules — Django ORM internals, Express
-# middleware, Spring annotations. They rot with every framework release, and
-# framework breadth is exactly what the online registry path is for. A rule
-# that names a third-party framework API belongs there, not here. See D9.
+# WHAT GOES IN. Language primitives — constructs the language itself provides,
+# which do not change between releases and cost almost nothing to keep correct.
+# And only where no floor scanner already covers them.
 #
-# EVERY RULE CARRIES: a stable id, a version, a CWE, an OWASP bucket, and a
-# confidence. The mapping is the point — registry rules deliver CWEs
-# inconsistently, and a fully-mapped small set is worth more to a
-# standards-anchored tool than a partially-mapped large one.
+# WHAT STAYS OUT. Anything a floor scanner already finds, and anything
+# framework-specific: Django ORM internals, Express middleware, Rails helpers,
+# Spring annotations. Framework rules rot with every framework release, and
+# framework breadth is what the online registry path is for. Both bounds are
+# enforced by tests, not by review. See D9 and D11.
 #
-# EVERY RULE IS PAIRED-TESTED: a positive fixture it must flag and a negative
-# fixture it must not. Proving a rule fires is the easy half; proving it stays
-# quiet on safe code is where precision lives.
+# EVERY RULE CARRIES a stable id, a version, a CWE, an OWASP bucket and a
+# confidence — the mapping is the point, because registry rules deliver CWEs
+# inconsistently.
+#
+# EVERY RULE IS PAIRED-TESTED: a fixture it must flag and a fixture it must
+# not. Proving a rule fires is the easy half.
 rules:
-  # ----- CWE-78 · OS command injection ------------------------------------
-  - id: sca.offline.python.subprocess-shell-true
+  # =========================================================================
+  # Python — only what Bandit measurably misses. Everything else is Bandit's.
+  # =========================================================================
+  - id: sca.offline.python.debug-enabled
     message: >-
-      subprocess call with shell=True runs the command through a shell. Any
-      attacker-influenced element of the command becomes command injection.
-      Pass an argument list and leave shell=False.
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-78"
-      owasp: "A03:2021-Injection"
-      confidence: HIGH
-      version: "1.0.0"
-    pattern-either:
-      - pattern: subprocess.run(..., shell=True, ...)
-      - pattern: subprocess.Popen(..., shell=True, ...)
-      - pattern: subprocess.call(..., shell=True, ...)
-      - pattern: subprocess.check_call(..., shell=True, ...)
-      - pattern: subprocess.check_output(..., shell=True, ...)
-
-  - id: sca.offline.python.os-command-exec
-    message: >-
-      os.system() and os.popen() pass their argument to a shell. Use subprocess
-      with an argument list instead.
+      Running a development server with debug=True exposes an interactive
+      console and stack traces. Bandit's B201 only recognises Flask; this
+      catches the pattern on any server object.
     languages: [python]
     severity: WARNING
     metadata:
-      cwe: "CWE-78"
-      owasp: "A03:2021-Injection"
+      cwe: "CWE-489"
+      owasp: "A05:2021-Security Misconfiguration"
       confidence: MEDIUM
       version: "1.0.0"
-    pattern-either:
-      - pattern: os.system(...)
-      - pattern: os.popen(...)
-      - pattern: os.popen2(...)
-      - pattern: os.popen3(...)
+      covers-gap: "bandit B201 is Flask-specific and does not fire on a generic app.run(debug=True)"
+    pattern: $APP.run(..., debug=True, ...)
 
+  - id: sca.offline.python.ecb-mode-pycryptodome
+    message: >-
+      ECB mode leaks plaintext structure because identical blocks encrypt
+      identically. Use an authenticated mode such as GCM. Bandit's B305 sees
+      the `cryptography` spelling of this, not PyCryptodome's.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-327"
+      owasp: "A02:2021-Cryptographic Failures"
+      confidence: HIGH
+      version: "1.0.0"
+      covers-gap: "bandit B305 flags cryptography's modes.ECB but not AES.MODE_ECB"
+    pattern-either:
+      - pattern: $AES.new($K, $AES.MODE_ECB, ...)
+      - pattern: Crypto.Cipher.AES.new($K, Crypto.Cipher.AES.MODE_ECB, ...)
+
+  # =========================================================================
+  # JavaScript / TypeScript — no offline SAST in the floor reads these.
+  # =========================================================================
   - id: sca.offline.javascript.child-process-exec
     message: >-
       child_process.exec() runs its argument through a shell. Use execFile()
@@ -78,22 +85,6 @@ rules:
       - pattern: child_process.exec(...)
       - pattern: child_process.execSync(...)
       - pattern: cp.exec(...)
-
-  # ----- CWE-94 / CWE-95 · Code injection ---------------------------------
-  - id: sca.offline.python.eval-exec
-    message: >-
-      eval() and exec() execute their argument as code. If any part is
-      attacker-influenced this is code injection. Use a typed dispatch table.
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-95"
-      owasp: "A03:2021-Injection"
-      confidence: MEDIUM
-      version: "1.0.0"
-    pattern-either:
-      - pattern: eval($X, ...)
-      - pattern: exec($X, ...)
 
   - id: sca.offline.javascript.eval
     message: >-
@@ -124,77 +115,6 @@ rules:
       - pattern: setTimeout("...", ...)
       - pattern: setInterval("...", ...)
 
-  # ----- CWE-502 · Unsafe deserialization ---------------------------------
-  - id: sca.offline.python.pickle-load
-    message: >-
-      Deserializing with pickle executes arbitrary code from the payload. Use
-      JSON for data, or a signed envelope for trusted state transfer.
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-502"
-      owasp: "A08:2021-Software and Data Integrity Failures"
-      confidence: HIGH
-      version: "1.0.0"
-    pattern-either:
-      - pattern: pickle.load(...)
-      - pattern: pickle.loads(...)
-      - pattern: cPickle.load(...)
-      - pattern: cPickle.loads(...)
-      - pattern: dill.load(...)
-      - pattern: dill.loads(...)
-
-  - id: sca.offline.python.marshal-shelve-load
-    message: >-
-      marshal and shelve deserialize executable structures and are not safe on
-      untrusted input, for the same reason pickle is not.
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-502"
-      owasp: "A08:2021-Software and Data Integrity Failures"
-      confidence: MEDIUM
-      version: "1.0.0"
-    pattern-either:
-      - pattern: marshal.load(...)
-      - pattern: marshal.loads(...)
-      - pattern: shelve.open(...)
-
-  - id: sca.offline.python.yaml-unsafe-load
-    message: >-
-      yaml.load without SafeLoader can construct arbitrary Python objects.
-      Use yaml.safe_load().
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-502"
-      owasp: "A08:2021-Software and Data Integrity Failures"
-      confidence: HIGH
-      version: "1.0.0"
-    pattern-either:
-      - pattern: yaml.load($X)
-      - pattern: yaml.load($X, Loader=yaml.Loader)
-      - pattern: yaml.load($X, Loader=yaml.UnsafeLoader)
-      - pattern: yaml.unsafe_load(...)
-
-  # ----- CWE-327 / CWE-328 · Broken cryptography --------------------------
-  - id: sca.offline.python.weak-hash
-    message: >-
-      MD5 and SHA-1 are broken for security use. Use SHA-256 or better, and a
-      password KDF for passwords.
-    languages: [python]
-    severity: WARNING
-    metadata:
-      cwe: "CWE-327"
-      owasp: "A02:2021-Cryptographic Failures"
-      confidence: MEDIUM
-      version: "1.0.0"
-    pattern-either:
-      - pattern: hashlib.md5(...)
-      - pattern: hashlib.sha1(...)
-      - pattern: hashlib.new("md5", ...)
-      - pattern: hashlib.new("sha1", ...)
-
   - id: sca.offline.javascript.weak-hash
     message: >-
       MD5 and SHA-1 are broken for security use. Use SHA-256 or better.
@@ -209,59 +129,6 @@ rules:
       - pattern: crypto.createHash("md5")
       - pattern: crypto.createHash("sha1")
 
-  - id: sca.offline.python.weak-cipher
-    message: >-
-      DES, 3DES, RC4 and Blowfish are obsolete for confidentiality. Use AES-GCM
-      or ChaCha20-Poly1305.
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-327"
-      owasp: "A02:2021-Cryptographic Failures"
-      confidence: HIGH
-      version: "1.0.0"
-    pattern-either:
-      - pattern: Crypto.Cipher.DES.new(...)
-      - pattern: Crypto.Cipher.DES3.new(...)
-      - pattern: Crypto.Cipher.ARC4.new(...)
-      - pattern: Crypto.Cipher.Blowfish.new(...)
-      - pattern: cryptography.hazmat.primitives.ciphers.algorithms.TripleDES(...)
-      - pattern: cryptography.hazmat.primitives.ciphers.algorithms.ARC4(...)
-      - pattern: cryptography.hazmat.primitives.ciphers.algorithms.Blowfish(...)
-
-  - id: sca.offline.python.ecb-mode
-    message: >-
-      ECB mode leaks plaintext structure because identical blocks encrypt
-      identically. Use an authenticated mode such as GCM.
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-327"
-      owasp: "A02:2021-Cryptographic Failures"
-      confidence: HIGH
-      version: "1.0.0"
-    pattern-either:
-      - pattern: cryptography.hazmat.primitives.ciphers.modes.ECB(...)
-      - pattern: Crypto.Cipher.AES.new($K, Crypto.Cipher.AES.MODE_ECB, ...)
-
-  # ----- CWE-330 · Insufficiently random values ---------------------------
-  - id: sca.offline.python.weak-random
-    message: >-
-      random is a Mersenne Twister, not a CSPRNG, and its output is predictable
-      from observed values. Use the secrets module for tokens, keys and nonces.
-    languages: [python]
-    severity: WARNING
-    metadata:
-      cwe: "CWE-330"
-      owasp: "A02:2021-Cryptographic Failures"
-      confidence: LOW
-      version: "1.0.0"
-    pattern-either:
-      - pattern: random.random(...)
-      - pattern: random.randint(...)
-      - pattern: random.choice(...)
-      - pattern: random.randrange(...)
-
   - id: sca.offline.javascript.weak-random
     message: >-
       Math.random() is not cryptographically secure. Use crypto.randomBytes or
@@ -275,33 +142,10 @@ rules:
       version: "1.0.0"
     pattern: Math.random(...)
 
-  # ----- CWE-295 · Improper certificate validation ------------------------
-  - id: sca.offline.python.tls-verification-disabled
-    message: >-
-      TLS certificate verification is disabled, so the connection is open to
-      interception. Remove verify=False, and do not use an unverified context.
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-295"
-      owasp: "A02:2021-Cryptographic Failures"
-      confidence: HIGH
-      version: "1.0.0"
-    pattern-either:
-      - pattern: requests.get(..., verify=False, ...)
-      - pattern: requests.post(..., verify=False, ...)
-      - pattern: requests.put(..., verify=False, ...)
-      - pattern: requests.delete(..., verify=False, ...)
-      - pattern: requests.patch(..., verify=False, ...)
-      - pattern: requests.head(..., verify=False, ...)
-      - pattern: requests.request(..., verify=False, ...)
-      - pattern: requests.Session(...).get(..., verify=False, ...)
-      - pattern: ssl._create_unverified_context(...)
-
   - id: sca.offline.javascript.tls-verification-disabled
     message: >-
       Setting NODE_TLS_REJECT_UNAUTHORIZED to "0", or rejectUnauthorized to
-      false, disables certificate validation process-wide.
+      false, disables certificate validation.
     languages: [javascript, typescript]
     severity: ERROR
     metadata:
@@ -313,92 +157,6 @@ rules:
       - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
       - pattern: "{rejectUnauthorized: false}"
 
-  # ----- CWE-22 · Path traversal ------------------------------------------
-  - id: sca.offline.python.archive-extract-all
-    message: >-
-      extractall() on an untrusted archive writes wherever the entry names say,
-      including outside the destination (zip slip / tar slip). Validate each
-      member path, or pass a filter.
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-22"
-      owasp: "A01:2021-Broken Access Control"
-      confidence: MEDIUM
-      version: "1.0.0"
-    pattern-either:
-      - pattern: $Z.extractall(...)
-      - pattern: tarfile.open(...).extractall(...)
-      - pattern: zipfile.ZipFile(...).extractall(...)
-
-  # ----- CWE-611 · XML external entities ----------------------------------
-  - id: sca.offline.python.xml-external-entities
-    message: >-
-      This XML parser resolves external entities, which allows file disclosure
-      and SSRF from a crafted document. Use defusedxml.
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-611"
-      owasp: "A05:2021-Security Misconfiguration"
-      confidence: MEDIUM
-      version: "1.0.0"
-    pattern-either:
-      - pattern: lxml.etree.XMLParser(..., resolve_entities=True, ...)
-      - pattern: xml.dom.pulldom.parseString(...)
-      - pattern: xml.sax.make_parser(...)
-
-  # ----- CWE-377 · Insecure temporary file --------------------------------
-  - id: sca.offline.python.insecure-temp-file
-    message: >-
-      tempfile.mktemp() returns a name, not an open file, so anything can win
-      the race to create it. Use NamedTemporaryFile or mkstemp.
-    languages: [python]
-    severity: WARNING
-    metadata:
-      cwe: "CWE-377"
-      owasp: "A01:2021-Broken Access Control"
-      confidence: HIGH
-      version: "1.0.0"
-    pattern: tempfile.mktemp(...)
-
-  # ----- CWE-732 · Incorrect permission assignment ------------------------
-  - id: sca.offline.python.world-writable-permissions
-    message: >-
-      This grants write permission to every user on the host. Narrow the mode
-      to the owner, or the owner and group.
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-732"
-      owasp: "A01:2021-Broken Access Control"
-      confidence: HIGH
-      version: "1.0.0"
-    pattern-either:
-      - pattern: os.chmod(..., 0o777)
-      - pattern: os.chmod(..., 0o666)
-      - pattern: os.chmod(..., 0o722)
-      - pattern: os.umask(0)
-
-  # ----- CWE-89 · SQL injection -------------------------------------------
-  - id: sca.offline.python.sql-string-building
-    message: >-
-      This builds SQL by string interpolation, so any interpolated value can
-      change the statement's structure. Use parameterized queries.
-    languages: [python]
-    severity: ERROR
-    metadata:
-      cwe: "CWE-89"
-      owasp: "A03:2021-Injection"
-      confidence: MEDIUM
-      version: "1.0.0"
-    pattern-either:
-      - pattern: $CUR.execute(f"...", ...)
-      - pattern: $CUR.execute("..." % ..., ...)
-      - pattern: $CUR.execute("..." + $X, ...)
-      - pattern: $CUR.executemany(f"...", ...)
-
-  # ----- CWE-79 · Cross-site scripting ------------------------------------
   - id: sca.offline.javascript.html-sink-assignment
     message: >-
       Assigning to innerHTML or outerHTML, or calling document.write, renders
@@ -417,50 +175,230 @@ rules:
       - pattern: document.write(...)
       - pattern: document.writeln(...)
 
-  # ----- CWE-489 · Debug feature left enabled -----------------------------
-  - id: sca.offline.python.debug-enabled
+  # =========================================================================
+  # Go — gosec is not in the floor, so offline Go has no coverage at all.
+  # =========================================================================
+  - id: sca.offline.go.command-injection
     message: >-
-      Running with debug=True exposes an interactive console and stack traces.
-      Never enable it outside local development.
-    languages: [python]
-    severity: WARNING
+      Invoking a shell with a constructed command string makes any
+      attacker-influenced element command injection. Pass the program and its
+      arguments to exec.Command separately.
+    languages: [go]
+    severity: ERROR
     metadata:
-      cwe: "CWE-489"
-      owasp: "A05:2021-Security Misconfiguration"
+      cwe: "CWE-78"
+      owasp: "A03:2021-Injection"
       confidence: MEDIUM
       version: "1.0.0"
-    pattern: $APP.run(..., debug=True, ...)
+    pattern-either:
+      - pattern: exec.Command("sh", "-c", ...)
+      - pattern: exec.Command("bash", "-c", ...)
+      - pattern: exec.CommandContext($CTX, "sh", "-c", ...)
+      - pattern: exec.CommandContext($CTX, "bash", "-c", ...)
 
-  # ----- CWE-703 · Improper check of exceptional conditions ---------------
-  - id: sca.offline.python.assert-for-enforcement
+  - id: sca.offline.go.weak-hash
     message: >-
-      assert statements are removed when Python runs with -O, so a security
-      check written as an assert disappears in an optimized deployment. Raise
-      explicitly.
-    languages: [python]
+      MD5 and SHA-1 are broken for security use. Use SHA-256 or better.
+    languages: [go]
     severity: WARNING
     metadata:
-      cwe: "CWE-703"
-      owasp: "A04:2021-Insecure Design"
+      cwe: "CWE-327"
+      owasp: "A02:2021-Cryptographic Failures"
+      confidence: MEDIUM
+      version: "1.0.0"
+    pattern-either:
+      - pattern: md5.New()
+      - pattern: md5.Sum(...)
+      - pattern: sha1.New()
+      - pattern: sha1.Sum(...)
+
+  - id: sca.offline.go.weak-cipher
+    message: >-
+      DES and RC4 are obsolete for confidentiality. Use AES-GCM or
+      ChaCha20-Poly1305.
+    languages: [go]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-327"
+      owasp: "A02:2021-Cryptographic Failures"
+      confidence: HIGH
+      version: "1.0.0"
+    pattern-either:
+      - pattern: des.NewCipher(...)
+      - pattern: des.NewTripleDESCipher(...)
+      - pattern: rc4.NewCipher(...)
+
+  - id: sca.offline.go.tls-verification-disabled
+    message: >-
+      InsecureSkipVerify disables certificate validation, so the connection is
+      open to interception.
+    languages: [go]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-295"
+      owasp: "A02:2021-Cryptographic Failures"
+      confidence: HIGH
+      version: "1.0.0"
+    pattern: "InsecureSkipVerify: true"
+
+  - id: sca.offline.go.weak-random
+    message: >-
+      math/rand is deterministic and predictable. Use crypto/rand for tokens,
+      keys and nonces.
+    languages: [go]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-330"
+      owasp: "A02:2021-Cryptographic Failures"
       confidence: LOW
       version: "1.0.0"
     pattern-either:
-      - pattern: assert $X.is_authenticated, ...
-      - pattern: assert $X.is_admin, ...
-      - pattern: assert $USER == $OWNER, ...
+      - pattern: rand.Int()
+      - pattern: rand.Intn(...)
+      - pattern: rand.Float64()
 
-  # ----- CWE-1327 · Binding to an unrestricted address ---------------------
-  - id: sca.offline.python.bind-all-interfaces
+  # =========================================================================
+  # Ruby — Brakeman is not in the floor, so offline Ruby has no coverage.
+  # =========================================================================
+  - id: sca.offline.ruby.command-injection
     message: >-
-      Binding to 0.0.0.0 exposes the service on every interface, including ones
-      the host did not intend to serve. Bind to a specific address.
-    languages: [python]
-    severity: WARNING
+      These forms pass their argument to a shell. Use the multi-argument form
+      of system/exec, which does not.
+    languages: [ruby]
+    severity: ERROR
     metadata:
-      cwe: "CWE-1327"
-      owasp: "A05:2021-Security Misconfiguration"
-      confidence: LOW
+      cwe: "CWE-78"
+      owasp: "A03:2021-Injection"
+      confidence: MEDIUM
       version: "1.0.0"
     pattern-either:
-      - pattern: $S.bind(("0.0.0.0", ...))
-      - pattern: $APP.run(..., host="0.0.0.0", ...)
+      - pattern: Kernel.system("...#{...}...")
+      - pattern: system("...#{...}...")
+      - pattern: exec("...#{...}...")
+      - pattern: $X = `...`
+
+  - id: sca.offline.ruby.code-injection
+    message: >-
+      eval and its relatives execute their argument as code. If any part is
+      attacker-influenced this is code injection.
+    languages: [ruby]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-95"
+      owasp: "A03:2021-Injection"
+      confidence: MEDIUM
+      version: "1.0.0"
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: instance_eval(...)
+      - pattern: class_eval(...)
+
+  - id: sca.offline.ruby.unsafe-deserialization
+    message: >-
+      Marshal.load and YAML.load construct arbitrary objects from their input.
+      Use JSON, or YAML.safe_load.
+    languages: [ruby]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-502"
+      owasp: "A08:2021-Software and Data Integrity Failures"
+      confidence: HIGH
+      version: "1.0.0"
+    pattern-either:
+      - pattern: Marshal.load(...)
+      - pattern: YAML.load(...)
+
+  - id: sca.offline.ruby.weak-hash
+    message: >-
+      MD5 and SHA-1 are broken for security use. Use SHA-256 or better.
+    languages: [ruby]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-327"
+      owasp: "A02:2021-Cryptographic Failures"
+      confidence: MEDIUM
+      version: "1.0.0"
+    pattern-either:
+      - pattern: Digest::MD5.$M(...)
+      - pattern: Digest::SHA1.$M(...)
+
+  # =========================================================================
+  # Java — SpotBugs is not in the floor, so offline Java has no coverage.
+  # =========================================================================
+  - id: sca.offline.java.command-execution
+    message: >-
+      Runtime.exec() with a constructed string runs through the platform shell
+      handling. Pass a String[] of program and arguments.
+    languages: [java]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-78"
+      owasp: "A03:2021-Injection"
+      confidence: MEDIUM
+      version: "1.0.0"
+    # Only Runtime.exec. ProcessBuilder with a String[] of program and
+    # arguments is the *recommended fix*, and an earlier revision flagged it —
+    # a rule that reports the remediation as the defect trains people to
+    # ignore the rule.
+    pattern: Runtime.getRuntime().exec($CMD)
+
+  - id: sca.offline.java.unsafe-deserialization
+    message: >-
+      ObjectInputStream.readObject() instantiates whatever the stream names,
+      which is remote code execution on untrusted input.
+    languages: [java]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-502"
+      owasp: "A08:2021-Software and Data Integrity Failures"
+      confidence: HIGH
+      version: "1.0.0"
+    pattern: $OIS.readObject()
+
+  - id: sca.offline.java.weak-hash
+    message: >-
+      MD5 and SHA-1 are broken for security use. Use SHA-256 or better.
+    languages: [java]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-327"
+      owasp: "A02:2021-Cryptographic Failures"
+      confidence: MEDIUM
+      version: "1.0.0"
+    pattern-either:
+      - pattern: MessageDigest.getInstance("MD5")
+      - pattern: MessageDigest.getInstance("SHA1")
+      - pattern: MessageDigest.getInstance("SHA-1")
+
+  - id: sca.offline.java.weak-cipher
+    message: >-
+      DES and ECB mode are obsolete. Use AES in an authenticated mode such as
+      GCM.
+    languages: [java]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-327"
+      owasp: "A02:2021-Cryptographic Failures"
+      confidence: HIGH
+      version: "1.0.0"
+    # Matched on the algorithm string rather than by enumerating spellings:
+    # "DES", "DES/CBC/PKCS5Padding" and "AES/ECB/PKCS5Padding" are the same
+    # defect wearing three names.
+    patterns:
+      - pattern: Cipher.getInstance($ALG)
+      - metavariable-regex:
+          metavariable: $ALG
+          regex: (?i)"(des|desede|rc2|rc4|blowfish)[/"]|.*/ecb/
+
+  - id: sca.offline.java.weak-random
+    message: >-
+      java.util.Random is a linear congruential generator and is predictable.
+      Use SecureRandom for anything security-bearing.
+    languages: [java]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-330"
+      owasp: "A02:2021-Cryptographic Failures"
+      confidence: LOW
+      version: "1.0.0"
+    pattern: new Random(...)

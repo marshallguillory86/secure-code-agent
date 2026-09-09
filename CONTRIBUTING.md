@@ -8,7 +8,12 @@ This project is an **orchestrator + scoring + remediation-prompt layer**.
 It is NOT a SAST engine. PRs that propose:
 
 - writing a new AST analyzer in Python
-- shipping a parallel ruleset to Semgrep / Bandit / CodeQL
+- shipping a parallel ruleset to Semgrep / Bandit / CodeQL — meaning **rules
+  that duplicate detection a floor scanner already does**. Authoring rules for
+  a gap no floor scanner covers is not this, and is how the offline profile
+  exists at all; see [D11](docs/decisions.md). The test is measured, not
+  argued: `test_no_python_rule_duplicates_bandit` fails the build on a rule
+  flagging a line Bandit already flags.
 - adding a SaaS dashboard
 - adding telemetry
 

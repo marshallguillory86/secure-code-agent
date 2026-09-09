@@ -20,6 +20,8 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
 | D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
 | D9 | Our ruleset is the offline floor, bounded to language primitives | 2026-09-09 | Accepted |
+| D10 | Rules ship as a versioned, digest-identified profile | 2026-09-09 | Accepted |
+| D11 | Author a rule only where no floor scanner already covers it | 2026-09-09 | Accepted |
 
 ---
 
@@ -305,3 +307,54 @@ Someone editing the ruleset inside an installed wheel leaves the version saying
 whose pattern is broadened has changed meaning even with an unchanged id, and a
 report citing an unchanged version after that claims a comparison it cannot
 support.
+
+## D11 — Author a rule only where no floor scanner already covers it
+
+**Question.** `CONTRIBUTING.md` has forbidden "shipping a parallel ruleset to
+Semgrep / Bandit / CodeQL" since the first commit. Marshall asked whether that
+principle still made sense, since nobody remembered writing it.
+
+**It made more sense than we credited, and it had just been violated.** The
+principle's target was never rule-writing as such — it sits in a scope-creep
+list beside "writing a new AST analyzer", "SaaS dashboard" and "telemetry". Its
+target is **duplicating detection a scanner already does**, because then you
+have built a worse version of that scanner and now maintain it.
+
+**Measured, not argued.** Running Bandit against the profile's own fixture:
+
+| | |
+| --- | --- |
+| Python rules in the profile | 19 |
+| Fully or partly covered by Bandit | **17** |
+| Genuinely unique | 2 |
+
+Bandit found 23 distinct test types where the profile had 19 rules, including
+`B113 request_without_timeout`, which the profile did not cover at all.
+
+**Why the reasoning failed.** The rules were justified as "the offline floor".
+That argument does not survive the observation that **Bandit is itself
+offline** — Apache-2.0, no network, no registry. The offline/online framing was
+imported from the Semgrep Rules Licence problem, which is real, and applied to
+a language where a different tool had already solved it.
+
+**Decision.** Author a rule only where no floor scanner already covers it. In
+practice that means the profile covers what Bandit cannot read: JavaScript,
+TypeScript, Go, Ruby and Java have no offline SAST in the floor at all. Python
+is admitted only for gaps Bandit measurably leaves, and each such rule must
+declare the gap in a `covers-gap` metadata field.
+
+**Enforced, not remembered.** `test_no_python_rule_duplicates_bandit` runs both
+tools over the fixtures and fails on any Python rule flagging a line Bandit
+already flags. `test_the_profile_covers_languages_the_floor_cannot_read_offline`
+asserts the languages that justify the profile existing. A bound enforced only
+in review is not a bound — the same conclusion D9 reached, applied to the
+mistake D9 did not prevent.
+
+**Consequence.** The profile went from 26 rules to 23, and became more valuable:
+2 Python, 7 JavaScript/TypeScript, 5 Go, 4 Ruby, 5 Java. Smaller, no overlap,
+and every rule covering something nothing else in the floor can see.
+
+**A precision defect fell out of the same pass.** The Java command-execution
+rule flagged `new ProcessBuilder(new String[]{...})` — the *recommended fix* —
+as the defect. A rule that reports the remediation as the problem trains people
+to ignore the rule. It is now narrowed to `Runtime.exec`.

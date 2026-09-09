@@ -19,12 +19,21 @@ clear.
   evidence where the version is only an assertion — editing the ruleset inside
   an installed wheel leaves the version unchanged and the digest does not. See
   [D10](docs/decisions.md).
-- The profile grew from 10 rules to **26, across 15 CWEs**, all language
-  primitives. Every rule declares a CWE, an OWASP bucket, a confidence and a
-  version, and every rule is paired-tested: a fixture it must flag and a
-  fixture it must not. Proving a rule fires is the easy half. A dedicated CI
-  job runs both, because these tests skip where Semgrep is absent and a skip
-  nobody notices is how a ruleset rots.
+- The profile is **23 rules across 5 languages** — JavaScript/TypeScript, Go,
+  Ruby, Java, and the two Python patterns Bandit measurably misses. Every rule
+  declares a CWE, an OWASP bucket, a confidence and a version, and every rule
+  is paired-tested: a fixture it must flag and a fixture it must not. Proving a
+  rule fires is the easy half. A dedicated CI job runs both, because these
+  tests skip where Semgrep is absent and a skip nobody notices is how a ruleset
+  rots.
+- **The profile covers the languages the floor cannot read offline, not Python.**
+  An intermediate revision carried 19 Python rules; measured against Bandit, 17
+  of them duplicated it. Bandit is in the floor, is Apache-2.0, and is already
+  offline — so the "offline coverage" argument that justified them was simply
+  wrong, and `CONTRIBUTING.md` has forbidden a parallel ruleset since the first
+  commit. Nothing in the floor reads JavaScript, Go, Ruby or Java without the
+  network, and that is where these rules earn their maintenance. Enforced by
+  `test_no_python_rule_duplicates_bandit`. See [D11](docs/decisions.md).
 - `product-intent.md` §5 principle 2 amended. It read as an unqualified refusal
   to author rules, which we already violated twice over. The bound that
   replaces it: our ruleset is the offline floor, not a competitor — language
