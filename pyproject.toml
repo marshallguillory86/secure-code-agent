@@ -92,7 +92,12 @@ target-version = "py310"
 # Ruff 0.16 formats Python blocks embedded in Markdown. Our docs use those
 # blocks illustratively — excerpted statements, aligned-comment schemas — and
 # reformatting them damages the documentation without improving any code.
-extend-exclude = ["**/*.md"]
+extend-exclude = [
+  "**/*.md",
+  # Scanner fixtures are deliberately vulnerable sample code. Linting them
+  # would demand we fix the very patterns the rules exist to detect.
+  "tests/fixtures/**",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "C4"]

@@ -10,6 +10,27 @@ The version was bumped to 0.4.0 without an entry, so this section starts by
 existing. Do not tag until [`release-blockers.md`](docs/release-blockers.md) is
 clear.
 
+### Added
+
+- The offline Semgrep ruleset is now a **versioned profile**: `sca-offline`,
+  with a version and a SHA-256 digest of the shipped file, cited in scanner
+  provenance as `sca-offline@1.0.0 (cff6cb1e…)`. A finding can name the rules
+  that produced it and be re-checked against the same baseline. The digest is
+  evidence where the version is only an assertion — editing the ruleset inside
+  an installed wheel leaves the version unchanged and the digest does not. See
+  [D10](docs/decisions.md).
+- The profile grew from 10 rules to **26, across 15 CWEs**, all language
+  primitives. Every rule declares a CWE, an OWASP bucket, a confidence and a
+  version, and every rule is paired-tested: a fixture it must flag and a
+  fixture it must not. Proving a rule fires is the easy half. A dedicated CI
+  job runs both, because these tests skip where Semgrep is absent and a skip
+  nobody notices is how a ruleset rots.
+- `product-intent.md` §5 principle 2 amended. It read as an unqualified refusal
+  to author rules, which we already violated twice over. The bound that
+  replaces it: our ruleset is the offline floor, not a competitor — language
+  primitives in, framework rules out, enforced by a test rather than by review.
+  See [D9](docs/decisions.md).
+
 ### Security
 
 - **Repository-supplied configuration can no longer choose what the host

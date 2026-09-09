@@ -52,6 +52,27 @@ jobs:
       - name: Build wheel through pip
         run: python -m pip wheel . --no-deps --wheel-dir wheelhouse
 
+  ruleset:
+    name: Offline ruleset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # The paired-fixture tests skip without semgrep, and a skip nobody
+      # notices is how a ruleset rots. This job exists so they always run.
+      - name: Install project with the Semgrep engine
+        run: python -m pip install --disable-pip-version-check -e ".[dev,python-scanners]"
+
+      - name: Every rule fires, and none fires on safe code
+        run: python -m pytest tests/unit/test_offline_ruleset.py -v --no-header
+
   security:
     name: Required scanner coverage
     needs: test

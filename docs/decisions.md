@@ -19,6 +19,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
 | D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
 | D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
+| D9 | Our ruleset is the offline floor, bounded to language primitives | 2026-09-09 | Accepted |
 
 ---
 
@@ -238,3 +239,69 @@ that is the failure this project exists to remove.
 **Consequence.** Imported Scorecard coverage is `unverified` per D3: an
 artifact we did not watch being produced. That is the correct label, and it is
 visible in every output.
+
+## D9 — Our ruleset is the offline floor, bounded to language primitives
+
+**Question.** `product-intent.md` §5 principle 2 said *"no parallel ruleset
+competing with Semgrep or Bandit."* We ship two rulesets — the built-in regex
+pack and the offline Semgrep profile — so the principle was already violated
+the day it was written. Meanwhile `--config=auto` fetches registry rules under
+the Semgrep Rules Licence, which permits internal, non-competing, non-SaaS use
+only, and this project is arguably a competing security product.
+
+**Marshall's ruling (2026-09-09):** *"Our ruleset is the offline floor, not a
+competitor. Its job is: when there is no network and no registry, you still get
+the highest-consequence patterns."* Online, the maintained registries do the
+job, because online is where they are available.
+
+**Why an escape hatch was not available.** OpenGrep is a healthy LGPL-2.1 fork
+of the Semgrep engine, but `opengrep/opengrep-rules` — the permissively
+licensed rules fork — has six stars and was last touched in November 2025.
+There is no maintained, permissively licensed community ruleset to adopt, so
+authoring is the only path that resolves the licence question.
+
+**The bound, and why it is enforceable.** Maintenance cost is driven by rule
+*shape*, not rule count:
+
+- **Language primitives** — `shell=True`, `eval`, `pickle.loads`,
+  `hashlib.md5`, `verify=False` — are constructs the language itself provides.
+  They have not changed in a decade and will not. Sixty of them is an asset.
+- **Framework APIs** — Django ORM internals, Express middleware, Spring
+  annotations — rot with every framework release. That is where a funded rules
+  team earns its keep and where a one-maintainer project bleeds.
+
+So the offline profile takes primitives and **refuses framework rules**, and
+`test_the_offline_profile_refuses_framework_rules` fails the build on a rule
+that names one. A bound enforced only in review is not a bound.
+
+**What makes a small set worth having.** Not count. Every rule carries a CWE,
+an OWASP bucket, a confidence and a version, and every rule has a positive
+fixture it must flag *and* a negative fixture it must not. Registry rules
+deliver CWEs inconsistently — before this work every Semgrep finding arrived
+with no CWE at all — and a fully mapped 26-rule set is worth more to a
+standards-anchored tool than a partially mapped 3,000-rule one.
+
+**Parity remains a non-goal.** A stale ruleset claiming to be a standard is
+worse than a small one honestly labelled, and `docs/scanners.md` labels it.
+
+## D10 — Rules ship as a versioned, digest-identified profile
+
+**Question.** "Semgrep found three things" is not a claim anyone can check. A
+result is only reproducible if you can say which rules produced it, and re-run
+against the same baseline later.
+
+**Decision.** The offline rules are a **profile** with an id, a version and a
+digest, cited in scanner provenance as `sca-offline@1.0.0 (cff6cb1e5519)`.
+
+This is the STIG benchmark model: a named baseline, a release number, and rules
+that each carry their own version, so a finding can be cited and re-checked.
+
+**The digest is the part that is evidence.** A version is an assertion by
+whoever edited the file. A digest is computed from the bytes that actually ran.
+Someone editing the ruleset inside an installed wheel leaves the version saying
+1.0.0; the digest notices, and a test asserts it does.
+
+**Bump the version when rules are added, removed, or change meaning.** A rule
+whose pattern is broadened has changed meaning even with an unchanged id, and a
+report citing an unchanged version after that claims a comparison it cannot
+support.

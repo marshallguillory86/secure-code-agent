@@ -180,6 +180,9 @@ class Scanner(Protocol):
 ### Semgrep
 - `scanners.semgrep.online: true` (the default) uses `--config=auto`, the curated Registry pack. **This reaches the network.**
 - `scanners.semgrep.online: false` uses the ruleset shipped in the wheel at `secure_code_audit/data/semgrep-offline.yaml`. No registry fetch, no rule server.
+- The offline set is the profile `sca-offline`, cited in reports by id, version and digest — `sca-offline@1.0.0 (cff6cb1e…)` — so a finding names the rules that produced it and can be re-checked against the same baseline (D10).
+- It carries **26 rules across 15 CWEs**, all language primitives. Every rule declares a CWE, an OWASP bucket, a confidence and a version, and every rule is paired-tested: a fixture it must flag and a fixture it must not. CI runs both halves in a dedicated job.
+- **It refuses framework-specific rules by design** (D9). Framework rules rot with every framework release; framework breadth is what the online registry path is for. A rule naming a framework fails the build.
 - **The offline set is deliberately narrower than the Registry packs — it is not equivalent, and you should not read a clean offline run as equivalent to a clean `auto` run.** It is ten high-precision rules covering command injection, unsafe deserialization, weak hashes, disabled TLS verification, debug mode, `eval`, and DOM XSS, across Python and JavaScript/TypeScript. Every rule carries a CWE, and each is regression-tested to actually match its target pattern.
 - If the packaged ruleset is missing from an installation, offline Semgrep fails with a `tool_error` rather than falling back to anything that would reach the network.
 - We pass `--no-rewrite-rule-ids`. Semgrep otherwise prefixes rule ids with the config file's path, which would vary by install location and destabilize baseline fingerprints.

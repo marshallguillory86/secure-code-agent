@@ -589,6 +589,16 @@ def _validate_scanner_config(cfg: config_mod.Config) -> None:
 
 def _scanner_scope(name: str, cfg: config_mod.ScannerConfig) -> str | None:
     """Describe configured audit scope without changing scanner semantics."""
+    if name == "semgrep" and not cfg.online:
+        # Which rules produced the findings is part of the finding. Citing the
+        # profile by id, version and digest is what makes an offline run
+        # reproducible rather than merely repeatable.
+        from secure_code_audit import ruleset
+        from secure_code_audit.scanners.semgrep_scanner import offline_ruleset_path
+
+        path = offline_ruleset_path()
+        profile = ruleset.describe(path) if path else None
+        return f"offline profile {profile.cite()}" if profile else "offline profile unavailable"
     if name != "pip_audit":
         return None
     parts = [f"mode={cfg.mode}"]
