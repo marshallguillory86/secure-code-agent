@@ -113,46 +113,12 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install project and the Python-packaged floor scanners
-        run: python -m pip install --disable-pip-version-check -e ".[dev,python-scanners]"
-
-      # The floor (scanners/floor.py) is this project's declared minimum, and
-      # this repository is expected to meet it rather than grade itself with
-      # whatever happened to be installed. Versions are pinned so the audit
-      # stays reproducible; the agent never acquires these itself.
-      - name: Install the binary floor scanners
-        env:
-          GITLEAKS_VERSION: "8.30.1"
-          TRIVY_VERSION: "0.74.0"
-          OSV_VERSION: "2.5.1"
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.local/bin"
-          cd "$(mktemp -d)"
-
-          curl -sSfL -o gitleaks.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          tar -xzf gitleaks.tar.gz gitleaks && mv gitleaks "$HOME/.local/bin/"
-
-          curl -sSfL -o trivy.tar.gz \
-            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-          tar -xzf trivy.tar.gz trivy && mv trivy "$HOME/.local/bin/"
-
-          # osv-scanner's asset name carries no version, unlike the others.
-          curl -sSfL -o osv-scanner \
-            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
-          chmod +x osv-scanner && mv osv-scanner "$HOME/.local/bin/"
-
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      # RuboCop joined the floor in D12 and is a gem, not a binary release.
-      # Without it this repository grades itself on PARTIAL coverage, which is
-      # exactly the "scanned by whatever happened to be installed" the floor
-      # exists to prevent.
-      - name: Install RuboCop, the Ruby half of the floor
-        run: |
-          gem install --user-install --no-document rubocop -v 1.90.0
-          echo "$(ruby -e 'puts Gem.user_dir')/bin" >> "$GITHUB_PATH"
+      # One source for the floor install — see ./.github/actions/install-floor.
+      # The list used to live here and nowhere else, so when the floor grew
+      # the release workflow silently fell behind it and every tagged
+      # release would have failed its own preflight.
+      - name: Install the scanner floor
+        uses: ./.github/actions/install-floor
 
       - name: Verify the required scanner toolchain resolves
         run: secure-code-agent --config secure-code-agent.json --preflight

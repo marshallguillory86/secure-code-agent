@@ -25,7 +25,7 @@ from secure_code_audit import (
 from secure_code_audit import baseline as baseline_mod
 from secure_code_audit import config as config_mod
 from secure_code_audit.findings import Category, Finding, Severity
-from secure_code_audit.git_tools import find_repo_root, loc_under
+from secure_code_audit.git_tools import find_repo_root, is_excluded, loc_under
 from secure_code_audit.scanner_status import (
     ScannerExecution,
     ScannerOutcome,
@@ -251,6 +251,9 @@ def _do_audit(args: argparse.Namespace) -> int:
     all_findings.extend(imported)
     executions.extend(imported_executions)
 
+    # ----- scan scope, enforced once -----
+    all_findings = _drop_excluded(all_findings, target, cfg)
+
     # ----- overrides from config -----
     all_findings = _apply_overrides(all_findings, cfg)
 
@@ -433,6 +436,43 @@ def _selected_scanners(args: argparse.Namespace, cfg: config_mod.Config) -> list
         for name in scanners.SCANNERS
         if not (only and name not in only) and name not in skip and _scanner_enabled(cfg, name)
     ]
+
+
+def _drop_excluded(findings: list[Finding], target: Path, cfg: config_mod.Config) -> list[Finding]:
+    """Enforce `paths.exclude_patterns` on findings, not just on file discovery.
+
+    Five of fifteen adapters push the exclusion down to their tool; the rest
+    have no flag for it, or read it from a config file in the audited tree that
+    D1 forbids us honouring. So the setting was true for Bandit and a polite
+    fiction for Checkov, RuboCop, Trivy, Semgrep and the others.
+
+    That is worse than cosmetic, because `exclude_patterns` is *also* the
+    denominator: `loc_under()` counts only non-excluded files while the
+    findings counted against them came from everywhere. A repository excluding
+    its vendored tree was scored on vendored findings over first-party lines —
+    the numerator and denominator measuring different repositories.
+
+    Pushing the exclusion into each adapter is still worth doing for speed and
+    for smaller tool output. Correctness is enforced here, once, where every
+    finding passes regardless of which adapter or SARIF import produced it.
+
+    Control findings are exempt: they carry the scan root as their path, and
+    dropping "bandit could not run" because the root matched a pattern would
+    turn a failed scanner back into a silent one — the defect this whole
+    project exists to prevent.
+    """
+    if not cfg.exclude_patterns:
+        return findings
+
+    root = target if target.is_dir() else target.parent
+    kept: list[Finding] = []
+    for finding in findings:
+        path = finding.file_path
+        is_control = path in (target, root)
+        if not is_control and is_excluded(path, root, cfg.exclude_patterns):
+            continue
+        kept.append(finding)
+    return kept
 
 
 def _run_scanners(args: argparse.Namespace, cfg: config_mod.Config, target: Path) -> _ScanResult:

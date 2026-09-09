@@ -200,6 +200,37 @@ class ScoreReport:
         return rows
 
 
+#: A category with nothing against it grades here, so nothing below this
+#: ceiling means nothing actually drove the grade down.
+_PERFECT_GRADE = 5.0
+
+
+def _worst_category(
+    per_category: dict[Category, float],
+    per_category_count: dict[Category, int],
+) -> Category | None:
+    """The category that actually drove the grade, or None if none did.
+
+    This was `min()` over the grade dict, which returns the first key in enum
+    order on a tie. Every category grades 5.0 when nothing counts against it,
+    so a repository whose findings were all informational reported
+    *"worst category: secrets"* while holding zero secrets findings — the first
+    member of the enum, named as the problem. Sending an operator to audit a
+    clean category is worse than saying nothing.
+
+    Ties below the ceiling are real, and enum order is still the wrong
+    tie-break: between two categories at the same grade, the one carrying more
+    findings is the more useful thing to look at first.
+    """
+    if not per_category:
+        return None
+    lowest = min(per_category.values())
+    if lowest >= _PERFECT_GRADE:
+        return None
+    tied = [category for category, grade in per_category.items() if grade == lowest]
+    return max(tied, key=lambda category: per_category_count.get(category, 0))
+
+
 def score(findings: Iterable[Finding], loc_scanned: int) -> ScoreReport:
     findings = list(findings)
     per_category: dict[Category, float] = {}
@@ -216,7 +247,7 @@ def score(findings: Iterable[Finding], loc_scanned: int) -> ScoreReport:
         if not f.suppressed:
             per_severity_count[f.severity] += 1
 
-    worst_category = min(per_category.items(), key=lambda kv: kv[1])[0] if findings else None
+    worst_category = _worst_category(per_category, per_category_count)
 
     overall = min(per_category.values()) if per_category else 5.0
     return ScoreReport(
