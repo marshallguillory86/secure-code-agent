@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 from abc import ABC, abstractmethod
+from dataclasses import replace
 from pathlib import Path
 
 from secure_code_audit.config import Config, is_within, scanner_cfg, target_executables_allowed
@@ -30,6 +31,10 @@ class Scanner(ABC):
     # How an operator obtains this scanner. Surfaced in the unavailable
     # finding and in --preflight. The agent never installs anything itself.
     install_hint: str = ""
+    #: Wall clock this adapter needs. Scanners that query a remote API are
+    #: legitimately slower than ones reading a file tree, and an operator
+    #: should not have to discover that from a timeout.
+    default_timeout_seconds: int = 600
 
     # ----- availability ----------------------------------------------------
 
@@ -96,6 +101,11 @@ class Scanner(ABC):
                 timeout=10,
             )
         except (FileNotFoundError, subprocess.TimeoutExpired):
+            return None
+        # A failed probe is not a version. Reporting stderr here put
+        # "Error: unknown flag: --version" in the version column of a report
+        # that was otherwise claiming the scanner had run fine.
+        if r.returncode != 0:
             return None
         out = (r.stdout or r.stderr or "").strip().splitlines()
         return out[0] if out else None
@@ -288,8 +298,11 @@ class Scanner(ABC):
     # ----- shared utility -------------------------------------------------
 
     def cfg(self, config: Config) -> ScannerConfig:
-        """Convenience accessor."""
-        return scanner_cfg(config, self.name)
+        """Per-scanner config, with this adapter's own timeout default filled in."""
+        resolved = scanner_cfg(config, self.name)
+        if resolved.timeout_seconds is None:
+            resolved = replace(resolved, timeout_seconds=self.default_timeout_seconds)
+        return resolved
 
 
 # Re-export so the registry import in __init__.py is clean.

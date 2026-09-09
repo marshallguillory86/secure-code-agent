@@ -11,6 +11,7 @@ from pathlib import Path
 from secure_code_audit import __version__
 from secure_code_audit.findings import Finding, Severity
 from secure_code_audit.scanner_status import CoverageReport
+from secure_code_audit.scanners import floor
 from secure_code_audit.scoring import GateResult, ScoreReport, Verdict
 from secure_code_audit.standards import cwe_url, owasp_label
 
@@ -222,6 +223,11 @@ def _scanners_section(
                 f"{', '.join(coverage.unverified)}"
             )
     out.append(f"- Run: {', '.join(scanners_run) if scanners_run else '_none_'}")
+    if floor.REPOSITORY_CADENCE_NAMES:
+        out.append(
+            f"- Deferred (repository cadence, supplied by SARIF import): "
+            f"{', '.join(floor.REPOSITORY_CADENCE_NAMES)}"
+        )
     if scanners_unavailable:
         out.append(f"- Skipped (binary not on PATH): {', '.join(scanners_unavailable)}")
     if coverage is not None and coverage.executions:

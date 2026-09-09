@@ -2,10 +2,28 @@
   "$schema": "./secure-code-agent.schema.json",
   "version": 1,
   "paths": {
-    "include_extensions": [".py", ".js", ".jsx", ".ts", ".tsx", ".sh", ".yaml", ".yml", ".json", "Dockerfile"],
-    "exclude_patterns":   [
-      ".git/", "node_modules/", ".venv/", "venv/", "dist/", "build/",
-      "**/__pycache__/", "**/*.min.js", "**/*.lock",
+    "include_extensions": [
+      ".py",
+      ".js",
+      ".jsx",
+      ".ts",
+      ".tsx",
+      ".sh",
+      ".yaml",
+      ".yml",
+      ".json",
+      "Dockerfile"
+    ],
+    "exclude_patterns": [
+      ".git/",
+      "node_modules/",
+      ".venv/",
+      "venv/",
+      "dist/",
+      "build/",
+      "**/__pycache__/",
+      "**/*.min.js",
+      "**/*.lock",
       "tests/",
       "src/secure_code_audit/scanners/builtin_rules.py",
       "src/secure_code_audit/standards.py",
@@ -16,34 +34,38 @@
     ]
   },
   "scanners": {
-    "bandit":          { "enabled": true,  "timeout_seconds": 600 },
-    "semgrep":         { "enabled": false },
-    "pip_audit":       {
+    "pip_audit": {
       "enabled": true,
       "timeout_seconds": 300,
       "mode": "requirements",
-      "inputs": ["requirements-audit.txt"],
-      "extra_args": ["--no-deps"]
+      "inputs": [
+        "requirements-audit.txt"
+      ],
+      "extra_args": [
+        "--no-deps"
+      ]
     },
-    "npm_audit":       { "enabled": false },
-    "gitleaks":        { "enabled": false },
-    "checkov":         { "enabled": false },
-    "hadolint":        { "enabled": false },
-    "osv_scanner":     { "enabled": false },
-    "scorecard":       { "enabled": false },
-    "trivy":           { "enabled": false },
-    "trufflehog":      { "enabled": false },
-    "builtin_rules":   { "enabled": true }
+    "bandit": {
+      "enabled": true,
+      "timeout_seconds": 600
+    }
   },
   "gates": {
-    "fail_on_severity": ["critical", "high"],
-    "fail_on_category": ["secrets"],
-    "fail_on_new":      true,
-    "min_score":        4.0,
-    "require_scanners": ["builtin_rules", "bandit", "pip_audit"],
+    "fail_on_severity": [
+      "critical",
+      "high"
+    ],
+    "fail_on_category": [
+      "secrets"
+    ],
+    "fail_on_new": true,
+    "min_score": 4.0,
+    "require_scanners": [
+      "floor"
+    ],
     "max_unsuppressed": {
       "critical": 0,
-      "high":     0
+      "high": 0
     }
   }
 }

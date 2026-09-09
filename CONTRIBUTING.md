@@ -33,9 +33,41 @@ their install commands in [`docs/scanners.md`](docs/scanners.md).
 The bar is high. Each new scanner must:
 
 1. Have a documented JSON or SARIF output mode.
-2. Be MIT/Apache-2.0/BSD licensed (no GPL — license-surface contamination).
+2. Satisfy the licence criteria below.
 3. Cover a category not already well-covered, OR materially raise precision
-   in an existing category.
+   in an existing category. Where two tools answer the same question, the
+   better one joins the floor and the other becomes opt-in with the reason it
+   survived at all — see [`src/secure_code_audit/scanners/floor.py`](src/secure_code_audit/scanners/floor.py).
+
+### Licence criteria
+
+This rule used to read *"MIT/Apache-2.0/BSD licensed (no GPL — license-surface
+contamination)"*. That was inherited from library-consuming projects and does
+not describe this one, which links to no scanner, vendors no scanner source,
+and distributes no scanner binary. Two shipped tools violated it while causing
+no actual problem, which is how a rule teaches people to ignore rules. It is
+replaced by three criteria keyed to **mechanism** rather than licence name.
+
+1. **Any OSI-approved licence is acceptable for a tool we invoke as a
+   subprocess and never distribute.** Copyleft reaches a combined work through
+   linking, vendoring or bundling. Separate processes exchanging arguments and
+   JSON are separate programs, and running `hadolint` no more makes this tool
+   GPL than running `git` does. **Linking, vendoring or bundling still requires
+   a permissive licence** — and if this project ever ships an image with
+   scanners baked in, that image carries their obligations.
+2. **AGPL tools are optional and off by default.** Not a legal judgement:
+   AGPL §13 can create a source-offer obligation for anyone running this as a
+   hosted service, and that is their decision to make rather than one we make
+   silently on their behalf. Plenty of adopters also exclude AGPL by policy.
+3. **Rule content and data are licensed separately from engines, and must be
+   checked separately.** Semgrep is the live example — the engine is LGPL-2.1,
+   but Semgrep-maintained registry rules have been under the Semgrep Rules
+   Licence since December 2024, restricted to internal, non-competing,
+   non-SaaS use. An engine's licence tells you nothing about the rules it
+   fetches, and criterion 1 would have waved this through.
+
+Record the licence of any new tool in `floor.py` alongside its rationale. See
+[D6](docs/decisions.md).
 
 Steps:
 
