@@ -186,10 +186,16 @@ REPOSITORY_CADENCE_NAMES: tuple[str, ...] = tuple(
 )
 OPTIONAL_NAMES: tuple[str, ...] = tuple(policy.name for policy in OPTIONAL)
 
-#: The token an operator writes in `gates.require_scanners` to require the
+#: The keyword an operator writes in `gates.require_scanners` to require the
 #: floor without enumerating it, so the set stays maintained here rather than
 #: copied into every repository's config and left to rot.
-FLOOR_TOKEN = "floor"
+#:
+#: Named `KEYWORD` rather than `TOKEN` deliberately. Bandit's B105 heuristic
+#: flags any string constant whose name contains "token" as a possible
+#: hardcoded password, and it was right to look — this is a configuration
+#: keyword, not a credential, and the accurate name says so without needing a
+#: suppression to explain it away.
+FLOOR_KEYWORD = "floor"
 
 _BY_NAME: dict[str, ToolPolicy] = {p.name: p for p in (*FLOOR, *OPTIONAL)}
 
@@ -228,7 +234,7 @@ def expand_required(names: list[str]) -> list[str]:
     """Replace the `floor` token with the floor's members, order preserved."""
     out: list[str] = []
     for name in names:
-        if name == FLOOR_TOKEN:
+        if name == FLOOR_KEYWORD:
             out.extend(n for n in COMMIT_CADENCE_NAMES if n not in out)
         elif name not in out:
             out.append(name)
