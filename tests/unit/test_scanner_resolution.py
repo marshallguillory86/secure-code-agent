@@ -229,3 +229,38 @@ def test_a_tool_with_nothing_to_scan_is_not_a_coverage_gap():
     # Secrets and supply chain are not tied to a language.
     assert floor.applies_to_repository("gitleaks", *python_only)
     assert floor.applies_to_repository("scorecard", *python_only)
+
+
+def test_a_failed_version_probe_is_not_reported_as_a_version(tmp_path, monkeypatch):
+    # Scorecard has no --version flag. The probe's stderr was landing in the
+    # version column of a report that otherwise claimed the scanner ran fine.
+    monkeypatch.setattr(
+        "secure_code_audit.scanners.base.subprocess.run",
+        lambda *a, **k: subprocess.CompletedProcess(
+            args=a[0], returncode=1, stdout="", stderr="Error: unknown flag: --version"
+        ),
+    )
+    scanner = BanditScanner()
+    scanner._resolved_command = ("bandit",)
+
+    assert scanner.binary_version() is None
+
+
+def test_an_adapter_supplies_its_own_timeout_when_config_is_silent(tmp_path):
+    from secure_code_audit.scanners.scorecard_scanner import ScorecardScanner
+
+    scorecard = ScorecardScanner()
+    bandit = BanditScanner()
+
+    # Scorecard queries a remote API and legitimately needs longer; an
+    # operator should not have to learn that from a timeout.
+    assert scorecard.cfg(Config()).timeout_seconds == scorecard.default_timeout_seconds
+    assert scorecard.cfg(Config()).timeout_seconds > bandit.cfg(Config()).timeout_seconds
+
+
+def test_a_configured_timeout_still_wins_over_the_adapter_default():
+    from secure_code_audit.scanners.scorecard_scanner import ScorecardScanner
+
+    config = Config(scanners={"scorecard": ScannerConfig(timeout_seconds=30)})
+
+    assert ScorecardScanner().cfg(config).timeout_seconds == 30

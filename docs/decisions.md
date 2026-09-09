@@ -195,3 +195,12 @@ advisories with fewer false positives and without needing Node).
 `gates.require_scanners: ["floor"]` requires the declared set without
 enumerating it, so the membership stays maintained here rather than copied
 into every repository's config and left to rot.
+
+
+**First run found two defects the old three-scanner setup could not expose.**
+Scorecard timed out at the 600s default because it makes dozens of GitHub API
+calls, and its version probe printed `Error: unknown flag: --version` into the
+version column of a report that otherwise claimed it ran fine. Adapters now
+declare their own timeout default, and a nonzero version probe reports no
+version rather than an error string. That is the floor doing its job on day
+one: more tools running is more of the tool under test.

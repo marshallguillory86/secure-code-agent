@@ -71,7 +71,10 @@ _CATEGORIES = {
 @dataclass
 class ScannerConfig:
     enabled: bool = True
-    timeout_seconds: int = 600
+    #: None means "use the adapter's own default", so a scanner that is
+    #: legitimately slower than the rest does not need every operator to
+    #: discover that and set it by hand.
+    timeout_seconds: int | None = None
     online: bool = False
     extra_args: list[str] = field(default_factory=list)
     command: list[str] = field(default_factory=list)
@@ -223,8 +226,10 @@ def _from_dict(raw: dict[str, Any]) -> Config:
             raise ValueError(f"scanners.{name}.enabled must be a boolean")
         if not isinstance(online, bool):
             raise ValueError(f"scanners.{name}.online must be a boolean")
-        timeout = sc_raw.get("timeout_seconds", 600)
-        if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
+        timeout = sc_raw.get("timeout_seconds")
+        if timeout is not None and (
+            isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0
+        ):
             raise ValueError(f"scanners.{name}.timeout_seconds must be a positive integer")
         mode = sc_raw.get("mode") or "auto"
         if not isinstance(mode, str):
