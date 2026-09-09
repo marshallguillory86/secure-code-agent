@@ -200,6 +200,89 @@ class ScoreReport:
         return rows
 
 
+#: Categories that are scored wherever they are found, test tree included.
+#:
+#: A committed credential is a leak whatever directory it sits in, and the
+#: corpus supports treating it that way: across six large repositories every
+#: single `secrets` finding inside a test tree came from gitleaks — private
+#: keys, JWTs, API keys — and not one from Bandit's hardcoded-password
+#: heuristics, which land in `code_vulnerabilities` and are the actual noise
+#: (7,688 `B101` asserts against 17 real secrets). See docs/calibration.md.
+ALWAYS_SCORED_CATEGORIES: frozenset[Category] = frozenset({Category.SECRETS})
+
+
+def partition_by_tree(
+    findings: Iterable[Finding], is_test: Callable[[Finding], bool]
+) -> tuple[list[Finding], list[Finding]]:
+    """Split findings into (primary, test-tree).
+
+    `is_test` decides on path; this decides on policy. A finding in a category
+    that is always scored stays primary however it is classified, which is what
+    keeps a real key in a fixture from being filed away as test noise.
+    """
+    primary: list[Finding] = []
+    test: list[Finding] = []
+    for finding in findings:
+        if is_test(finding) and finding.category not in ALWAYS_SCORED_CATEGORIES:
+            test.append(finding)
+        else:
+            primary.append(finding)
+    return primary, test
+
+
+@dataclass(frozen=True)
+class TestTreeReport:
+    """What was found in the test tree, reported rather than scored.
+
+    Not a score. The test tree is a third axis beside findings and coverage,
+    for the same reason those two are separate: averaging things that mean
+    different things destroys both. A hardcoded password in a test double and
+    one in a request handler are not the same defect, and a single number
+    cannot say so.
+    """
+
+    loc: int
+    findings: tuple[Finding, ...]
+    per_severity_count: dict[Severity, int]
+    per_category_count: dict[Category, int]
+
+    @property
+    def count(self) -> int:
+        return len(self.findings)
+
+    def headline(self) -> str:
+        if not self.findings:
+            return f"test tree: {self.loc:,} LOC, nothing found"
+        worst = max(self.per_severity_count, key=lambda s: s.rank, default=None)
+        return (
+            f"test tree: {self.count} finding(s) across {self.loc:,} LOC"
+            + (f", worst {worst.value}" if worst else "")
+            + " — reported, not scored"
+        )
+
+
+def summarize_test_tree(findings: Iterable[Finding], loc: int) -> TestTreeReport:
+    """Count the test tree without scoring it.
+
+    Named `summarize_test_tree` rather than `test_tree_report` because
+    pytest collects any callable whose name begins with `test_`, including
+    imported ones — a public function so named would break the suite of
+    every project that imported it.
+    """
+    findings = tuple(f for f in findings if not f.suppressed)
+    per_severity: dict[Severity, int] = {}
+    per_category: dict[Category, int] = {}
+    for finding in findings:
+        per_severity[finding.severity] = per_severity.get(finding.severity, 0) + 1
+        per_category[finding.category] = per_category.get(finding.category, 0) + 1
+    return TestTreeReport(
+        loc=loc,
+        findings=findings,
+        per_severity_count=per_severity,
+        per_category_count=per_category,
+    )
+
+
 #: A category with nothing against it grades here, so nothing below this
 #: ceiling means nothing actually drove the grade down.
 _PERFECT_GRADE = 5.0

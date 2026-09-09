@@ -1,0 +1,26 @@
+{
+  "$schema": "../secure-code-agent.schema.json",
+  "version": 1,
+  "paths": {
+    "include_extensions": [
+      ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rb", ".java",
+      ".sh", ".yaml", ".yml", ".json", ".tf", "Dockerfile"
+    ],
+    "exclude_patterns": [
+      ".git/",
+      "node_modules/",
+      ".venv/",
+      "venv/",
+      "vendor/",
+      "dist/",
+      "build/",
+      "target/",
+      "__pycache__/",
+      ".pytest_cache/",
+      ".ruff_cache/",
+      ".mypy_cache/",
+      "**/*.min.js",
+      "**/*.lock"
+    ]
+  }
+}

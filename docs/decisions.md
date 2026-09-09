@@ -15,7 +15,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D2 | Unknown configuration keys are rejected, not ignored | 2026-09-08 | Accepted |
 | D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | Accepted |
 | D4 | A failing security audit fails MA's CI | 2026-09-08 | Accepted |
-| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — method needed |
+| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — [study run](calibration.md); test tree answered, dependencies owed |
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
 | D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
 | D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
@@ -135,10 +135,47 @@ repository *size*, scoring Django, pytest, black, tornado, httpx, lodash,
 svelte and fastapi all at 0.0/F while a 53-file toy scored 4.6/A. The fix was
 rates, normalized per dimension, calibrated so the corpus median earns a B.
 
-**State: open.** The method is owed, and it should follow MA's shape — a named
-corpus, a measured distribution, bands chosen from it, and the study published
-so the numbers can be argued with. Until then the scale is uncalibrated, and
-anything consuming it (D3, D4) should treat it as such.
+**State: open — but the method now exists and has been run.** See
+[`calibration.md`](calibration.md) for the study and
+[`calibration/`](../calibration/README.md) for the harness and pinned corpus.
+
+**What the study found.** As the tool runs today, ten of fourteen
+well-maintained open-source projects score **F**, and the median repository
+sits *five times* past the point where the grade floors. The ordering is not a
+security ordering: worst-first it reads Python → JavaScript → Go/Ruby → Java,
+which is the order of how talkative each language's scanner is at low severity
+and low confidence. This is MA's 0.5.0 lesson in a new form — there absolute
+counts graded repository size, here raw counts grade scanner verbosity.
+
+**The test tree was the largest input error, and it is now fixed in the
+product.** The primary tree is scored; the test tree is reported beside it.
+That cuts the median distortion by seventy percent — `worst_normalized` 50.15 →
+15.36, median unclamped score −20.08 → −2.68. Django's test tree turned out to
+be *larger than its primary tree*, 319,577 lines against 145,456, all of it
+previously inflating the denominator while its findings deflated the score.
+
+`secrets` findings are exempt and stay scored wherever they live: across the
+corpus every test-tree secret came from gitleaks — private keys, JWTs, API keys
+— and none from Bandit's hardcoded-password heuristics, which are the actual
+noise and are categorised `code_vulnerabilities`.
+
+**It was not sufficient.** Eight of fourteen still score F, and the ordering
+still tracks scanner verbosity rather than security. Dependency findings are
+now the largest remaining lever, worth a median of 15.36 → 7.32: whether a
+library's dev-dependency CVEs should sink its *code* security grade, or sit on
+their own axis the way the test tree now does, is the next decision and is a
+product decision. Band edges cannot be chosen while the median sits past the
+floor.
+
+**An earlier version of this study was wrong and is corrected in place.** It
+filtered test findings out of the numerator while still dividing by the whole
+tree's LOC, and reported a median of 3.10 — a B — that the corrected
+measurement does not support. That is the same numerator/denominator mismatch
+`exclude_patterns` caused once already, reproduced in the tool built to measure
+it. Doing the split inside the product is what makes it unavailable.
+
+Until then the scale is uncalibrated, and anything consuming it (D3, D4) should
+treat it as such.
 
 ## D6 — Scanner licences are judged by mechanism, not by name
 

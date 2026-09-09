@@ -12,7 +12,7 @@ from secure_code_audit import __version__
 from secure_code_audit.findings import Finding, Severity
 from secure_code_audit.scanner_status import CoverageReport
 from secure_code_audit.scanners import floor
-from secure_code_audit.scoring import GateResult, ScoreReport, Verdict
+from secure_code_audit.scoring import GateResult, ScoreReport, TestTreeReport, Verdict
 from secure_code_audit.standards import cwe_url, owasp_label
 
 # ---------------------------------------------------------------------------
@@ -26,6 +26,7 @@ def to_json(
     gate: GateResult,
     coverage: CoverageReport | None = None,
     verdict: Verdict | None = None,
+    test_tree: TestTreeReport | None = None,
 ) -> dict:
     findings = list(findings)
     return {
@@ -50,7 +51,32 @@ def to_json(
             "tripped": list(gate.tripped),
         },
         "coverage": _coverage_to_dict(coverage),
+        "test_tree": _test_tree_to_dict(test_tree),
         "findings": [_finding_to_dict(f) for f in findings],
+    }
+
+
+def _test_tree_to_dict(report: TestTreeReport | None) -> dict | None:
+    """Reported beside the score, never folded into it.
+
+    The findings are carried in full. Filing them under a separate key is the
+    opposite of hiding them: before this they were mixed into the score, where
+    seven thousand `assert` statements in a test suite outweighed everything a
+    reader actually needed to see.
+    """
+    if report is None:
+        return None
+    return {
+        "loc": report.loc,
+        "count": report.count,
+        "scored": False,
+        "note": (
+            "Reported, not scored. Secrets are the exception and stay in the "
+            "score, because a committed credential is a leak wherever it lives."
+        ),
+        "per_severity_count": {s.value: n for s, n in report.per_severity_count.items()},
+        "per_category_count": {c.value: n for c, n in report.per_category_count.items()},
+        "findings": [_finding_to_dict(f) for f in report.findings],
     }
 
 
@@ -110,9 +136,11 @@ def write_json(
     path: Path,
     coverage: CoverageReport | None = None,
     verdict: Verdict | None = None,
+    test_tree: TestTreeReport | None = None,
 ) -> None:
     path.write_text(
-        json.dumps(to_json(findings, score, gate, coverage, verdict), indent=2), encoding="utf-8"
+        json.dumps(to_json(findings, score, gate, coverage, verdict, test_tree), indent=2),
+        encoding="utf-8",
     )
 
 
@@ -130,9 +158,12 @@ def write_markdown(
     scanners_unavailable: list[str],
     coverage: CoverageReport | None = None,
     verdict: Verdict | None = None,
+    test_tree: TestTreeReport | None = None,
 ) -> None:
     path.write_text(
-        _markdown(findings, score, gate, scanners_run, scanners_unavailable, coverage, verdict),
+        _markdown(
+            findings, score, gate, scanners_run, scanners_unavailable, coverage, verdict, test_tree
+        ),
         encoding="utf-8",
     )
 
@@ -145,6 +176,7 @@ def _markdown(
     scanners_unavailable: list[str],
     coverage: CoverageReport | None = None,
     verdict: Verdict | None = None,
+    test_tree: TestTreeReport | None = None,
 ) -> str:
     lines: list[str] = []
     lines.append("# secure-code-agent report\n")
@@ -156,6 +188,7 @@ def _markdown(
     lines.append(_summary_section(score, gate, coverage, verdict))
     lines.append(_categories_table(score))
     lines.append(_severity_table(score))
+    lines.append(_test_tree_section(test_tree))
     lines.append(_scanners_section(scanners_run, scanners_unavailable, coverage))
     lines.append(_findings_sections(findings))
     return "\n".join(lines)
@@ -202,6 +235,36 @@ def _summary_section(
     out.append(f"- **LOC scanned:** {score.loc_scanned:,}")
     if score.worst_category is not None:
         out.append(f"- **Worst category:** `{score.worst_category.value}`")
+    out.append("")
+    return "\n".join(out)
+
+
+def _test_tree_section(report: TestTreeReport | None) -> str:
+    """The test tree, beside the score rather than inside it.
+
+    Shown even when empty, because "we looked and found nothing" and "we never
+    looked" are different statements and a reader cannot tell them apart from
+    a missing section.
+    """
+    if report is None:
+        return ""
+    out = ["## Test tree", ""]
+    out.append(f"- **Lines:** {report.loc:,}")
+    out.append(f"- **Findings:** {report.count} — reported, not scored")
+    if report.per_severity_count:
+        by_severity = ", ".join(
+            f"{severity.value}: {count}"
+            for severity, count in sorted(
+                report.per_severity_count.items(), key=lambda kv: -kv[0].rank
+            )
+        )
+        out.append(f"- **By severity:** {by_severity}")
+    out.append(
+        "- Findings in the test tree do not move the score. A project graded on "
+        "its test fixtures is graded on the wrong thing. Secrets are the "
+        "exception: they stay in the score, because a committed credential is a "
+        "leak wherever it lives."
+    )
     out.append("")
     return "\n".join(out)
 

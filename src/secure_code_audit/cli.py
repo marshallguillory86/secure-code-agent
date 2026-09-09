@@ -25,7 +25,7 @@ from secure_code_audit import (
 from secure_code_audit import baseline as baseline_mod
 from secure_code_audit import config as config_mod
 from secure_code_audit.findings import Category, Finding, Severity
-from secure_code_audit.git_tools import find_repo_root, is_excluded, loc_under
+from secure_code_audit.git_tools import find_repo_root, is_excluded, is_test_path, loc_under
 from secure_code_audit.scanner_status import (
     ScannerExecution,
     ScannerOutcome,
@@ -33,7 +33,12 @@ from secure_code_audit.scanner_status import (
     execution_from_result,
 )
 from secure_code_audit.scanners import floor
-from secure_code_audit.scoring import active_gates, evaluate_gates
+from secure_code_audit.scoring import (
+    active_gates,
+    evaluate_gates,
+    partition_by_tree,
+    summarize_test_tree,
+)
 from secure_code_audit.scoring import score as score_findings
 from secure_code_audit.scoring import verdict as build_verdict
 
@@ -290,11 +295,25 @@ def _do_audit(args: argparse.Namespace) -> int:
     all_findings = baseline_mod.mark_new(all_findings, baseline)
 
     # ----- scoring -----
+    # The test tree is reported, not scored. A project graded on its test
+    # fixtures is graded on the wrong thing: across the calibration corpus,
+    # including test directories moved the median normalized subtotal from
+    # 4.36 to 50.15 and put ten of fourteen well-maintained projects at F.
+    # Secrets are exempt and stay in the score — see ALWAYS_SCORED_CATEGORIES.
+    root_for_tests = target if target.is_dir() else target.parent
+    all_findings, test_findings = partition_by_tree(
+        all_findings,
+        lambda f: is_test_path(f.file_path, root_for_tests, cfg.test_patterns),
+    )
     if cfg.loc_for_scoring:
         loc = int(cfg.loc_for_scoring.get("value", 0))
+        test_loc = 0
     else:
-        loc = loc_under(target, cfg.include_extensions, cfg.exclude_patterns)
+        loc, test_loc = loc_under(
+            target, cfg.include_extensions, cfg.exclude_patterns, cfg.test_patterns
+        )
     score = score_findings(all_findings, loc)
+    test_tree = summarize_test_tree(test_findings, test_loc)
     # Naming an import on the command line asserts that it contributes coverage,
     # so a broken one fails the gate even if no config requires that scanner.
     # Requiring a tool that has nothing to look at would make every
@@ -316,18 +335,20 @@ def _do_audit(args: argparse.Namespace) -> int:
 
     # ----- write outputs -----
     paths = _resolve_outputs(args, cfg, root)
-    _write_outputs(paths, all_findings, score, gate, coverage, ran, unavailable, verdict)
+    _write_outputs(paths, all_findings, score, gate, coverage, ran, unavailable, verdict, test_tree)
     if args.bump_baseline:
         baseline_mod.write(baseline_path, all_findings, baseline)
 
     # ----- terminal output -----
     if args.json:
         sys.stdout.write(
-            json.dumps(renderers.to_json(all_findings, score, gate, coverage, verdict), indent=2)
+            json.dumps(
+                renderers.to_json(all_findings, score, gate, coverage, verdict, test_tree), indent=2
+            )
         )
         sys.stdout.write("\n")
     else:
-        _print_summary(verdict, score, gate, ran, unavailable, coverage, paths)
+        _print_summary(verdict, score, gate, ran, unavailable, coverage, paths, test_tree)
 
     return _exit_code(args, gate, all_findings)
 
@@ -523,13 +544,15 @@ def _ingest_sarif_imports(specs: list[str]) -> tuple[list[Finding], list[Scanner
     return findings, executions
 
 
-def _write_outputs(paths, findings, score, gate, coverage, ran, unavailable, verdict) -> None:
+def _write_outputs(
+    paths, findings, score, gate, coverage, ran, unavailable, verdict, test_tree=None
+) -> None:
     if paths.markdown is not None:
         renderers.write_markdown(
-            findings, score, gate, paths.markdown, ran, unavailable, coverage, verdict
+            findings, score, gate, paths.markdown, ran, unavailable, coverage, verdict, test_tree
         )
     if paths.json_out is not None:
-        renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict)
+        renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict, test_tree)
     if paths.sarif is not None:
         sarif.write(findings, paths.sarif, coverage)
     if paths.comment is not None:
@@ -588,12 +611,14 @@ def _under_root(root: Path, value: str) -> Path:
     return path.resolve() if path.is_absolute() else (root / path).resolve()
 
 
-def _print_summary(verdict, score, gate, ran, unavailable, coverage, paths) -> None:
+def _print_summary(verdict, score, gate, ran, unavailable, coverage, paths, test_tree=None) -> None:
     status = "PASS" if gate.passed else "FAIL"
     print(f"secure-code-agent  ·  score {verdict.headline()}  ·  gate {status}")
     for reason in verdict.reasons:
         print(f"  ! grade withheld: {reason}")
     print(f"  scanned LOC: {score.loc_scanned:,}")
+    if test_tree is not None and (test_tree.count or test_tree.loc):
+        print(f"  {test_tree.headline()}")
     print(f"  scanners run: {', '.join(ran) if ran else '(none)'}")
     coverage_line = f"  coverage: {coverage.status.value.upper()}"
     if coverage.unverified:

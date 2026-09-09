@@ -46,10 +46,36 @@ def in_scope(path: Path, include_exts: Iterable[str]) -> bool:
     return False
 
 
-def loc_under(root: Path, include_exts: Iterable[str], excludes: Iterable[str]) -> int:
-    """Best-effort LOC count for the scoring normalizer. Counts non-blank
-    lines across in-scope files; skips binary content."""
-    total = 0
+def is_test_path(path: Path, root: Path, patterns: Iterable[str]) -> bool:
+    """Does this path belong to the repository's own test tree?
+
+    Same matching as `is_excluded`, and deliberately so — an operator who can
+    write an exclude pattern already knows how to write one of these.
+
+    A path outside `root` is not a test path. An imported SARIF can name
+    absolute paths from another machine, and guessing that someone else's
+    `/build/tests/` is our test tree would move real findings out of the score.
+    """
+    return is_excluded(path, root, patterns)
+
+
+def loc_under(
+    root: Path,
+    include_exts: Iterable[str],
+    excludes: Iterable[str],
+    test_patterns: Iterable[str] = (),
+) -> tuple[int, int]:
+    """Non-blank in-scope lines, split into (primary, test).
+
+    The split exists because the score's denominator has to move with its
+    numerator. Scoring primary-tree findings over a LOC count that included the
+    test tree would understate every repository in proportion to how well it is
+    tested — the same numerator/denominator mismatch that `exclude_patterns`
+    already caused once, arriving by a different door.
+    """
+    test_patterns = tuple(test_patterns)
+    primary = 0
+    test = 0
     for path in root.rglob("*"):
         if not path.is_file():
             continue
@@ -61,5 +87,9 @@ def loc_under(root: Path, include_exts: Iterable[str], excludes: Iterable[str]) 
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        total += sum(1 for line in text.splitlines() if line.strip())
-    return total
+        lines = sum(1 for line in text.splitlines() if line.strip())
+        if test_patterns and is_test_path(path, root, test_patterns):
+            test += lines
+        else:
+            primary += lines
+    return primary, test

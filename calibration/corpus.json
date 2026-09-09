@@ -1,0 +1,40 @@
+{
+  "$comment": [
+    "The calibration corpus, pinned by commit so the study is re-runnable.",
+    "",
+    "Selection criteria, and the reason for each:",
+    "  - Spans the languages the floor actually reads. Calibrating on Python",
+    "    and applying the result to Java would be the same error D11 and D12",
+    "    made about rule coverage.",
+    "  - Spans two orders of magnitude of size, because the sqrt(LOC/1000)",
+    "    dampener is an invented normalizer and a corpus of similarly-sized",
+    "    repositories cannot tell us whether it works.",
+    "  - Well-known, actively maintained projects, following the shape MA used",
+    "    at 0.5.0 (django, pytest, black, tornado, httpx, lodash, svelte,",
+    "    fastapi).",
+    "",
+    "KNOWN BIAS, stated rather than discovered later: these are all",
+    "well-maintained OSS projects with their own security processes. The",
+    "distribution measured here is cleaner than the population this tool will",
+    "actually be pointed at. A median calibrated to earn a B here means 'as",
+    "clean as a well-run OSS project', not 'average code'. That is a defensible",
+    "target but it is a choice, and it is D5's to record."
+  ],
+  "version": 1,
+  "repositories": [
+    { "name": "django",        "url": "https://github.com/django/django",             "commit": "2b30f6255b5ef84afbd827993643d52ef2c0963a", "language": "python", "size": "large" },
+    { "name": "flask",         "url": "https://github.com/pallets/flask",             "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35", "language": "python", "size": "small" },
+    { "name": "requests",      "url": "https://github.com/psf/requests",              "commit": "dae7ef63b4df6eded86637f251fc4e3a06c3b479", "language": "python", "size": "small" },
+    { "name": "httpx",         "url": "https://github.com/encode/httpx",              "commit": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254", "language": "python", "size": "small" },
+    { "name": "fastapi",       "url": "https://github.com/fastapi/fastapi",           "commit": "50113da16fec53b66b80d75e80a89296de4fa5a5", "language": "python", "size": "medium" },
+    { "name": "express",       "url": "https://github.com/expressjs/express",         "commit": "bed501c695a61886399ee622875f3be933c716d8", "language": "javascript", "size": "small" },
+    { "name": "axios",         "url": "https://github.com/axios/axios",               "commit": "1226e6c53eeb0e9d7159bea83556c2ff117b5f2e", "language": "javascript", "size": "small" },
+    { "name": "lodash",        "url": "https://github.com/lodash/lodash",             "commit": "0f79302eaf53618079118dc9663f731e8faa40b7", "language": "javascript", "size": "medium" },
+    { "name": "gin",           "url": "https://github.com/gin-gonic/gin",             "commit": "dcaa4296d111981ffb31ac3eba90bb63e1eb5ab9", "language": "go",     "size": "small" },
+    { "name": "logrus",        "url": "https://github.com/sirupsen/logrus",           "commit": "6d6a132bc03324d4ceb78e1b927f995d014cda20", "language": "go",     "size": "small" },
+    { "name": "sinatra",       "url": "https://github.com/sinatra/sinatra",           "commit": "cb22afd7902b566b6eaba6c4ea89739494a65d12", "language": "ruby",   "size": "small" },
+    { "name": "jekyll",        "url": "https://github.com/jekyll/jekyll",             "commit": "74d751339d3e534aa51d5d7b0640e9bd743509e4", "language": "ruby",   "size": "medium" },
+    { "name": "gson",          "url": "https://github.com/google/gson",               "commit": "8b4b55051489132190cb8d1c61eb9dc7f5381295", "language": "java",   "size": "medium" },
+    { "name": "commons-lang",  "url": "https://github.com/apache/commons-lang",       "commit": "62620f371b9c6ed337854e066d8916e56942d9af", "language": "java",   "size": "medium" }
+  ]
+}

@@ -19,4 +19,6 @@ def test_scope_exclusions_and_loc(tmp_path):
     assert git_tools.is_excluded(excluded, tmp_path, ("node_modules/",))
     assert git_tools.in_scope(tmp_path / "keep.py", (".py",))
     assert git_tools.in_scope(tmp_path / "Dockerfile.dev", ("Dockerfile",))
-    assert git_tools.loc_under(tmp_path, (".py", "Dockerfile"), ("node_modules/",)) == 3
+    # loc_under returns (primary, test); with no test patterns everything is
+    # primary, so the denominator cannot silently shrink.
+    assert git_tools.loc_under(tmp_path, (".py", "Dockerfile"), ("node_modules/",)) == (3, 0)

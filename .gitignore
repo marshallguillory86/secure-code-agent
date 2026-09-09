@@ -45,3 +45,7 @@ secure-code-release-audit.json
 # Scanner caches
 .semgrepignore.local
 .bandit.local
+
+# Calibration study working tree. The pinned corpus is cloned here on demand;
+# the manifest and the results are the artifacts worth keeping, not the clones.
+calibration/.corpus/
