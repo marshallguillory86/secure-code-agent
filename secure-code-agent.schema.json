@@ -10,20 +10,36 @@
       "type": "string",
       "description": "JSON Schema reference used by editors and validators."
     },
-    "version":     { "type": "integer", "enum": [1] },
+    "version": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
     "paths": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "include_extensions": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "File extensions to consider in scope (e.g. '.py', '.ts')."
         },
         "exclude_patterns": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Glob patterns to exclude. Tested against POSIX-normalized relative paths."
+        },
+        "test_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths that are this repository's own test tree. Findings there are reported separately rather than scored \u2014 a project graded on its test fixtures is graded on the wrong thing. Not an exclusion: the findings are still collected and reported, and secrets among them still score and still gate, because a committed credential is a leak wherever it lives. Same glob syntax as exclude_patterns."
         }
       }
     },
@@ -34,25 +50,52 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "enabled":         { "type": "boolean", "default": true },
-          "timeout_seconds": { "type": "integer", "minimum": 1, "default": 600 },
-          "online":          { "type": "boolean", "default": false },
-          "extra_args":      { "type": "array", "items": { "type": "string" } },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 600
+          },
+          "online": {
+            "type": "boolean",
+            "default": false
+          },
+          "extra_args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "command": {
             "type": "array",
             "minItems": 1,
-            "items": { "type": "string", "minLength": 1 },
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
             "description": "Explicit executable command. Relative executable paths resolve from the scan target. Executed without a shell."
           },
           "mode": {
             "type": "string",
-            "enum": ["auto", "requirements", "project", "locked", "environment"],
+            "enum": [
+              "auto",
+              "requirements",
+              "project",
+              "locked",
+              "environment"
+            ],
             "default": "auto",
             "description": "Input mode used by pip_audit; ignored by other scanners."
           },
           "inputs": {
             "type": "array",
-            "items": { "type": "string", "minLength": 1 },
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
             "description": "Explicit scanner inputs, resolved from the scan target. Currently used by pip_audit."
           }
         }
@@ -63,7 +106,13 @@
       "description": "Override scanner-emitted severity per rule id.",
       "additionalProperties": {
         "type": "string",
-        "enum": ["critical", "high", "medium", "low", "informational"]
+        "enum": [
+          "critical",
+          "high",
+          "medium",
+          "low",
+          "informational"
+        ]
       }
     },
     "category_overrides": {
@@ -90,7 +139,15 @@
       "properties": {
         "fail_on_severity": {
           "type": "array",
-          "items": { "type": "string", "enum": ["critical", "high", "medium", "low"] }
+          "items": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          }
         },
         "fail_on_category": {
           "type": "array",
@@ -109,21 +166,42 @@
             ]
           }
         },
-        "fail_on_new":      { "type": "boolean", "default": true },
-        "min_score":        { "type": "number", "minimum": 0, "maximum": 5 },
+        "fail_on_new": {
+          "type": "boolean",
+          "default": true
+        },
+        "min_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5
+        },
         "require_scanners": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "max_unsuppressed": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "critical": { "type": "integer", "minimum": 0 },
-            "high":     { "type": "integer", "minimum": 0 },
-            "medium":   { "type": "integer", "minimum": 0 },
-            "low":      { "type": "integer", "minimum": 0 }
+            "critical": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "high": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "medium": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "low": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         }
       }
@@ -132,28 +210,54 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "markdown_path":      { "type": "string", "default": "secure-code-report.md" },
-        "json_path":          { "type": "string", "default": "secure-code-report.json" },
-        "sarif_path":         { "type": "string", "default": "secure-code.sarif" },
-        "comment_path":       { "type": "string", "default": "secure-code-pr-comment.md" },
-        "prompt_path":        { "type": "string", "default": "secure-code-remediation-prompt.md" },
-        "baseline_path":      { "type": "string", "default": "secure-code-baseline.json" }
+        "markdown_path": {
+          "type": "string",
+          "default": "secure-code-report.md"
+        },
+        "json_path": {
+          "type": "string",
+          "default": "secure-code-report.json"
+        },
+        "sarif_path": {
+          "type": "string",
+          "default": "secure-code.sarif"
+        },
+        "comment_path": {
+          "type": "string",
+          "default": "secure-code-pr-comment.md"
+        },
+        "prompt_path": {
+          "type": "string",
+          "default": "secure-code-remediation-prompt.md"
+        },
+        "baseline_path": {
+          "type": "string",
+          "default": "secure-code-baseline.json"
+        }
       }
     },
     "suppressions_file": {
       "type": "string",
       "default": ".scignore.yaml",
-      "description": "Path to the suppressions file. Per design.md §10."
+      "description": "Path to the suppressions file. Per design.md \u00a710."
     },
     "loc_for_scoring": {
       "type": "object",
       "description": "Override the auto-computed LOC count (rare).",
       "additionalProperties": false,
       "properties": {
-        "value":  { "type": "integer", "minimum": 1 },
-        "reason": { "type": "string" }
+        "value": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reason": {
+          "type": "string"
+        }
       },
-      "required": ["value", "reason"]
+      "required": [
+        "value",
+        "reason"
+      ]
     }
   }
 }

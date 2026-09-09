@@ -9,100 +9,85 @@ Raw data: [`calibration/results.json`](../calibration/results.json).
 
 ## Result in one line
 
-**The bands are approximately right and the inputs are wrong.** As the tool
-runs today, ten of fourteen well-maintained open-source projects score **F**.
-Excluding test directories and dependency findings — changing no weight, no
-band and no slope — puts the corpus median at **3.10, a B**, which is the
-target `maintainability-agent` calibrated to.
+**The bands are approximately right; the inputs are wrong, and there is more
+than one of them.** Separating the test tree from the primary tree — the single
+biggest input error — cuts the corpus median distortion by seventy percent. It
+is not enough on its own. Dependency findings are the next lever, and after
+both the median still sits below the bottom of the scale.
+
+## A correction to an earlier version of this study
+
+The first pass of this analysis filtered test findings out of the numerator
+while still dividing by the **whole tree's** LOC. Every "excluding tests"
+figure it produced was therefore too generous — it reported a median of 4.36
+and a corrected grade of B, and both were wrong.
+
+That is the same numerator/denominator mismatch `paths.exclude_patterns` caused
+before it was fixed, arriving by a different door and in the tool built to
+measure it. The split is now done inside the product, where `loc_under()`
+returns primary and test counts together and the denominator cannot drift from
+the numerator. The numbers below are the product's own.
 
 ## What was measured
 
 Fourteen repositories pinned by commit, spanning Python, JavaScript, Go, Ruby
-and Java, and 7,764 to 465,033 LOC. Each audited through the real CLI with one
-shared config and a fixed ten-scanner set.
+and Java. Each audited through the real CLI with one shared config and a fixed
+ten-scanner set, with the primary tree scored and the test tree reported
+separately.
 
-| repo | lang | LOC | findings | score |
-| --- | --- | ---: | ---: | --- |
-| django | python | 465,033 | 1352 | 0.00 **F** |
-| flask | python | 14,361 | 1139 | 0.00 **F** |
-| requests | python | 10,249 | 715 | 0.00 **F** |
-| httpx | python | 24,259 | 1389 | 0.00 **F** |
-| fastapi | python | 104,938 | 5153 | 0.00 **F** |
-| express | javascript | 17,980 | 93 | 0.00 **F** |
-| axios | javascript | 55,211 | 66 | 0.00 **F** |
-| lodash | javascript | 48,142 | 159 | 0.00 **F** |
-| gin | go | 20,855 | 14 | 0.00 **F** |
-| sinatra | ruby | 20,894 | 18 | 0.00 **F** |
-| jekyll | ruby | 23,490 | 10 | 3.07 B |
-| logrus | go | 7,764 | 4 | 4.66 A |
-| commons-lang | java | 190,344 | 7 | 4.39 A- |
-| gson | java | 50,871 | 4 | 5.00 A+ |
+| repo | lang | primary LOC | findings | test LOC | test findings | score |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| django | python | 145,456 | 364 | 319,577 | 987 | 0.00 **F** |
+| flask | python | 8,284 | 80 | 6,077 | 1071 | 0.00 **F** |
+| requests | python | 5,965 | 23 | 4,284 | 692 | 0.00 **F** |
+| httpx | python | 7,585 | 85 | 16,674 | 1304 | 0.00 **F** |
+| fastapi | python | 35,655 | 257 | 69,283 | 4896 | 0.00 **F** |
+| lodash | javascript | 25,944 | 159 | 22,198 | 0 | 0.00 **F** |
+| gin | go | 16,823 | 14 | 4,032 | 0 | 0.00 **F** |
+| sinatra | ruby | 7,135 | 13 | 13,759 | 5 | 0.00 **F** |
+| axios | javascript | 26,788 | 21 | 28,423 | 45 | 1.69 D |
+| jekyll | ruby | 14,590 | 10 | 8,900 | 0 | 2.55 B− |
+| commons-lang | java | 97,561 | 7 | 92,783 | 0 | 4.15 A− |
+| logrus | go | 6,609 | 4 | 1,155 | 0 | 4.64 A |
+| express | javascript | 4,497 | 3 | 13,483 | 90 | 5.00 A+ |
+| gson | java | 21,784 | 4 | 29,087 | 0 | 5.00 A+ |
 
-Median reported score **0.00**. Median *unclamped* score **−20.08** — the
-middle of the corpus sits twenty points below the bottom of the scale.
+Note the test trees. Django's is **larger than its primary tree** — 319,577
+lines against 145,456 — and `gson`, `express` and `sinatra` all have more test
+code than source. Before the split, all of that sat in the denominator making
+scores look better while its findings made them worse. Now both move together.
 
-## Why it fails, and it is not the bands
+## What the split was worth, and what it was not
 
-`category_grade` clamps at 0, so every F above is the same F. Recomputing
-without the clamp shows the real spread: `worst_normalized` runs from 0.00 to
-375.14, and grade 0 begins at 10. **The median repository is five times past
-the floor.** No choice of band edges rescues that; the scale is saturated.
-
-More damning, the ordering is not a security ordering. Sorted worst-first it
-reads Python → JavaScript → Go/Ruby → Java, which is the order of **how
-talkative each language's scanner is at low severity and low confidence**, not
-of how safe the code is. Django, one of the most security-conscious projects in
-Python, is bracketed with the noisiest.
-
-This is `maintainability-agent`'s 0.5.0 lesson in a new form. There, absolute
-finding counts graded repository *size*. Here, raw finding counts grade
-*scanner verbosity per language*.
-
-## The two inputs that actually move it
-
-Every finding was already captured, so the input questions were answered from
-the same evidence rather than by re-scanning — `calibrate.py --variants`
-reproduces this table.
-
-| input rule | median `worst_normalized` | median grade |
+| | median `worst_normalized` | median grade |
 | --- | ---: | --- |
-| as-run | 50.15 | 0.00 **F** |
-| drop LOW severity | 22.63 | 0.00 **F** |
-| drop dependency findings | 14.30 | 0.00 **F** |
-| **drop test directories** | **4.36** | **2.82** B− |
-| **drop tests and dependencies** | **3.81** | **3.10 B** |
+| before the split (whole tree scored) | 50.15 | 0.00 **F** |
+| **after the split** (primary tree scored) | **15.36** | 0.00 **F** |
+| after the split, dependencies also excluded | 7.32 | 1.34 **D** |
+| dropping LOW severity instead | 15.36 | 0.00 **F** |
 
-Test directories are worth more than everything else combined, and severity
-thresholds — the obvious knob — are worth the least.
+Separating the test tree removes about seventy percent of the distortion, and
+median unclamped score improves from **−20.08 to −2.68**. Eight repositories
+still score F rather than ten. Dropping LOW severity now changes *nothing* at
+the median, because the low-severity noise was overwhelmingly in the test tree
+and has already been moved out of the score.
 
-**Test fixtures.** 696 of `requests`' 715 findings are in `tests/`; 90 of
-`express`' 93. They are `B105`/`B106` hardcoded passwords, `B101` asserts —
-test doubles, behaving exactly as test doubles do.
+**It is still not a usable scale.** The median repository remains past the
+floor, and the ordering still tracks scanner verbosity: every Python project is
+F, while Java and Go sit at A− to A+.
 
-**Dependency findings.** 154 of `lodash`' 159 are CVEs in `package-lock.json`;
-54 of `httpx`' 85 and 45 of `flask`' 68 are dependency advisories. These are
-*true positives* — the question is not whether they are real but whether a
-library's dev-dependency CVEs should sink its code-security grade.
+## What remains, measured
 
-**A third, smaller effect.** With tests excluded, Django still carries 107
-`B703`/`B308` findings — `mark_safe`, which is Django's own template-escaping
-API, flagged in the framework that defines it. FastAPI carries 107 `B101`
-asserts in non-test source. Framework-idiomatic and stylistic rules survive
-into the score at full weight.
+**Dependency findings are now the largest single lever** — median 15.36 → 7.32.
+For `lodash`, 154 of 159 findings are CVEs in `package-lock.json`. For `httpx`,
+54 of 85. These are true positives; the question is whether a library's
+dev-dependency CVEs should sink its *code* security grade, or belong on their
+own axis the way the test tree now does.
 
-## What this does not settle
-
-Two product decisions, and the study deliberately stops at naming them:
-
-1. **Do test directories count?** Worth a median of 50.15 → 4.36. Test trees do
-   sometimes hold real secrets, so "exclude them" is not obviously right — but
-   as things stand a project is graded largely on its test fixtures.
-2. **Do dependency vulnerabilities score like source vulnerabilities?** Worth
-   4.36 → 3.81, and the difference between `lodash` being F and being gradable.
-
-Once both are answered the slope needs **no change**: the median lands at 3.10
-under the current `×0.5`, inside the B band. That is the study's most useful
-result — the arithmetic was never the problem.
+**Bandit's low-confidence output on primary source is the rest.** With tests
+excluded, Django still carries 107 `B703`/`B308` findings — `mark_safe`, which
+is Django's own template-escaping API, flagged in the framework that defines
+it. FastAPI carries 107 `B101` asserts in non-test source.
 
 ## Limits of this study, stated
 
@@ -123,8 +108,21 @@ result — the arithmetic was never the problem.
 
 ## Status
 
-D5 stays **open**. The method now exists, has been run, and has produced a
-specific answer: the scale cannot be calibrated until the two input questions
-above are decided, and the measured cost of each is recorded here. Choosing
-bands before that would be fitting numbers to noise — which is the thing D5 was
-raised to prevent.
+D5 stays **open**, and one of its two input questions is now answered in code.
+
+**Answered — test directories.** They are separated rather than excluded: the
+primary tree is scored, the test tree is reported beside it, and `secrets`
+findings stay in the score wherever they live, because a committed credential
+is a leak whatever directory it sits in. The corpus supports the exemption
+directly: every `secrets` finding inside a test tree came from gitleaks, and
+none from Bandit's hardcoded-password heuristics. Configurable via
+`paths.test_patterns`.
+
+**Still open — dependency findings.** Worth a median of 15.36 → 7.32. Whether a
+library's dev-dependency CVEs should sink its code-security grade, or sit on
+their own axis the way the test tree now does, is the same shape of question
+and has the same shape of answer available.
+
+**Still open — band edges.** They cannot be chosen while the median sits past
+the floor. Choosing them now would be fitting numbers to noise, which is what
+D5 was raised to prevent.

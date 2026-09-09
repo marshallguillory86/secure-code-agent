@@ -34,7 +34,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import re
 import statistics
 import subprocess
 import sys
@@ -176,24 +175,19 @@ def measure(payload: dict) -> dict:
     }
 
 
-#: Paths a repository uses for its own test suite. Not a config setting: the
-#: study needs to *measure* whether test directories should be excluded, and a
-#: measurement cannot depend on the answer it is looking for.
-TEST_PATH = re.compile(
-    r"(^|/)(tests?|spec|specs|testing|__tests__|test_[^/]*|[^/]*_test\.[a-z]+)(/|$)"
-)
-
-#: The input questions the study exists to answer, as filters over findings.
-#: Each is a decision someone has to make before bands can be chosen, and the
-#: point of running all four is to show how much each one is worth.
+#: The input question the study still has to answer. Test directories are no
+#: longer one of them: the product now partitions them natively, so "as-run"
+#: already means "primary tree, primary LOC".
+#:
+#: An earlier version of this analysis filtered test findings out of the
+#: numerator while still dividing by the *whole* tree's LOC, which made every
+#: "no-tests" figure too generous — the same numerator/denominator mismatch
+#: `exclude_patterns` caused once already. Doing the split in the product
+#: rather than in the analysis is what makes that mistake unavailable.
 VARIANTS: dict[str, object] = {
     "as-run": lambda f: True,
-    "no-tests": lambda f: not TEST_PATH.search(f["file_path"]),
-    "no-low": lambda f: f["severity"] != "low",
     "no-deps": lambda f: f["category"] != "dependencies",
-    "no-tests-no-deps": lambda f: (
-        not TEST_PATH.search(f["file_path"]) and f["category"] != "dependencies"
-    ),
+    "no-low": lambda f: f["severity"] != "low",
 }
 
 
@@ -208,12 +202,12 @@ def worst_normalized(findings: list[dict], loc: int) -> float:
 
 
 def variants(reports: Path) -> dict:
-    """Re-analyze saved reports under each input rule. No re-scanning.
+    """Re-analyze saved reports under each remaining input rule.
 
-    Every finding is already in the report, so the expensive part — running ten
-    scanners over fourteen repositories — is done once and the input questions
-    are answered from the same evidence. That also means the variants cannot
-    disagree because of a re-scan drifting underneath them.
+    No re-scanning: every finding is already in the report, so the expensive
+    part is done once and the variants cannot disagree because of a re-scan
+    drifting underneath them. `loc_scanned` is the primary-tree count, so the
+    denominator matches the numerator in every variant.
     """
     rows: dict[str, dict[str, float]] = {}
     for path in sorted(reports.glob("*.json")):
@@ -223,6 +217,9 @@ def variants(reports: Path) -> dict:
             name: round(worst_normalized([f for f in payload["findings"] if keep(f)], loc), 4)
             for name, keep in VARIANTS.items()
         }
+        tree = payload.get("test_tree") or {}
+        rows[path.stem]["test_tree_findings"] = float(tree.get("count", 0))
+        rows[path.stem]["test_tree_loc"] = float(tree.get("loc", 0))
     medians = {
         name: round(statistics.median([r[name] for r in rows.values()]), 4)
         for name in VARIANTS
