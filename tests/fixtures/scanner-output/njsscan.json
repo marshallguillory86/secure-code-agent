@@ -1,0 +1,73 @@
+{
+  "errors": [],
+  "njsscan_version": "1.0.0",
+  "nodejs": {
+    "node_insecure_random_generator": {
+      "files": [
+        {
+          "file_path": "/repo/app.js",
+          "match_lines": [
+            4,
+            4
+          ],
+          "match_position": [
+            33,
+            46
+          ],
+          "match_string": "function predictable() { return Math.random(); }"
+        }
+      ],
+      "metadata": {
+        "cwe": "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+        "description": "crypto.pseudoRandomBytes()/Math.random() is a cryptographically weak random number generator.",
+        "owasp-web": "A9: Using Components with Known Vulnerabilities",
+        "severity": "WARNING"
+      }
+    },
+    "node_md5": {
+      "files": [
+        {
+          "file_path": "/repo/app.js",
+          "match_lines": [
+            3,
+            3
+          ],
+          "match_position": [
+            31,
+            55
+          ],
+          "match_string": "function weakHash(d) { return crypto.createHash('md5').update(d); }"
+        }
+      ],
+      "metadata": {
+        "cwe": "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+        "description": "MD5 is a a weak hash which is known to have collision. Use a strong hashing function.",
+        "owasp-web": "A9: Using Components with Known Vulnerabilities",
+        "severity": "WARNING"
+      }
+    },
+    "node_tls_reject": {
+      "files": [
+        {
+          "file_path": "/repo/app.js",
+          "match_lines": [
+            5,
+            5
+          ],
+          "match_position": [
+            25,
+            71
+          ],
+          "match_string": "function disableTls() { process.env.NODE_TLS_REJECT_UNAUTHORIZED = \"0\"; }"
+        }
+      ],
+      "metadata": {
+        "cwe": "CWE-295: Improper Certificate Validation",
+        "description": "Setting 'NODE_TLS_REJECT_UNAUTHORIZED' to 0 will allow node server to accept self signed certificates and is not a secure behaviour.",
+        "owasp-web": "A6: Security Misconfiguration",
+        "severity": "ERROR"
+      }
+    }
+  },
+  "templates": {}
+}

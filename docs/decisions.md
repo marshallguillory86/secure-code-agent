@@ -24,6 +24,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D11 | Author a rule only where no floor scanner already covers it | 2026-09-09 | Accepted |
 | D12 | The coverage check, run for the other four languages | 2026-09-09 | Accepted |
 | D13 | Adapters state their outcome; nothing infers it from a finding's name | 2026-09-09 | Accepted |
+| D14 | Parsers are tested against real captured output, and the gap is declared | 2026-09-09 | Accepted |
 
 ---
 
@@ -513,3 +514,52 @@ registered scanner returns `ScanResult`, that a non-COMPLETED result carries a
 reason, that a failed run keeps its findings and loses its count, and — by AST
 walk over every adapter — that none of them hand-builds a control finding. The
 last one was verified against a synthetic offender rather than assumed to work.
+
+## D14 — Parsers are tested against real captured output, and the gap is declared
+
+**Status.** Accepted, 2026-09-09. Closes [`architecture.md`](architecture.md) §4.
+
+**Question.** This tool's entire job is parsing fifteen other tools' output
+formats, and every parser was verified against hand-written mock output — which
+means against *the author's belief about the format*, not the format. Two
+instances of that class had already bitten: the OSV-Scanner v1→v2 CLI change
+and `pip-audit --locked` semantics, both caught by hand during review.
+`tests/integration/` was empty, and `CONTRIBUTING.md` had cited a
+`test_scoring_drift.py` that never existed.
+
+**Decision.** Commit genuine captured output per scanner under
+`tests/fixtures/scanner-output/`, and drive each adapter against it. Captures
+are produced by running the real tool against a small deliberately-vulnerable
+tree; local paths are rewritten to `/repo` and `/home/user` and nothing else is
+edited. On a scanner upgrade, recapture — a fixture hand-edited to make a test
+pass is precisely the belief this stops trusting.
+
+**Six of fifteen, and the other nine are named.** Only tools installable on the
+capture host could produce real output: njsscan, RuboCop, gitleaks, gosec,
+pip-audit and semgrep. Writing plausible-looking output for the rest would
+recreate the defect being fixed, so the remainder sit in
+`SCANNERS_WITHOUT_A_REAL_CAPTURE` with a reason each, and a test fails if that
+list drifts out of step with the fixtures directory. A parser with no real
+capture is a known risk; an undocumented one is the same silence this project
+rejects everywhere else.
+
+**The gosec capture is the valuable one.** It is that tool's genuine output on
+a host with no Go toolchain: exit 1, well-formed JSON, `"Issues": []`,
+`"Stats": {"files": 0}`, and the failure recorded only under `Golang errors`.
+The test asserts the capture still demonstrates that shape before asserting the
+adapter handles it — so if a future gosec stops behaving this way, the fixture
+says so rather than the test quietly passing for a new reason.
+
+**Scoring drift is pinned, not calibrated.** The model is a chain of judgement
+calls — severity weights, the `sqrt(LOC/1000)` dampener, the grade table, the
+letter bands — and changing any of them silently re-grades every repository
+ever scanned, including accepted baselines. The new tests pin the output of
+that chain, plus the properties that must survive any retuning: severity
+ordering is monotonic, informational findings never move the grade, the overall
+grade is the worst category rather than the mean, suppressed findings do not
+count, and more findings never improve the score. A failure there means the
+model changed and should be declared, not that something is broken.
+
+**This is not D5.** Pinning an uncalibrated number does not calibrate it.
+These prove the scale is *stable*; nobody has yet established that A+
+corresponds to anything real. D5 remains open.

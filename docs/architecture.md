@@ -173,7 +173,7 @@ One source each.
 
 ## 4. Problem 3 — no integration tests and no real scanner fixtures
 
-**Severity: high. Fix third — cheapest of the three.**
+**Severity: high. Fix third — cheapest of the three. — CLOSED 2026-09-09, see D14.**
 
 `tests/fixtures/` and `tests/integration/` **exist and are empty.**
 `CONTRIBUTING.md` mandates per-scanner fixtures ("at least one HIGH true
@@ -196,6 +196,24 @@ refreshed deliberately when a scanner is upgraded. Add the scoring-drift
 regression test that `CONTRIBUTING.md` already promises. This converts a whole
 class of "the upstream format changed" defect from a production surprise into a
 test failure.
+
+**Done, partially and explicitly so.** `tests/fixtures/scanner-output/` holds
+genuine output from njsscan, RuboCop, gitleaks, gosec, pip-audit and semgrep,
+captured against a deliberately-vulnerable tree with local paths rewritten and
+nothing else edited. `tests/integration/test_scanner_output_fixtures.py` drives
+each adapter against its real capture.
+
+Six of fifteen scanners are covered, because only tools installable on the
+capture host could produce real output — fabricating the rest would recreate
+the exact defect this fixes. The remainder are named in
+`SCANNERS_WITHOUT_A_REAL_CAPTURE` with the reason, and a test fails if that
+list drifts out of step with the directory, so the gap stays visible rather
+than becoming folklore.
+
+`tests/integration/test_scoring_drift.py` now exists. It pins the letter bands,
+the severity ordering, the worst-category rule, and the property that a perfect
+score sits beside failed coverage without either deriving from the other. It
+proves the scale is *stable*, not that it is *correct* — D5 is still open.
 
 ## 5. Problem 4 — the score's null state is "perfect"
 
@@ -261,8 +279,8 @@ it is a product decision, not a refactor.
 
 1. ~~**`ScanResult` for adapters** (§2).~~ **Done 2026-09-09** (D13). Highest
    defect-elimination per hour, and a prerequisite for §3.
-2. **Real scanner fixtures and the scoring-drift test** (§4). Cheapest of the
-   three; immediately catches upstream format drift.
+2. ~~**Real scanner fixtures and the scoring-drift test** (§4).~~ **Done
+   2026-09-09** (D14), for the six scanners installable on the capture host.
 3. **Single `ScoreVerdict` view-model** (§3, row 2). Small, and it retires the
    qualification-duplication class outright.
 4. **Generate the config schema from the dataclasses** (§3, row 1).

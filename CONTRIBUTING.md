@@ -116,6 +116,13 @@ Built-in rules are deliberately small + high-precision. Each new rule:
 - Unit tests for everything except subprocess-shelling-out (mock those).
 - Integration tests for the SARIF emit/ingest roundtrip.
 - Regression tests for scoring drift (`tests/integration/test_scoring_drift.py`).
+- **A new adapter needs a real captured output fixture**, not only a mock.
+  Run the tool against a deliberately-vulnerable tree, commit the output under
+  `tests/fixtures/scanner-output/`, rewrite local paths, and edit nothing else.
+  Mock output tests the parser against what you believe the format is; that
+  belief has already been wrong twice (D14). If the tool cannot be installed,
+  add it to `SCANNERS_WITHOUT_A_REAL_CAPTURE` with the reason — a declared gap
+  is acceptable, an undeclared one is not, and a test enforces the difference.
 
 ## Commit messages
 
