@@ -195,11 +195,26 @@ def test_every_declared_tool_records_a_licence_and_a_reason():
         assert policy.optional_because, f"{policy.name} is optional with no reason"
 
 
-def test_optional_tools_are_off_by_default_and_floor_tools_are_on():
+def test_optional_tools_are_off_by_default_and_commit_floor_tools_are_on():
     from secure_code_audit.scanners import floor
 
-    assert all(floor.default_enabled(n) for n in floor.FLOOR_NAMES)
+    assert all(floor.default_enabled(n) for n in floor.COMMIT_CADENCE_NAMES)
     assert not any(floor.default_enabled(n) for n in floor.OPTIONAL_NAMES)
+    # Repository-cadence tools are in the floor but are not invoked inline:
+    # their answers do not move between commits and they take minutes.
+    assert not any(floor.default_enabled(n) for n in floor.REPOSITORY_CADENCE_NAMES)
+
+
+def test_cadence_partitions_the_floor_with_nothing_lost():
+    from secure_code_audit.scanners import floor
+
+    assert set(floor.COMMIT_CADENCE_NAMES) | set(floor.REPOSITORY_CADENCE_NAMES) == set(
+        floor.FLOOR_NAMES
+    )
+    assert not set(floor.COMMIT_CADENCE_NAMES) & set(floor.REPOSITORY_CADENCE_NAMES)
+    # A deferred tool must still be named somewhere, or deferring it is just
+    # dropping it. The renderer and preflight both read this list.
+    assert floor.REPOSITORY_CADENCE_NAMES
 
 
 def test_agpl_tools_are_never_in_the_floor():
@@ -214,9 +229,12 @@ def test_agpl_tools_are_never_in_the_floor():
 def test_the_floor_token_expands_and_deduplicates():
     from secure_code_audit.scanners import floor
 
-    assert floor.expand_required(["floor"]) == list(floor.FLOOR_NAMES)
+    # The token requires what this run can actually evaluate. Requiring a
+    # repository-cadence tool per change would fail every pull request for a
+    # question the change did not touch.
+    assert floor.expand_required(["floor"]) == list(floor.COMMIT_CADENCE_NAMES)
     assert floor.expand_required(["bandit", "floor", "bandit"])[0] == "bandit"
-    assert len(floor.expand_required(["floor", "floor"])) == len(floor.FLOOR_NAMES)
+    assert len(floor.expand_required(["floor", "floor"])) == len(floor.COMMIT_CADENCE_NAMES)
 
 
 def test_a_tool_with_nothing_to_scan_is_not_a_coverage_gap():

@@ -226,6 +226,10 @@ def _print_preflight(rows: list[dict], unselected: list[str], blocking: list[str
             print(f"      → {row['remedy']}")
     for name in unselected:
         print(f"  ✗ {name:<14} required  not enabled in this configuration")
+    # Named, not omitted: a floor tool this run does not evaluate is a stated
+    # scope decision, and silence would read as a pass.
+    for name in floor.REPOSITORY_CADENCE_NAMES:
+        print(f"  · {name:<14} deferred  repository cadence; supplied by SARIF import (D3)")
     if blocking:
         print(f"  required scanners unavailable: {', '.join(blocking)}")
     else:

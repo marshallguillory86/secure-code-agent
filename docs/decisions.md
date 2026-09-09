@@ -18,6 +18,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — method needed |
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
 | D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
+| D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
 
 ---
 
@@ -204,3 +205,36 @@ version column of a report that otherwise claimed it ran fine. Adapters now
 declare their own timeout default, and a nonzero version probe reports no
 version rather than an error string. That is the floor doing its job on day
 one: more tools running is more of the tool under test.
+
+## D8 — Floor tools have a cadence, and repository-level ones arrive by import
+
+**Question.** The floor's first CI run failed on Scorecard, twice. It timed out
+at 600s, and again at 1800s: against this repository it takes over half an
+hour, because it makes dozens of GitHub API calls. Raising the timeout again
+would have made every pull request wait thirty minutes.
+
+**The timeout was never the problem.** Scorecard answers questions about the
+*repository* — branch protection, release signing, token scopes, dependency
+pinning. Those answers do not move between commits. Asking them on every change
+is asking the wrong question at the wrong rate, and no timeout value fixes a
+cadence mismatch.
+
+**Decision.** `ToolPolicy` gains a cadence. `commit` tools answer questions
+about the code in front of them and run in the per-change gate. `repository`
+tools run on their own schedule and reach the audit as an imported SARIF —
+which is D3's rule applied to ourselves rather than only to consumers.
+
+Scorecard is the first repository-cadence tool. It stays **in the floor** —
+demoting it to optional would concede the supply-chain domain by default, which
+is what the floor exists to prevent. `.github/workflows/supply-chain.yml` runs
+it weekly and on pushes to `main`, publishes SARIF to code scanning, and
+retains the artifact for `--sarif-import scorecard=…`.
+
+**Deferred is not silent.** A floor tool a run does not evaluate is named in
+preflight and in the report — `· scorecard deferred repository cadence` —
+because an omission the reader cannot see is indistinguishable from a pass, and
+that is the failure this project exists to remove.
+
+**Consequence.** Imported Scorecard coverage is `unverified` per D3: an
+artifact we did not watch being produced. That is the correct label, and it is
+visible in every output.

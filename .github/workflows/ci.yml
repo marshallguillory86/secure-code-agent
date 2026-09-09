@@ -81,7 +81,6 @@ jobs:
           GITLEAKS_VERSION: "8.30.1"
           TRIVY_VERSION: "0.74.0"
           OSV_VERSION: "2.5.1"
-          SCORECARD_VERSION: "5.5.0"
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.local/bin"
@@ -100,20 +99,16 @@ jobs:
             "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
           chmod +x osv-scanner && mv osv-scanner "$HOME/.local/bin/"
 
-          curl -sSfL -o scorecard.tar.gz \
-            "https://github.com/ossf/scorecard/releases/download/v${SCORECARD_VERSION}/scorecard_${SCORECARD_VERSION}_linux_amd64.tar.gz"
-          tar -xzf scorecard.tar.gz scorecard && mv scorecard "$HOME/.local/bin/"
-
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Verify the required scanner toolchain resolves
         run: secure-code-agent --config secure-code-agent.json --preflight
 
+      # Scorecard is not here on purpose. It is in the declared floor at
+      # repository cadence and runs in supply-chain.yml, because its answers
+      # belong to the project rather than the change and take over half an hour
+      # to produce. Its coverage arrives by SARIF import (D3).
       - name: Run required security coverage
-        env:
-          # Scorecard queries the GitHub API for repository posture; without a
-          # token it rate-limits and the check fails for the wrong reason.
-          GITHUB_AUTH_TOKEN: ${{ github.token }}
         run: >-
           secure-code-agent
           --config secure-code-agent.json

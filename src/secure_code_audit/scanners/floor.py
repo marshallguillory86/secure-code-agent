@@ -43,6 +43,13 @@ class ToolPolicy:
     #: Filenames whose presence makes the tool applicable regardless of
     #: extensions, e.g. a Dockerfile or a lockfile.
     applies_to_files: tuple[str, ...] = field(default_factory=tuple)
+    #: "commit" tools answer questions about the code in front of them and
+    #: belong in a per-change gate. "repository" tools answer questions about
+    #: the project — branch protection, release signing, token scopes — which
+    #: do not change between commits and are far too slow to ask on every one.
+    #: A repository-cadence tool is fed by importing its SARIF (D3), not by
+    #: being invoked inline.
+    cadence: str = "commit"
 
 
 #: The floor. Enabled unless an operator turns one off, and the set that
@@ -122,6 +129,7 @@ FLOOR: tuple[ToolPolicy, ...] = (
         licence="Apache-2.0",
         domain="supply_chain",
         rationale="repository and supply-chain hygiene; no other tool here asks these questions",
+        cadence="repository",
     ),
 )
 
@@ -166,6 +174,16 @@ OPTIONAL: tuple[ToolPolicy, ...] = (
 )
 
 FLOOR_NAMES: tuple[str, ...] = tuple(policy.name for policy in FLOOR)
+#: Floor members a per-change run evaluates itself.
+COMMIT_CADENCE_NAMES: tuple[str, ...] = tuple(
+    policy.name for policy in FLOOR if policy.cadence == "commit"
+)
+#: Floor members whose answers belong to the repository rather than the
+#: change, and which arrive by import. Named in every report so their absence
+#: from a per-change run is a stated scope, never a silence.
+REPOSITORY_CADENCE_NAMES: tuple[str, ...] = tuple(
+    policy.name for policy in FLOOR if policy.cadence == "repository"
+)
 OPTIONAL_NAMES: tuple[str, ...] = tuple(policy.name for policy in OPTIONAL)
 
 #: The token an operator writes in `gates.require_scanners` to require the
@@ -181,8 +199,13 @@ def policy(name: str) -> ToolPolicy | None:
 
 
 def default_enabled(name: str) -> bool:
-    """Whether a scanner runs when the configuration does not say."""
-    return name in FLOOR_NAMES
+    """Whether a scanner runs inline when the configuration does not say.
+
+    Repository-cadence tools are in the floor but are not invoked by a
+    per-change run: they are minutes-long, their answers do not move between
+    commits, and D3 says such coverage arrives as an imported artifact.
+    """
+    return name in COMMIT_CADENCE_NAMES
 
 
 def applies_to_repository(name: str, extensions: set[str], filenames: set[str]) -> bool:
@@ -206,7 +229,7 @@ def expand_required(names: list[str]) -> list[str]:
     out: list[str] = []
     for name in names:
         if name == FLOOR_TOKEN:
-            out.extend(n for n in FLOOR_NAMES if n not in out)
+            out.extend(n for n in COMMIT_CADENCE_NAMES if n not in out)
         elif name not in out:
             out.append(name)
     return out
