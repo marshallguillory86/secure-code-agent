@@ -34,6 +34,7 @@ from secure_code_audit.scanner_status import (
 )
 from secure_code_audit.scoring import active_gates, evaluate_gates
 from secure_code_audit.scoring import score as score_findings
+from secure_code_audit.scoring import verdict as build_verdict
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -87,6 +88,16 @@ def _parser() -> argparse.ArgumentParser:
             "External SARIF file to ingest; counts toward scanner coverage. "
             "Prefix with NAME= when the tool's SARIF driver name differs from "
             "its id in gates.require_scanners. May be passed multiple times."
+        ),
+    )
+
+    p.add_argument(
+        "--trust-target-config",
+        action="store_true",
+        help=(
+            "Allow a config inside the audited tree to name executables from "
+            "that tree. Only for repositories you own. CLI-only by design: a "
+            "config file cannot grant itself this."
         ),
     )
 
@@ -279,21 +290,22 @@ def _do_audit(args: argparse.Namespace) -> int:
     ]
     coverage = evaluate_coverage(executions, required)
     gate = evaluate_gates(all_findings, score, cfg.gates, coverage)
+    verdict = build_verdict(score, cfg.gates, coverage)
 
     # ----- write outputs -----
     paths = _resolve_outputs(args, cfg, root)
-    _write_outputs(paths, all_findings, score, gate, coverage, ran, unavailable)
+    _write_outputs(paths, all_findings, score, gate, coverage, ran, unavailable, verdict)
     if args.bump_baseline:
         baseline_mod.write(baseline_path, all_findings, baseline)
 
     # ----- terminal output -----
     if args.json:
         sys.stdout.write(
-            json.dumps(renderers.to_json(all_findings, score, gate, coverage), indent=2)
+            json.dumps(renderers.to_json(all_findings, score, gate, coverage, verdict), indent=2)
         )
         sys.stdout.write("\n")
     else:
-        _print_summary(score, gate, ran, unavailable, coverage, paths)
+        _print_summary(verdict, score, gate, ran, unavailable, coverage, paths)
 
     return _exit_code(args, gate, all_findings)
 
@@ -303,6 +315,9 @@ def _prepare_audit(
 ) -> tuple[config_mod.Config, Path, Path]:
     """Load config and resolve the single scan root, or refuse."""
     cfg = config_mod.load(args.config)
+    # Set from the command line only. Threading it through the loaded config
+    # would let a repository-supplied file assert its own trustworthiness.
+    cfg.trust_target_config = bool(getattr(args, "trust_target_config", False))
     _validate_scanner_config(cfg)
     if args.changed_only:
         raise ValueError(
@@ -420,11 +435,11 @@ def _ingest_sarif_imports(specs: list[str]) -> tuple[list[Finding], list[Scanner
     return findings, executions
 
 
-def _write_outputs(paths, findings, score, gate, coverage, ran, unavailable) -> None:
+def _write_outputs(paths, findings, score, gate, coverage, ran, unavailable, verdict) -> None:
     if paths.markdown is not None:
         renderers.write_markdown(findings, score, gate, paths.markdown, ran, unavailable, coverage)
     if paths.json_out is not None:
-        renderers.write_json(findings, score, gate, paths.json_out, coverage)
+        renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict)
     if paths.sarif is not None:
         sarif.write(findings, paths.sarif, coverage)
     if paths.comment is not None:
@@ -483,15 +498,11 @@ def _under_root(root: Path, value: str) -> Path:
     return path.resolve() if path.is_absolute() else (root / path).resolve()
 
 
-def _print_summary(score, gate, ran, unavailable, coverage, paths) -> None:
+def _print_summary(verdict, score, gate, ran, unavailable, coverage, paths) -> None:
     status = "PASS" if gate.passed else "FAIL"
-    score_label = "score"
-    if coverage.status.value != "complete":
-        score_label = "finding score (coverage incomplete)"
-    print(
-        f"secure-code-agent  ·  {score_label} {score.overall:.2f} ({score.letter})  "
-        f"·  gate {status}"
-    )
+    print(f"secure-code-agent  ·  score {verdict.headline()}  ·  gate {status}")
+    for reason in verdict.reasons:
+        print(f"  ! grade withheld: {reason}")
     print(f"  scanned LOC: {score.loc_scanned:,}")
     print(f"  scanners run: {', '.join(ran) if ran else '(none)'}")
     coverage_line = f"  coverage: {coverage.status.value.upper()}"

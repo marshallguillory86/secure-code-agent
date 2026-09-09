@@ -1,8 +1,13 @@
+import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 
-from secure_code_audit.config import Config, ScannerConfig
+import pytest
+
+from secure_code_audit.config import Config, ScannerConfig, target_executables_allowed
+from secure_code_audit.config import load as config_load
 from secure_code_audit.scanners.bandit_scanner import BanditScanner
 
 
@@ -11,7 +16,13 @@ def test_explicit_relative_command_resolves_from_target(tmp_path):
     executable.parent.mkdir()
     executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     executable.chmod(0o755)
-    config = Config(scanners={"bandit": ScannerConfig(command=[".tools/bandit"])})
+    # A relative command still resolves from the target — but only once the
+    # operator has vouched for the tree. Resolution mechanics and the trust
+    # boundary are separate properties; this one tests the mechanics.
+    config = Config(
+        scanners={"bandit": ScannerConfig(command=[".tools/bandit"])},
+        trust_target_config=True,
+    )
 
     scanner = BanditScanner()
     scanner.configure(tmp_path, config)
@@ -89,3 +100,74 @@ def test_sanitized_environment_keeps_allowlist(monkeypatch):
     assert environment["PATH"] == "/tools"
     assert environment["LANG"] == "C"
     assert "SECRET_TOKEN" not in environment
+
+
+def _tree_with_executable(tmp_path):
+    tool = tmp_path / "pwn.sh"
+    tool.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    tool.chmod(0o755)
+    return tool
+
+
+def _config_naming(tmp_path, command, *, source: Path | None, trust: bool = False):
+    cfg = Config()
+    cfg.scanners["bandit"] = ScannerConfig(command=command)
+    cfg.source_path = source
+    cfg.trust_target_config = trust
+    return cfg
+
+
+def test_config_inside_the_tree_cannot_choose_an_executable_from_the_tree(tmp_path):
+    # threat-model T1: repository content must not select what the host runs.
+    _tree_with_executable(tmp_path)
+    cfg = _config_naming(tmp_path, ["./pwn.sh"], source=tmp_path / "secure-code-agent.json")
+
+    scanner = BanditScanner()
+    scanner.configure(tmp_path, cfg)
+
+    assert scanner.command == ()
+    assert not scanner.is_available()
+
+
+def test_an_operator_config_outside_the_tree_keeps_the_tree_local_workflow(tmp_path):
+    # The documented `.audit-tools/bin/python` case: the operator authored a
+    # config they keep outside the audited tree, so their choice stands.
+    tool = _tree_with_executable(tmp_path)
+    outside = tmp_path.parent / "operator-config.json"
+    cfg = _config_naming(tmp_path, [str(tool)], source=outside)
+
+    scanner = BanditScanner()
+    scanner.configure(tmp_path, cfg)
+
+    assert scanner.command == (str(tool.resolve()),)
+
+
+def test_trust_target_config_is_an_explicit_operator_opt_in(tmp_path):
+    _tree_with_executable(tmp_path)
+    cfg = _config_naming(
+        tmp_path, ["./pwn.sh"], source=tmp_path / "secure-code-agent.json", trust=True
+    )
+
+    scanner = BanditScanner()
+    scanner.configure(tmp_path, cfg)
+
+    assert scanner.command  # the operator asserted the tree is theirs
+
+
+def test_a_config_file_cannot_grant_itself_trust(tmp_path):
+    # If `trust_target_config` were readable from the config, repository
+    # content would hand itself the trust the flag exists to withhold. The
+    # loader rejects the key rather than ignoring it, so an operator who tries
+    # is told, instead of believing they enabled something.
+    payload = {"version": 1, "trust_target_config": True, "scanners": {}}
+    path = tmp_path / "secure-code-agent.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unknown configuration key"):
+        config_load(path)
+
+    assert Config().trust_target_config is False
+
+
+def test_defaults_never_allow_executables_from_the_tree(tmp_path):
+    assert target_executables_allowed(Config(), tmp_path) is False

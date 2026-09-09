@@ -70,6 +70,74 @@ def letter_grade(score: float) -> str:
     return "F"
 
 
+def evidence_reasons(gate_config: dict, coverage: CoverageReport | None) -> tuple[str, ...]:
+    """Why the evidence cannot support a verified letter grade, if it cannot.
+
+    The score is a rate over findings, so removing a scanner removes findings
+    and the number rises. On one tree, disabling the scanners took it from
+    0.00/F to 5.00/A+ — withholding evidence bought the best possible letter.
+    A number computed from whatever happened to run cannot be a *grade* unless
+    something says what was supposed to run and confirms it did.
+
+    `gates.require_scanners` is that declaration. Without it there is no
+    standard to have met, so there is no letter — not a low one, which would
+    claim knowledge of poor quality we do not have.
+    """
+    reasons: list[str] = []
+    if not gate_config.get("require_scanners"):
+        reasons.append(
+            "no gates.require_scanners is declared, so no scanner set was asserted to have run"
+        )
+    if coverage is None:
+        reasons.append("no scanner coverage was evaluated")
+    elif coverage.status is not CoverageStatus.COMPLETE:
+        reasons.append(f"scanner coverage is {coverage.status.value}")
+        reasons.extend(coverage.failures)
+    return tuple(reasons)
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """What the run is willing to claim, decided once.
+
+    Five renderers used to each decide how to caveat the score, and the SARIF
+    one was missed on the first pass. The decision belongs in one place, and
+    every output reads it rather than re-deriving it.
+    """
+
+    estimate: float
+    #: The letter the estimate alone would earn. Not a grade — an arithmetic
+    #: consequence, kept so a reader can see what the evidence suggested.
+    estimated_letter: str
+    verified_grade: str | None
+    reasons: tuple[str, ...]
+
+    @property
+    def is_verified(self) -> bool:
+        return self.verified_grade is not None
+
+    @property
+    def evidence_status(self) -> str:
+        return "complete" if self.is_verified else "incomplete"
+
+    def headline(self) -> str:
+        """One line, used by every renderer that shows a score."""
+        if self.is_verified:
+            return f"{self.estimate:.2f} ({self.verified_grade})"
+        return f"{self.estimate:.2f} — grade withheld ({self.estimated_letter} unverified)"
+
+
+def verdict(report: ScoreReport, gate_config: dict, coverage: CoverageReport | None) -> Verdict:
+    """Decide the letter, or withhold it, once for the whole run."""
+    reasons = evidence_reasons(gate_config, coverage)
+    return Verdict(
+        estimate=report.overall,
+        estimated_letter=report.letter,
+        verified_grade=None if reasons else report.letter,
+        reasons=reasons,
+    )
+
+
 # --- per-finding score -----------------------------------------------------
 
 

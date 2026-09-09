@@ -36,8 +36,32 @@
 
 **Threat:** A repo contains crafted filenames, source files, or config that triggers code execution in the agent.
 
+**The ruling, and why it was needed.** This document called repository content
+untrusted *and* called the operator the author of the config, while
+`secure-code-agent.json` normally lives in the audited tree. Both could not be
+true, and the code took the permissive reading: `scanners.<name>.command`
+accepted a relative path, resolved it under the audit target, and executed it.
+A repository could choose what the auditing host ran — T1, realised by the
+tool.
+
+**The line is drawn at executing what the tree supplies, not at distrusting
+repositories wholesale.** A config the operator keeps *outside* the tree is an
+operator artifact and may still name a tree-local interpreter, which is the
+documented `.audit-tools/bin/python` workflow. A config found *inside* the tree
+is repository content, and a command it names that also resolves inside the
+tree is refused — the scanner reports `unavailable`, which fails required
+coverage rather than silently skipping. Auditing a repository you own with a
+tree-local toolchain takes `--trust-target-config`, which is a command-line
+flag by design: a config file cannot grant itself the trust the flag exists to
+withhold.
+
+The containment check runs on the resolved path from **every** route, not just
+the relative one, because `PATH` may contain `.` or a tree-local directory.
+
 **Mitigations:**
 - All scanner invocations are `subprocess.run(args=[...], shell=False, cwd=target, env=_sanitized_env())`.
+- Repository-supplied configuration cannot select an executable inside the audited tree; see the ruling above.
+- Unknown top-level configuration keys are rejected rather than ignored, so a config asserting a privilege this tool does not read fails loudly instead of appearing accepted.
 - The orchestrator does not `eval()`, `exec()`, `pickle.load()`, or import target source. `.scignore.yaml` uses `yaml.safe_load`; PyYAML is a bounded runtime dependency.
 - File paths are passed via argv, never via shell interpolation.
 - `.scignore.yaml` is parsed with `yaml.safe_load`; deserializing it cannot construct arbitrary Python objects.
