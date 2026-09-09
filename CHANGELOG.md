@@ -4,11 +4,30 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
-## 0.4.0 — unreleased
+## 0.4.0 — 2026-09-09
 
-The version was bumped to 0.4.0 without an entry, so this section starts by
-existing. Do not tag until [`release-blockers.md`](docs/release-blockers.md) is
-clear.
+All eight v0.3.0 release blockers are closed, and so are the four structural
+problems the architecture audit ranked
+([`architecture.md`](docs/architecture.md) §2, §3, §4). Two decisions remain
+open on purpose and are named at the foot of this section.
+
+### Changed — behaviour that will move existing results
+
+Pre-1.0, and these are corrections rather than features, but a repository
+audited with 0.3.0 can score differently under 0.4.0:
+
+- **Findings from paths matching `paths.exclude_patterns` no longer appear.**
+  They did for ten of fifteen scanners, while the same patterns already
+  excluded those files from the LOC denominator — so scores were computed with
+  a numerator and a denominator measuring different repositories. Expect fewer
+  findings and, in repositories with large excluded trees, a different score.
+- **The markdown report and PR comment now withhold a grade** whenever the JSON
+  does. If you have no `gates.require_scanners` declared, output that used to
+  read `Score: … A+` now reads `Finding score (not a verified grade)`. Declare
+  the scanner set to get a verified grade back.
+- **`Scanner.run()` is now `Scanner.scan()` and returns a `ScanResult`.** This
+  breaks any out-of-tree scanner adapter. Nothing in the documented CLI or
+  config surface changes; see [D13](docs/decisions.md) for the migration shape.
 
 ### Added
 
@@ -154,6 +173,24 @@ clear.
 - [`docs/decisions.md`](docs/decisions.md) — a decision register, recording the
   trust ruling and the three integration decisions taken for the
   `maintainability-agent` Security pillar.
+
+### Still open, deliberately
+
+Neither is a defect, and neither can be settled by a refactor — both are about
+whether the number this tool reports means anything.
+
+- **The condition scale is uncalibrated** ([D5](docs/decisions.md)). The bands
+  were borrowed from `maintainability-agent` without its calibration study, and
+  the `sqrt(LOC/1000)` dampener is an invented normalizer with no corpus behind
+  it. `tests/integration/test_scoring_drift.py` pins the scale's *stability*;
+  nobody has established that A+ corresponds to anything real. Treat the letter
+  as a relative signal, not an absolute one.
+- **The score's null state is still "perfect"**
+  ([`architecture.md`](docs/architecture.md) §5). A repository nothing could be
+  scanned in produces zero findings and therefore A+. That is why coverage
+  exists as a separate axis and why a verified grade is withheld without a
+  declared scanner set — but it still asks a reader to combine two numbers.
+  Whether the deliverable should be a single verdict is a product decision.
 
 ## 0.3.0 — 2026-08-09
 
