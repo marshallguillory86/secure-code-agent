@@ -14,8 +14,9 @@ import tempfile
 from importlib.resources import files
 from pathlib import Path
 
-from secure_code_audit.config import Config
+from secure_code_audit.config import Config, ScannerConfig
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 #: Ruleset shipped inside the wheel, used when `online` is false. Deliberately
@@ -57,9 +58,24 @@ class SemgrepScanner(Scanner):
     default_category = Category.CODE_VULNERABILITIES
     install_hint = "pip install 'secure-code-agent[python-scanners]'"
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scope(self, config: ScannerConfig) -> str | None:
+        """Which rules produced the findings is part of the finding.
+
+        Citing the profile by id, version and digest is what makes an offline
+        run reproducible rather than merely repeatable. Online runs draw from
+        the Registry, which has no such identity to cite.
+        """
+        if config.online:
+            return None
+        from secure_code_audit import ruleset as ruleset_mod
+
+        path = offline_ruleset_path()
+        profile = ruleset_mod.describe(path) if path else None
+        return f"offline profile {profile.cite()}" if profile else "offline profile unavailable"
+
+    def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
-            return [self._unavailable_finding(target)]
+            return self.unavailable(target)
 
         sc_cfg = self.cfg(config)
         config_arg = "auto"  # registry-curated pack; requires network
@@ -71,15 +87,13 @@ class SemgrepScanner(Scanner):
             # falling back to something that reaches the network.
             ruleset = offline_ruleset_path()
             if ruleset is None:
-                return [
-                    self._error_finding(
-                        target,
-                        f"offline semgrep requested but the packaged ruleset "
-                        f"({OFFLINE_RULESET}) is missing from this installation; "
-                        "reinstall secure-code-agent, or set scanners.semgrep.online "
-                        "to allow the Semgrep Registry",
-                    )
-                ]
+                return self.failed(
+                    target,
+                    f"offline semgrep requested but the packaged ruleset "
+                    f"({OFFLINE_RULESET}) is missing from this installation; "
+                    "reinstall secure-code-agent, or set scanners.semgrep.online "
+                    "to allow the Semgrep Registry",
+                )
             config_arg = str(ruleset)
 
         with tempfile.NamedTemporaryFile(suffix=".sarif", delete=False) as tmp:
@@ -106,27 +120,16 @@ class SemgrepScanner(Scanner):
                 args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
             )
             if r.returncode == 124:
-                return [
-                    self._make_finding(
-                        rule_id=f"{self.name}.tool_timeout",
-                        message=f"semgrep timed out: {r.stderr[:200]}",
-                        file_path=target,
-                        line_start=0,
-                        line_end=None,
-                        code_snippet=None,
-                        severity=Severity.INFORMATIONAL,
-                        confidence=Confidence.HIGH,
-                    )
-                ]
+                return self.timed_out(target, f"semgrep timed out: {r.stderr[:200]}")
             if r.returncode not in (0, 1):
-                return [self._error_finding(target, f"semgrep failed: {r.stderr[:300]}")]
+                return self.failed(target, f"semgrep failed: {r.stderr[:300]}")
             if not sarif_path.exists() or sarif_path.stat().st_size == 0:
-                return [self._error_finding(target, "semgrep emitted no SARIF output")]
+                return self.failed(target, "semgrep emitted no SARIF output")
             try:
                 payload = json.loads(sarif_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
-                return [self._error_finding(target, f"semgrep SARIF parse failure: {exc}")]
-            return self._parse_sarif(payload, target)
+                return self.failed(target, f"semgrep SARIF parse failure: {exc}")
+            return self.completed(self._parse_sarif(payload, target), scope=self.scope(sc_cfg))
         finally:
             sarif_path.unlink(missing_ok=True)
 
@@ -187,15 +190,3 @@ class SemgrepScanner(Scanner):
                     )
                 )
         return findings
-
-    def _error_finding(self, target: Path, message: str) -> Finding:
-        return self._make_finding(
-            rule_id=f"{self.name}.tool_error",
-            message=message,
-            file_path=target,
-            line_start=0,
-            line_end=None,
-            code_snippet=None,
-            severity=Severity.INFORMATIONAL,
-            confidence=Confidence.HIGH,
-        )

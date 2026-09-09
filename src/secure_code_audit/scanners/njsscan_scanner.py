@@ -31,6 +31,7 @@ from typing import Any
 
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Confidence, Finding, Severity
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 
@@ -44,9 +45,9 @@ class NjsscanScanner(Scanner):
     #: Pug/Handlebars/EJS and friends; both share the same inner shape.
     _BUCKETS = ("nodejs", "templates")
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
-            return [self._unavailable_finding(target)]
+            return self.unavailable(target)
 
         sc_cfg = self.cfg(config)
         args = [*self.command, "--json", str(target), *sc_cfg.extra_args]
@@ -56,14 +57,14 @@ class NjsscanScanner(Scanner):
             args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
         )
         if r.returncode == 124:
-            return [self._tool_finding(target, f"njsscan timed out: {r.stderr}", "tool_timeout")]
+            return self.timed_out(target, f"njsscan timed out: {r.stderr}")
         if not r.stdout.strip():
-            return [self._tool_finding(target, "njsscan emitted no output", "tool_error")]
+            return self.failed(target, "njsscan emitted no output")
 
         try:
             payload = json.loads(r.stdout)
         except json.JSONDecodeError as e:
-            return [self._tool_finding(target, f"njsscan JSON parse failure: {e}", "tool_error")]
+            return self.failed(target, f"njsscan JSON parse failure: {e}")
 
         findings: list[Finding] = []
         for bucket in self._BUCKETS:
@@ -72,7 +73,7 @@ class NjsscanScanner(Scanner):
                 continue
             for rule_id, entry in section.items():
                 findings.extend(self._findings_for_rule(str(rule_id), entry))
-        return findings
+        return self.completed(findings)
 
     def _findings_for_rule(self, rule_id: str, entry: Any) -> list[Finding]:
         if not isinstance(entry, dict):
@@ -105,15 +106,3 @@ class NjsscanScanner(Scanner):
                 )
             )
         return out
-
-    def _tool_finding(self, target: Path, message: str, kind: str) -> Finding:
-        return self._make_finding(
-            rule_id=f"{self.name}.{kind}",
-            message=message,
-            file_path=target,
-            line_start=0,
-            line_end=None,
-            code_snippet=None,
-            severity=Severity.INFORMATIONAL,
-            confidence=Confidence.HIGH,
-        )

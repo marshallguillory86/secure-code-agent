@@ -57,7 +57,7 @@ replacing.
 
 ## 2. Problem 1 — scanner outcomes are encoded in strings
 
-**Severity: high. Fix first.**
+**Severity: high. Fix first. — CLOSED 2026-09-09, see D13.**
 
 An adapter signals what happened to it by *naming a finding*:
 
@@ -122,6 +122,22 @@ name check in the orchestrator.
 
 Estimated cost: one focused session across twelve adapters. This is a
 prerequisite for cleanly fixing §3.
+
+**Done.** All fifteen adapters return `ScanResult`; the outcome constructors
+live on `Scanner` so the control finding is derived from the outcome rather
+than being the thing an outcome is inferred from. `classify_execution` is
+deleted — not deprecated — because a working string-parser left in the tree is
+an invitation to wire the next adapter into it. `_scanner_scope`'s name check
+is gone: adapters answer `scope()` for themselves. `tests/unit/test_scan_protocol.py`
+is the lint that blocks the class, including an AST check that fails any
+adapter hand-building a control finding.
+
+Two live defects fell out of the migration. `trufflehog` and `npm_audit` could
+return real findings *alongside* a control finding; the old classifier's early
+return then recorded `finding_count=0` for a run whose findings did reach the
+report, so the count and the report disagreed. And `pip_audit._parse` returned
+a control finding from a parsing helper, which made a leaf function the thing
+that decided the run's outcome. Both are structurally impossible now.
 
 ## 3. Problem 2 — every contract has two or more sources of truth
 
@@ -243,8 +259,8 @@ it is a product decision, not a refactor.
 
 ## 7. Recommended sequence
 
-1. **`ScanResult` for adapters** (§2). Highest defect-elimination per hour, and
-   a prerequisite for §3.
+1. ~~**`ScanResult` for adapters** (§2).~~ **Done 2026-09-09** (D13). Highest
+   defect-elimination per hour, and a prerequisite for §3.
 2. **Real scanner fixtures and the scoring-drift test** (§4). Cheapest of the
    three; immediately catches upstream format drift.
 3. **Single `ScoreVerdict` view-model** (§3, row 2). Small, and it retires the

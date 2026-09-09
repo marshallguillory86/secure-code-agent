@@ -72,7 +72,7 @@ def test_njsscan_flattens_one_finding_per_occurrence(tmp_path, monkeypatch):
         scanner, "_exec", lambda *a, **k: _proc(json.dumps(_NJSSCAN_PAYLOAD), code=1)
     )
 
-    findings = scanner.run(tmp_path, Config())
+    findings = scanner.scan(tmp_path, Config()).findings
 
     assert len(findings) == 2
     assert {f.rule_id for f in findings} == {"node_md5"}
@@ -98,20 +98,20 @@ def test_njsscan_reads_the_templates_bucket_too(tmp_path, monkeypatch):
     scanner = _configured(NjsscanScanner(), "njsscan")
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(json.dumps(payload), code=1))
 
-    assert [f.rule_id for f in scanner.run(tmp_path, Config())] == ["express_xss"]
+    assert [f.rule_id for f in scanner.scan(tmp_path, Config()).findings] == ["express_xss"]
 
 
 def test_njsscan_reports_timeout_and_unparseable_output(tmp_path, monkeypatch):
     scanner = _configured(NjsscanScanner(), "njsscan")
 
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(stderr="slow", code=124))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "njsscan.tool_timeout"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "njsscan.tool_timeout"
 
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(stdout="not json"))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "njsscan.tool_error"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "njsscan.tool_error"
 
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(stdout=""))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "njsscan.tool_error"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "njsscan.tool_error"
 
 
 def test_njsscan_survives_a_malformed_section(tmp_path, monkeypatch):
@@ -119,7 +119,7 @@ def test_njsscan_survives_a_malformed_section(tmp_path, monkeypatch):
     scanner = _configured(NjsscanScanner(), "njsscan")
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(json.dumps(payload)))
 
-    assert scanner.run(tmp_path, Config()) == []
+    assert scanner.scan(tmp_path, Config()).findings == ()
 
 
 # --------------------------------------------------------------------------
@@ -153,7 +153,7 @@ def test_rubocop_parses_security_offenses(tmp_path, monkeypatch):
     scanner = _configured(RubocopScanner(), "rubocop")
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(json.dumps(payload), code=1))
 
-    findings = scanner.run(tmp_path, Config())
+    findings = scanner.scan(tmp_path, Config()).findings
 
     assert [f.rule_id for f in findings] == ["Security/Eval", "Security/MarshalLoad"]
     assert [f.line_start for f in findings] == [9, 13]
@@ -186,7 +186,7 @@ def test_a_convention_severity_is_not_demoted_out_of_the_gate(tmp_path, monkeypa
     scanner = _configured(RubocopScanner(), "rubocop")
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(json.dumps(payload), code=1))
 
-    assert scanner.run(tmp_path, Config())[0].severity is Severity.MEDIUM
+    assert scanner.scan(tmp_path, Config()).findings[0].severity is Severity.MEDIUM
 
 
 def test_rubocop_is_restricted_to_security_and_ignores_the_targets_config(tmp_path, monkeypatch):
@@ -205,7 +205,7 @@ def test_rubocop_is_restricted_to_security_and_ignores_the_targets_config(tmp_pa
 
     scanner = _configured(RubocopScanner(), "rubocop")
     monkeypatch.setattr(scanner, "_exec", fake_exec)
-    scanner.run(tmp_path, Config())
+    scanner.scan(tmp_path, Config())
 
     assert seen[0][seen[0].index("--only") + 1] == "Security"
     assert "--force-default-config" in seen[0]
@@ -215,13 +215,13 @@ def test_rubocop_reports_timeout_and_unparseable_output(tmp_path, monkeypatch):
     scanner = _configured(RubocopScanner(), "rubocop")
 
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(stderr="slow", code=124))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "rubocop.tool_timeout"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "rubocop.tool_timeout"
 
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(stdout="{"))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "rubocop.tool_error"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "rubocop.tool_error"
 
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(stdout=" "))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "rubocop.tool_error"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "rubocop.tool_error"
 
 
 def test_rubocop_skips_malformed_entries_rather_than_raising(tmp_path, monkeypatch):
@@ -229,7 +229,7 @@ def test_rubocop_skips_malformed_entries_rather_than_raising(tmp_path, monkeypat
     scanner = _configured(RubocopScanner(), "rubocop")
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(json.dumps(payload)))
 
-    assert scanner.run(tmp_path, Config()) == []
+    assert scanner.scan(tmp_path, Config()).findings == ()
 
 
 # --------------------------------------------------------------------------
@@ -273,7 +273,7 @@ def test_gosec_without_a_go_toolchain_is_a_failure_not_a_clean_scan(tmp_path, mo
         scanner, "_exec", lambda *a, **k: _proc(json.dumps(_GOSEC_NO_TOOLCHAIN), code=1)
     )
 
-    findings = scanner.run(tmp_path, Config())
+    findings = scanner.scan(tmp_path, Config()).findings
 
     assert [f.rule_id for f in findings] == ["gosec.tool_error"]
     assert "could not load the Go packages" in findings[0].message
@@ -291,7 +291,7 @@ def test_gosec_reporting_zero_files_with_no_error_is_still_not_clean(tmp_path, m
     scanner = _configured(GosecScanner(), "gosec")
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(json.dumps(payload)))
 
-    assert scanner.run(tmp_path, Config())[0].rule_id == "gosec.tool_error"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "gosec.tool_error"
 
 
 def test_gosec_parses_issues_when_it_actually_read_the_tree(tmp_path, monkeypatch):
@@ -315,7 +315,7 @@ def test_gosec_parses_issues_when_it_actually_read_the_tree(tmp_path, monkeypatc
     scanner = _configured(GosecScanner(), "gosec")
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(json.dumps(payload), code=1))
 
-    findings = scanner.run(tmp_path, Config())
+    findings = scanner.scan(tmp_path, Config()).findings
 
     assert len(findings) == 1
     assert findings[0].rule_id == "G204"
@@ -335,7 +335,7 @@ def test_gosec_reads_a_line_span(tmp_path, monkeypatch):
     scanner = _configured(GosecScanner(), "gosec")
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(json.dumps(payload), code=1))
 
-    finding = scanner.run(tmp_path, Config())[0]
+    finding = scanner.scan(tmp_path, Config()).findings[0]
 
     assert (finding.line_start, finding.line_end) == (12, 14)
 
@@ -349,7 +349,7 @@ def test_gosec_passes_no_fail_so_findings_do_not_read_as_a_crash(tmp_path, monke
 
     scanner = _configured(GosecScanner(), "gosec")
     monkeypatch.setattr(scanner, "_exec", fake_exec)
-    scanner.run(tmp_path, Config())
+    scanner.scan(tmp_path, Config())
 
     assert "-no-fail" in seen[0]
     assert any(a.endswith("/...") for a in seen[0])
@@ -359,10 +359,10 @@ def test_gosec_reports_timeout_and_unparseable_output(tmp_path, monkeypatch):
     scanner = _configured(GosecScanner(), "gosec")
 
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(stderr="slow", code=124))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "gosec.tool_timeout"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "gosec.tool_timeout"
 
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(stdout="<html>"))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "gosec.tool_error"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "gosec.tool_error"
 
     monkeypatch.setattr(scanner, "_exec", lambda *a, **k: _proc(stdout=""))
-    assert scanner.run(tmp_path, Config())[0].rule_id == "gosec.tool_error"
+    assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "gosec.tool_error"

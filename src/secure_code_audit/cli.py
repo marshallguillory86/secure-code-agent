@@ -29,8 +29,8 @@ from secure_code_audit.git_tools import find_repo_root, loc_under
 from secure_code_audit.scanner_status import (
     ScannerExecution,
     ScannerOutcome,
-    classify_execution,
     evaluate_coverage,
+    execution_from_result,
 )
 from secure_code_audit.scanners import floor
 from secure_code_audit.scoring import active_gates, evaluate_gates
@@ -438,21 +438,19 @@ def _selected_scanners(args: argparse.Namespace, cfg: config_mod.Config) -> list
 def _run_scanners(args: argparse.Namespace, cfg: config_mod.Config, target: Path) -> _ScanResult:
     result = _ScanResult(findings=[], ran=[], unavailable=[], executions=[])
     for name in _selected_scanners(args, cfg):
-        sc_cfg = cfg.scanners.get(name) or config_mod.ScannerConfig()
         scanner = scanners.SCANNERS[name]()
         scanner.configure(target, cfg)
         available = scanner.is_available()
         if not available:
             result.unavailable.append(name)
         version = scanner.binary_version() if available else None
-        findings = scanner.run(target, cfg)
-        result.findings.extend(findings)
-        execution = classify_execution(
+        scan = scanner.scan(target, cfg)
+        result.findings.extend(scan.findings)
+        execution = execution_from_result(
             name,
-            findings,
+            scan,
             command=scanner.command if available else (),
             version=version,
-            scope=_scanner_scope(name, sc_cfg),
         )
         result.executions.append(execution)
         if execution.outcome is ScannerOutcome.COMPLETED:
@@ -586,28 +584,6 @@ def _validate_scanner_config(cfg: config_mod.Config) -> None:
     unknown_required = sorted(required - known)
     if unknown_required:
         raise ValueError(f"unknown required scanner: {', '.join(unknown_required)}")
-
-
-def _scanner_scope(name: str, cfg: config_mod.ScannerConfig) -> str | None:
-    """Describe configured audit scope without changing scanner semantics."""
-    if name == "semgrep" and not cfg.online:
-        # Which rules produced the findings is part of the finding. Citing the
-        # profile by id, version and digest is what makes an offline run
-        # reproducible rather than merely repeatable.
-        from secure_code_audit import ruleset
-        from secure_code_audit.scanners.semgrep_scanner import offline_ruleset_path
-
-        path = offline_ruleset_path()
-        profile = ruleset.describe(path) if path else None
-        return f"offline profile {profile.cite()}" if profile else "offline profile unavailable"
-    if name != "pip_audit":
-        return None
-    parts = [f"mode={cfg.mode}"]
-    if cfg.inputs:
-        parts.append(f"inputs={','.join(cfg.inputs)}")
-    if cfg.extra_args:
-        parts.append(f"extra_args={' '.join(cfg.extra_args)}")
-    return "; ".join(parts)
 
 
 if __name__ == "__main__":

@@ -4,10 +4,11 @@ from pathlib import Path
 from secure_code_audit import config as config_mod
 from secure_code_audit.cli import (
     _parse_sarif_import,
-    _scanner_scope,
     _under_root,
     main,
 )
+from secure_code_audit.scanners.bandit_scanner import BanditScanner
+from secure_code_audit.scanners.pip_audit_scanner import PipAuditScanner
 
 
 def _write_config(tmp_path, *, required: bool):
@@ -106,14 +107,20 @@ def test_repository_policy_paths_resolve_from_scan_root(tmp_path):
 
 
 def test_pip_audit_scope_discloses_bounded_inputs_and_flags():
+    """Scope is declared by the adapter, not inferred from its name.
+
+    The orchestrator used to carry `if name != "pip_audit": return None`,
+    because there was nowhere on an adapter to say what it covered
+    (architecture.md §2). Asking the adapter is the fix.
+    """
     scanner_config = config_mod.ScannerConfig(
         mode="requirements",
         inputs=["requirements-audit.txt"],
         extra_args=["--no-deps"],
     )
 
-    assert _scanner_scope("bandit", scanner_config) is None
-    assert _scanner_scope("pip_audit", scanner_config) == (
+    assert BanditScanner().scope(scanner_config) is None
+    assert PipAuditScanner().scope(scanner_config) == (
         "mode=requirements; inputs=requirements-audit.txt; extra_args=--no-deps"
     )
 

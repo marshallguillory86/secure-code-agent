@@ -37,6 +37,7 @@ from typing import Any
 
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Confidence, Finding, Severity
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 
@@ -45,9 +46,9 @@ class GosecScanner(Scanner):
     binary = "gosec"
     install_hint = "go install github.com/securego/gosec/v2/cmd/gosec@latest"
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
-            return [self._unavailable_finding(target)]
+            return self.unavailable(target)
 
         sc_cfg = self.cfg(config)
         args = [
@@ -64,25 +65,25 @@ class GosecScanner(Scanner):
             args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
         )
         if r.returncode == 124:
-            return [self._tool_finding(target, f"gosec timed out: {r.stderr}", "tool_timeout")]
+            return self.timed_out(target, f"gosec timed out: {r.stderr}")
         if not r.stdout.strip():
-            return [self._tool_finding(target, "gosec emitted no output", "tool_error")]
+            return self.failed(target, "gosec emitted no output")
 
         try:
             payload = json.loads(r.stdout)
         except json.JSONDecodeError as e:
-            return [self._tool_finding(target, f"gosec JSON parse failure: {e}", "tool_error")]
+            return self.failed(target, f"gosec JSON parse failure: {e}")
 
         blocked = self._load_failure(payload)
         if blocked is not None:
-            return [self._tool_finding(target, blocked, "tool_error")]
+            return self.failed(target, blocked)
 
         findings: list[Finding] = []
         for issue in payload.get("Issues") or []:
             if not isinstance(issue, dict):
                 continue
             findings.append(self._finding_for(issue))
-        return findings
+        return self.completed(findings)
 
     @staticmethod
     def _load_failure(payload: dict[str, Any]) -> str | None:
@@ -128,16 +129,4 @@ class GosecScanner(Scanner):
             code_snippet=str(issue.get("code") or "").strip() or None,
             severity=Severity.from_string(str(issue.get("severity") or "")),
             confidence=Confidence.from_string(str(issue.get("confidence") or "")),
-        )
-
-    def _tool_finding(self, target: Path, message: str, kind: str) -> Finding:
-        return self._make_finding(
-            rule_id=f"{self.name}.{kind}",
-            message=message,
-            file_path=target,
-            line_start=0,
-            line_end=None,
-            code_snippet=None,
-            severity=Severity.INFORMATIONAL,
-            confidence=Confidence.HIGH,
         )

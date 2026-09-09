@@ -23,6 +23,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D10 | Rules ship as a versioned, digest-identified profile | 2026-09-09 | Accepted |
 | D11 | Author a rule only where no floor scanner already covers it | 2026-09-09 | Accepted |
 | D12 | The coverage check, run for the other four languages | 2026-09-09 | Accepted |
+| D13 | Adapters state their outcome; nothing infers it from a finding's name | 2026-09-09 | Accepted |
 
 ---
 
@@ -452,3 +453,63 @@ other languages. Running the check on one language and asserting the result for
 the rest is not evidence. The check is now automated per language in
 `tests/unit/test_offline_ruleset.py`, so the next rule added to a language a
 tool covers fails the build instead of surviving to a later audit.
+
+## D13 — Adapters state their outcome; nothing infers it from a name
+
+**Status.** Accepted, 2026-09-09. Closes [`architecture.md`](architecture.md) §2.
+
+**Question.** An adapter used to signal what happened to it by *naming a
+finding*: `bandit.tool_error` meant FAILED, `bandit.tool_timeout` meant
+TIMED_OUT, and anything starting `pip_audit.no_` meant NOT_APPLICABLE.
+`classify_execution` then reverse-engineered the intent by prefix matching, and
+counted real findings by *exclusion* — everything not starting `<name>.tool_`.
+
+**Why that was worth changing before adding features.** Nothing enforced the
+protocol: no type, no test, no lint. The convention was documented only by
+example, and fifteen adapters had been written at four different times. An
+adapter naming a control finding wrongly produced a *security* finding
+silently; a real finding whose id began with the scanner's name plus `no_`
+became a false NOT_APPLICABLE, which a required-scanner gate escalated into a
+hard build failure. The architecture audit ranked this first on
+defect-elimination per hour, and most defects traded during recent review
+cycles were downstream symptoms of it.
+
+**Decision.** `Scanner.scan()` returns a `ScanResult` — outcome, findings,
+reason, scope. Outcome constructors (`completed`, `failed`, `timed_out`,
+`unavailable`, `not_applicable`) live on the base class and *derive* the
+control finding from the outcome, so the two cannot disagree. A non-COMPLETED
+result without a reason raises: a failed scanner with no reason reaches a
+report as a blank cell, indistinguishable from one nobody asked about.
+
+**`classify_execution` is deleted, not deprecated.** It still worked, and that
+was the problem — a functioning string-parser left in the tree is an invitation
+to wire the next adapter into it. `execution_from_result` replaces it and does
+no decoding at all.
+
+**Scope moved onto the adapter.** `cli.py` carried `if name != "pip_audit":
+return None` because there was nowhere on an adapter to declare what it
+covered. `Scanner.scope()` is that place; `pip_audit` reports its mode and
+inputs, `semgrep` cites the offline rule profile by digest, everything else
+returns None.
+
+**Two live defects surfaced during the migration**, both of the predicted kind.
+`trufflehog` and `npm_audit` could return real findings *alongside* a control
+finding — twenty parsed secrets and three unreadable lines — and the old
+classifier's early return recorded `finding_count=0` while those findings still
+reached the report. The count and the report disagreed because neither was the
+source of truth. `failed()` now takes the partial findings explicitly: they are
+reported, and the outcome stays FAILED, because a partial audit is not an
+audit. Separately, `pip_audit._parse` returned a control finding from a parsing
+helper, making a leaf function the thing that decided the run's outcome; it
+raises now, and the caller states the outcome.
+
+**A regression I introduced and caught.** Folding per-input timeouts into the
+same failure list cost `npm_audit` and `pip_audit` their TIMED_OUT outcome.
+Both fail coverage, so no gate changed — but only one of them tells an operator
+to raise the timeout. Timeouts are tracked separately again.
+
+**Enforced, not remembered.** `tests/unit/test_scan_protocol.py` asserts every
+registered scanner returns `ScanResult`, that a non-COMPLETED result carries a
+reason, that a failed run keeps its findings and loses its count, and — by AST
+walk over every adapter — that none of them hand-builds a control finding. The
+last one was verified against a synthetic offender rather than assumed to work.

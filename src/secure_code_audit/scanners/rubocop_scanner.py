@@ -34,6 +34,7 @@ from pathlib import Path
 
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Confidence, Finding, Severity
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 #: RuboCop's severities are linter severities, not security ones. A Security
@@ -55,9 +56,9 @@ class RubocopScanner(Scanner):
     binary = "rubocop"
     install_hint = "gem install rubocop"
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
-            return [self._unavailable_finding(target)]
+            return self.unavailable(target)
 
         sc_cfg = self.cfg(config)
         args = [
@@ -76,14 +77,14 @@ class RubocopScanner(Scanner):
             args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
         )
         if r.returncode == 124:
-            return [self._tool_finding(target, f"rubocop timed out: {r.stderr}", "tool_timeout")]
+            return self.timed_out(target, f"rubocop timed out: {r.stderr}")
         if not r.stdout.strip():
-            return [self._tool_finding(target, "rubocop emitted no output", "tool_error")]
+            return self.failed(target, "rubocop emitted no output")
 
         try:
             payload = json.loads(r.stdout)
         except json.JSONDecodeError as e:
-            return [self._tool_finding(target, f"rubocop JSON parse failure: {e}", "tool_error")]
+            return self.failed(target, f"rubocop JSON parse failure: {e}")
 
         findings: list[Finding] = []
         for entry in payload.get("files") or []:
@@ -94,7 +95,7 @@ class RubocopScanner(Scanner):
                 if not isinstance(offense, dict):
                     continue
                 findings.append(self._finding_for(offense, file_path))
-        return findings
+        return self.completed(findings)
 
     def _finding_for(self, offense: dict, file_path: Path) -> Finding:
         location = offense.get("location")
@@ -114,16 +115,4 @@ class RubocopScanner(Scanner):
             # A Security cop is a syntactic match on a known-dangerous call,
             # with no dataflow behind it — the same standing as njsscan's.
             confidence=Confidence.MEDIUM,
-        )
-
-    def _tool_finding(self, target: Path, message: str, kind: str) -> Finding:
-        return self._make_finding(
-            rule_id=f"{self.name}.{kind}",
-            message=message,
-            file_path=target,
-            line_start=0,
-            line_end=None,
-            code_snippet=None,
-            severity=Severity.INFORMATIONAL,
-            confidence=Confidence.HIGH,
         )

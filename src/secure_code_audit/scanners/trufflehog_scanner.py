@@ -19,6 +19,7 @@ from pathlib import Path
 
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 _FINDINGS_EXIT = 183  # trufflehog: 0 = clean, 183 = verified secrets found
@@ -32,9 +33,9 @@ class TruffleHogScanner(Scanner):
         "brew install trufflehog, or a pinned release from github.com/trufflesecurity/trufflehog"
     )
 
-    def run(self, target: Path, config: Config) -> list[Finding]:
+    def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
-            return [self._unavailable_finding(target)]
+            return self.unavailable(target)
 
         sc_cfg = self.cfg(config)
         args = [
@@ -51,38 +52,16 @@ class TruffleHogScanner(Scanner):
             args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 183)
         )  # 183 = findings present
         if r.returncode == 124:
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.tool_timeout",
-                    message=f"trufflehog timed out: {r.stderr[:200]}",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                )
-            ]
+            return self.timed_out(target, f"trufflehog timed out: {r.stderr[:200]}")
         if r.returncode not in (0, 183):
-            return [
-                self._make_finding(
-                    rule_id=f"{self.name}.tool_error",
-                    message=f"trufflehog failed: {r.stderr[:300]}",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                )
-            ]
+            return self.failed(target, f"trufflehog failed: {r.stderr[:300]}")
         if not r.stdout.strip():
             # Exit 0 with no output is a clean scan. Exit 183 with no output is
             # trufflehog reporting verified secrets we cannot show.
             contradiction = self._findings_exit_contradiction(
                 target, exit_code=r.returncode, findings_exit=_FINDINGS_EXIT, findings=[]
             )
-            return [contradiction] if contradiction else []
+            return self.failed(target, contradiction) if contradiction else self.completed([])
 
         out: list[Finding] = []
         parse_errors = 0
@@ -97,22 +76,17 @@ class TruffleHogScanner(Scanner):
                 continue
             out.append(self._parse_one(hit))
         if parse_errors:
-            out.append(
-                self._make_finding(
-                    rule_id=f"{self.name}.parse_error",
-                    message=f"trufflehog emitted {parse_errors} invalid JSON line(s)",
-                    file_path=target,
-                    line_start=0,
-                    line_end=None,
-                    code_snippet=None,
-                    severity=Severity.INFORMATIONAL,
-                    confidence=Confidence.HIGH,
-                )
+            # Real secrets and lost lines at once. Both are true, so both are
+            # reported: the findings stand and the coverage says failed.
+            return self.failed(
+                target,
+                f"trufflehog emitted {parse_errors} invalid JSON line(s)",
+                findings=out,
             )
         contradiction = self._findings_exit_contradiction(
             target, exit_code=r.returncode, findings_exit=_FINDINGS_EXIT, findings=out
         )
-        return [contradiction] if contradiction else out
+        return self.failed(target, contradiction) if contradiction else self.completed(out)
 
     def _parse_one(self, hit: dict) -> Finding:
         detector = str(hit.get("DetectorName") or hit.get("Detector") or "unknown")

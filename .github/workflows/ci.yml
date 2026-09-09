@@ -75,8 +75,13 @@ jobs:
       # duplicates a floor tool fails the build instead of surviving to a later
       # audit. Each needs the tool it checks against actually installed, or it
       # skips and proves nothing.
+      # --user-install because the runner's system gem directory is not
+      # writable, and the user gem bin has to reach PATH or the test finds no
+      # `rubocop` and skips — which the guard below then fails on.
       - name: Install RuboCop for the Ruby overlap check
-        run: gem install --no-document rubocop -v 1.90.0
+        run: |
+          gem install --user-install --no-document rubocop -v 1.90.0
+          echo "$(ruby -e 'puts Gem.user_dir')/bin" >> "$GITHUB_PATH"
 
       - name: Every rule fires, none fires on safe code, and none duplicates a tool
         run: python -m pytest tests/unit/test_offline_ruleset.py -v --no-header

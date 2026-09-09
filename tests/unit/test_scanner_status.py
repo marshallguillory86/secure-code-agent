@@ -5,7 +5,6 @@ from secure_code_audit.scanner_status import (
     CoverageStatus,
     ScannerExecution,
     ScannerOutcome,
-    classify_execution,
     evaluate_coverage,
     worst_by_name,
 )
@@ -33,7 +32,9 @@ def _control(rule_id: str, message: str = "control") -> Finding:
 
 
 def test_required_unavailable_scanner_fails_coverage_and_gate():
-    execution = classify_execution("bandit", [_control("bandit.tool_unavailable")])
+    execution = ScannerExecution(
+        "bandit", ScannerOutcome.UNAVAILABLE, reason="could not resolve bandit"
+    )
     coverage = evaluate_coverage([execution], ["bandit"])
     report = score([], 100)
     gate = evaluate_gates([], report, {"require_scanners": ["bandit"]}, coverage)
@@ -53,7 +54,9 @@ def test_optional_unavailable_scanner_is_partial_but_does_not_fail_gate():
 
 
 def test_required_not_applicable_scanner_fails_coverage():
-    execution = classify_execution("pip_audit", [_control("pip_audit.no_dependency_input")])
+    execution = ScannerExecution(
+        "pip_audit", ScannerOutcome.NOT_APPLICABLE, reason="no dependency input"
+    )
     coverage = evaluate_coverage([execution], ["pip_audit"])
 
     assert execution.outcome is ScannerOutcome.NOT_APPLICABLE
