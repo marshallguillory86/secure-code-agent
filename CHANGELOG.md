@@ -40,6 +40,21 @@ clear.
   primitives in, framework rules out, enforced by a test rather than by review.
   See [D9](docs/decisions.md).
 
+### Fixed — remaining known defects
+
+- The default `secure-code-agent.json` is read from the **audited project**,
+  not the shell's working directory. The config was loaded before the target
+  was resolved, so auditing another tree from this repository applied *this*
+  repository's required scanners to it, and a tree carrying its own policy was
+  audited without it. Release-blockers §7.
+- The emitted SARIF `$schema` pointed at an `oasis-tcs` raw path that returns
+  404. It now uses the OASIS canonical URL, which returns 200 — both were
+  checked rather than assumed. The documents always validated; only the
+  locator a consumer would follow was broken. Release-blockers §8.
+- The release-blocker checklist listed every item twice, once ticked and once
+  not, from a keep-both conflict resolution during a rebase. A checklist that
+  says an item is both done and not done is worse than no checklist.
+
 ### Security
 
 - **Repository-supplied configuration can no longer choose what the host

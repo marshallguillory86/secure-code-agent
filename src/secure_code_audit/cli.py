@@ -333,18 +333,19 @@ def _prepare_audit(
     args: argparse.Namespace,
 ) -> tuple[config_mod.Config, Path, Path]:
     """Load config and resolve the single scan root, or refuse."""
-    cfg = config_mod.load(args.config)
-    # Set from the command line only. Threading it through the loaded config
-    # would let a repository-supplied file assert its own trustworthiness.
-    cfg.trust_target_config = bool(getattr(args, "trust_target_config", False))
-    _validate_scanner_config(cfg)
     if args.changed_only:
         raise ValueError(
             "--changed-only is not implemented safely; refusing to claim a scoped audit"
         )
     if len(args.paths) > 1:
         raise ValueError("multiple scan roots are not supported; provide one repository root")
+    # The target is resolved first because the default config belongs to it.
     target = Path(args.paths[0]).resolve()
+    cfg = config_mod.load(args.config, default_root=target)
+    # Set from the command line only. Threading it through the loaded config
+    # would let a repository-supplied file assert its own trustworthiness.
+    cfg.trust_target_config = bool(getattr(args, "trust_target_config", False))
+    _validate_scanner_config(cfg)
     return cfg, target, find_repo_root(target)
 
 

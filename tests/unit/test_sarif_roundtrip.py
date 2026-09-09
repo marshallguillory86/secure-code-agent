@@ -318,3 +318,16 @@ def test_non_object_entries_inside_results_are_skipped_not_fatal(tmp_path):
 
     assert len(findings) == 1
     assert executions[0].outcome is ScannerOutcome.UNVERIFIED
+
+
+def test_the_declared_schema_is_the_canonical_oasis_url():
+    """§8: the emitted `$schema` pointed at an oasis-tcs path that 404s.
+
+    The document validated fine — only the locator a consumer would follow was
+    broken, which is the kind of defect that survives because nobody follows it
+    until they need to.
+    """
+    schema = sarif.emit([])["$schema"]
+
+    assert schema.startswith("https://docs.oasis-open.org/sarif/")
+    assert "raw.githubusercontent.com" not in schema

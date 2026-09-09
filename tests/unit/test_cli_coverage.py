@@ -241,6 +241,7 @@ def test_sarif_import_name_prefix_is_split_from_paths_that_contain_equals(tmp_pa
 
 def _vulnerable_repo(tmp_path):
     """A target the built-in rules will flag HIGH (CWE-78)."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "vuln.py").write_text(
         "import subprocess\n\n\ndef run(user_input):\n    subprocess.run(user_input, shell=True)\n",
         encoding="utf-8",
@@ -367,3 +368,32 @@ def test_a_grade_is_issued_only_when_a_declared_scanner_set_actually_ran(tmp_pat
     assert payload["verified_grade"] == payload["letter"]
     assert payload["evidence_status"] == "complete"
     assert payload["evidence_reasons"] == []
+
+
+def test_the_default_config_belongs_to_the_target_not_the_shell(tmp_path, monkeypatch):
+    """§7: auditing another project used to apply *this* project's policy.
+
+    `config_mod.load` was called before the target was resolved, so the default
+    `secure-code-agent.json` came from the shell's working directory. Running
+    the audit from a repository with strict gates against an unrelated tree
+    silently enforced the wrong policy — and, read the other way, a tree with
+    its own config was audited without it.
+    """
+    caller = tmp_path / "caller"
+    caller.mkdir()
+    (caller / "secure-code-agent.json").write_text(
+        json.dumps({"gates": {"require_scanners": ["trivy"]}}), encoding="utf-8"
+    )
+    target = _vulnerable_repo(tmp_path / "target")
+    (target / "secure-code-agent.json").write_text(
+        json.dumps({"gates": {"fail_on_severity": ["critical"]}}), encoding="utf-8"
+    )
+    out = tmp_path / "report.json"
+
+    monkeypatch.chdir(caller)
+    main([str(target), "--only-scanners", "builtin_rules", "--json-output", str(out)])
+    payload = json.loads(out.read_text(encoding="utf-8"))
+
+    # The target's own policy, not the caller's.
+    assert payload["coverage"]["required"] == []
+    assert "trivy" not in json.dumps(payload["coverage"])
