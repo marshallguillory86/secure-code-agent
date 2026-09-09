@@ -4,6 +4,56 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.4.0 — unreleased
+
+The version was bumped to 0.4.0 without an entry, so this section starts by
+existing. Do not tag until [`release-blockers.md`](docs/release-blockers.md) is
+clear.
+
+### Security
+
+- **Repository-supplied configuration can no longer choose what the host
+  executes.** `scanners.<name>.command` accepted a relative path, resolved it
+  under the audit target, and ran it — so a repository shipping its own
+  `secure-code-agent.json` selected the auditing host's executable. That is
+  threat model T1, realised by the tool. A config found inside the tree may no
+  longer name a command that also resolves inside the tree; the scanner reports
+  `unavailable`, which fails required coverage. A config kept outside the tree
+  is an operator artifact and keeps the documented tree-local interpreter
+  workflow. `--trust-target-config` is the explicit opt-in, and is
+  command-line-only so a config cannot grant itself the trust. See
+  [D1](docs/decisions.md).
+- The containment check applies to the resolved path from every resolution
+  route, not only the relative-path branch, because `PATH` can contain `.` or a
+  tree-local directory.
+
+### Fixed
+
+- **Withholding evidence can no longer buy a better grade.** The score is a
+  rate over findings, so disabling scanners removed findings and the number
+  rose — on one tree, from 0.00/F to 5.00/A+, the best possible letter earned
+  by looking less hard. Scanner coverage did not catch it, because a disabled
+  scanner produces no execution record at all. A letter grade is now issued
+  only when `gates.require_scanners` declares a scanner set *and* coverage
+  confirms it ran; otherwise `verified_grade` is null with reasons. The numeric
+  estimate is unchanged and still reported — it is honest about what was found,
+  it simply is not a grade. Borrowed from `maintainability-agent`'s P3 and
+  ADR 001.
+- The decision to qualify or withhold a score is made once, in
+  `scoring.verdict()`, instead of independently in five renderers — the
+  duplication `architecture.md` §3 recorded, where the SARIF site was missed on
+  the first pass.
+- Unknown top-level configuration keys are rejected instead of ignored. The
+  schema declared `additionalProperties: false` while the loader accepted
+  anything, so a typo'd gate name silently disabled a gate. See
+  [D2](docs/decisions.md).
+
+### Documentation
+
+- [`docs/decisions.md`](docs/decisions.md) — a decision register, recording the
+  trust ruling and the three integration decisions taken for the
+  `maintainability-agent` Security pillar.
+
 ## 0.3.0 — 2026-08-09
 
 Coverage-integrity release. A clean finding set and successful scanner

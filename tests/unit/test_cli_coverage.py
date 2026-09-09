@@ -287,3 +287,78 @@ def test_report_only_audits_still_run_without_any_gate(tmp_path):
     config.write_text(json.dumps({"gates": {}}), encoding="utf-8")
 
     assert main([str(target), "--config", str(config)]) == 0
+
+
+def test_removing_a_scanner_cannot_buy_a_better_grade(tmp_path):
+    # P3, borrowed from maintainability-agent: no input whose removal raises
+    # the graded field. The score is a rate over findings, so disabling
+    # scanners took this same tree from 0.00/F to 5.00/A+ — the best possible
+    # letter, bought by looking less hard.
+    target = _vulnerable_repo(tmp_path)
+
+    def run(config_payload, out_name):
+        config = tmp_path / f"{out_name}.json"
+        config.write_text(json.dumps(config_payload), encoding="utf-8")
+        out = tmp_path / f"{out_name}.out.json"
+        # Pinned to one scanner so the assertion cannot depend on which other
+        # scanners happen to be installed. Without this the test passed locally
+        # (no bandit) and failed in CI (bandit finds the same shell=True), which
+        # is the test being environment-dependent, not the fix being wrong.
+        main(
+            [
+                str(target),
+                "--config",
+                str(config),
+                "--only-scanners",
+                "builtin_rules",
+                "--json-output",
+                str(out),
+            ]
+        )
+        return json.loads(out.read_text(encoding="utf-8"))["score"]
+
+    looked = run(
+        {"scanners": {"builtin_rules": {"enabled": True}}, "gates": {"min_score": 4.0}}, "looked"
+    )
+    did_not_look = run(
+        {"scanners": {"builtin_rules": {"enabled": False}}, "gates": {"min_score": 4.0}}, "blind"
+    )
+
+    # The estimate still rises — that is arithmetic over what was found.
+    assert did_not_look["overall"] > looked["overall"]
+    # The *grade* does not, because neither run declared a scanner set.
+    assert looked["verified_grade"] is None
+    assert did_not_look["verified_grade"] is None
+    assert "require_scanners" in " ".join(did_not_look["evidence_reasons"])
+
+
+def test_a_grade_is_issued_only_when_a_declared_scanner_set_actually_ran(tmp_path):
+    target = _vulnerable_repo(tmp_path)
+    config = tmp_path / "secure-code-agent.json"
+    config.write_text(
+        json.dumps(
+            {
+                "scanners": {"builtin_rules": {"enabled": True}},
+                "gates": {"require_scanners": ["builtin_rules"], "min_score": 4.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "report.json"
+
+    main(
+        [
+            str(target),
+            "--config",
+            str(config),
+            "--only-scanners",
+            "builtin_rules",
+            "--json-output",
+            str(out),
+        ]
+    )
+    payload = json.loads(out.read_text(encoding="utf-8"))["score"]
+
+    assert payload["verified_grade"] == payload["letter"]
+    assert payload["evidence_status"] == "complete"
+    assert payload["evidence_reasons"] == []

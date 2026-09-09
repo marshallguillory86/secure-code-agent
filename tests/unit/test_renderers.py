@@ -77,7 +77,10 @@ def test_all_report_formats_include_gate_coverage_and_provenance(tmp_path):
     assert payload["coverage"]["scanners"][0]["command"] == ["/tools/bandit"]
     assert payload["coverage"]["scanners"][0]["scope"].startswith("mode=requirements")
     assert payload["score"]["coverage_complete"] is False
-    assert payload["score"]["qualification"] == "finding score; scanner coverage incomplete"
+    # `qualification` was a label; `verified_grade` is the claim itself, and
+    # withholding it is what stops a thinner scan from earning a better letter.
+    assert payload["score"]["verified_grade"] is None
+    assert payload["score"]["evidence_status"] == "incomplete"
     assert "Scanner coverage: **FAILED**" in comment.read_text(encoding="utf-8")
     assert "finding score; coverage incomplete" in comment.read_text(encoding="utf-8")
 

@@ -10,7 +10,7 @@ import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from secure_code_audit.config import Config, scanner_cfg
+from secure_code_audit.config import Config, is_within, scanner_cfg, target_executables_allowed
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.standards import StandardsEntry, is_top25, lookup
 
@@ -35,6 +35,7 @@ class Scanner(ABC):
 
     def configure(self, target: Path, config: Config) -> None:
         """Resolve the command once so probing and execution use the same tool."""
+        self._allow_target_executables = target_executables_allowed(config, target)
         self._resolved_command = self._resolve_command(target, self.cfg(config))
 
     @property
@@ -46,6 +47,20 @@ class Scanner(ABC):
         return (found,) if found else ()
 
     def _resolve_command(self, target: Path, config: ScannerConfig) -> tuple[str, ...]:
+        resolved = self._resolve_candidate(target, config)
+        if not resolved:
+            return ()
+        # One containment check for every resolution route, not just the
+        # relative-path one. PATH can contain '.' or a tree-local directory, so
+        # checking only the explicit-path branch would leave the same door open
+        # a step to the left.
+        if not getattr(self, "_allow_target_executables", False) and is_within(
+            Path(resolved[0]), target
+        ):
+            return ()
+        return resolved
+
+    def _resolve_candidate(self, target: Path, config: ScannerConfig) -> tuple[str, ...]:
         if config.command:
             executable, *arguments = config.command
             candidate = Path(executable).expanduser()
