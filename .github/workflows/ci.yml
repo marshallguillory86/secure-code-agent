@@ -123,6 +123,15 @@ jobs:
       - name: Verify the required scanner toolchain resolves
         run: secure-code-agent --config secure-code-agent.json --preflight
 
+      # The `test` job installs no scanners, so an adapter test that reads the
+      # real PATH behaves differently there than anywhere the tools exist. That
+      # difference was invisible until the release workflow — the only job that
+      # ran the suite with the floor installed — failed on argument positions
+      # in `test_osv_parses_vulnerabilities`. Running the suite here too means
+      # a host-dependent test fails on a pull request rather than at a tag.
+      - name: Run the suite against the installed floor
+        run: python -m pytest -o cache_dir=.pytest-cache-floor -q --no-header
+
       # Scorecard is not here on purpose. It is in the declared floor at
       # repository cadence and runs in supply-chain.yml, because its answers
       # belong to the project rather than the change and take over half an hour
