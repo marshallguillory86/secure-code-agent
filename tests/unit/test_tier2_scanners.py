@@ -30,7 +30,21 @@ def _proc(stdout: str = "", stderr: str = "", code: int = 0) -> CompletedProcess
 
 
 def _mock_available(monkeypatch, scanner_cls, available=True):
+    """Make availability *and* the resolved command deterministic.
+
+    Patching only `is_available` left `command` falling through to
+    `shutil.which()`, so the argv these tests observe depended on whether the
+    real binary happened to be installed on the host. Every CI job that ran
+    pytest installed no binaries, so the difference was invisible until the
+    release workflow — which installs the whole floor — ran the same suite and
+    `test_osv_parses_vulnerabilities` failed on argument positions.
+
+    A test whose result depends on what is installed is not testing the
+    adapter, and the machine where it disagrees is the one that ships.
+    """
     monkeypatch.setattr(scanner_cls, "is_available", lambda self: available)
+    if available:
+        monkeypatch.setattr(scanner_cls, "command", property(lambda self: (scanner_cls.binary,)))
 
 
 # --- Trivy ----------------------------------------------------------------
@@ -253,7 +267,8 @@ def test_osv_parses_vulnerabilities(tmp_path, monkeypatch):
     assert f.category is Category.DEPENDENCIES
     assert f.severity is Severity.HIGH
     assert "GHSA-x84v-xcm2-53pg" in f.message
-    assert captured[:2] == ["scan", "source"]
+    # The resolved executable is argv[0]; the subcommand follows it.
+    assert captured[:3] == [OsvScanner.binary, "scan", "source"]
 
 
 # --- TruffleHog -----------------------------------------------------------
