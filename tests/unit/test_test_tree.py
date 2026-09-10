@@ -24,7 +24,7 @@ from secure_code_audit.scoring import (
     ALWAYS_SCORED_CATEGORIES,
     partition_by_tree,
     score,
-    summarize_test_tree,
+    summarize_axis,
 )
 
 
@@ -146,7 +146,7 @@ def test_the_report_counts_without_scoring(tmp_path):
         _finding(str(tmp_path / "tests" / "c.py"), severity=Severity.MEDIUM),
     ]
 
-    report = summarize_test_tree(findings, loc=4_284)
+    report = summarize_axis("test tree", findings, loc=4_284)
 
     assert report.count == 3
     assert report.loc == 4_284
@@ -157,7 +157,7 @@ def test_the_report_counts_without_scoring(tmp_path):
 
 def test_an_empty_test_tree_still_reports(tmp_path):
     """ "We looked and found nothing" and "we never looked" are different."""
-    report = summarize_test_tree([], loc=1_200)
+    report = summarize_axis("test tree", [], loc=1_200)
 
     assert report.count == 0
     assert "nothing found" in report.headline()
@@ -168,4 +168,4 @@ def test_a_suppressed_test_finding_is_not_counted():
     muted = _finding("tests/b.py")
     object.__setattr__(muted, "suppressed", True)
 
-    assert summarize_test_tree([kept, muted], loc=10).count == 1
+    assert summarize_axis("test tree", [kept, muted], loc=10).count == 1

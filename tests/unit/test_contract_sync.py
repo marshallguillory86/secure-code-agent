@@ -150,3 +150,51 @@ def test_the_offline_ruleset_is_declared_as_package_data():
 
     # And the loader can actually find it through the packaging machinery.
     assert offline_ruleset_path() is not None
+
+
+def test_the_version_is_written_in_exactly_one_place():
+    """Not "the two agree" — there is only one.
+
+    The version was duplicated: `pyproject.toml` carried `version = "0.4.0"`
+    while the package carried `0.3.0`. The released v0.4.0 wheel therefore
+    stamped 0.3.0 into every SARIF document, every JSON report, the Markdown
+    header, `--version` and the pillar artifact handed to
+    maintainability-agent. The release workflow compared the tag against
+    pyproject's line and never looked at the package, so it verified the half
+    that was right and shipped the half that was wrong.
+
+    An earlier fix asserted the two literals matched. That polices a
+    duplication rather than removing it, and leaves the next person free to
+    edit either one. pyproject now derives the version from the package via
+    `[tool.setuptools.dynamic]`, so this asserts the duplication has not come
+    back rather than that it is currently consistent.
+    """
+    project = _pyproject()["project"]
+
+    assert "version" not in project, (
+        "pyproject declares a literal version again; it must stay derived from "
+        "secure_code_audit.__version__ via [tool.setuptools.dynamic]"
+    )
+    assert project.get("dynamic") == ["version"]
+    assert (
+        _pyproject()["tool"]["setuptools"]["dynamic"]["version"]["attr"]
+        == "secure_code_audit.__version__"
+    )
+
+
+def test_the_build_stamps_the_package_version_into_its_metadata():
+    """The property that actually failed, checked end to end.
+
+    A single source of truth is only worth anything if the build honours it.
+    This asserts the version setuptools would publish is the one the package
+    reports — the exact comparison nobody was making when 0.4.0 shipped
+    reporting 0.3.0.
+    """
+    from secure_code_audit import __version__
+
+    attr = _pyproject()["tool"]["setuptools"]["dynamic"]["version"]["attr"]
+    module_name, _, attribute = attr.rpartition(".")
+    module = __import__(module_name, fromlist=[attribute])
+
+    assert getattr(module, attribute) == __version__
+    assert __version__.count(".") >= 2, f"{__version__!r} is not a release version"

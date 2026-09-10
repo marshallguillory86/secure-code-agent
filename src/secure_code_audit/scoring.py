@@ -231,43 +231,61 @@ def partition_by_tree(
 
 
 @dataclass(frozen=True)
-class TestTreeReport:
-    """What was found in the test tree, reported rather than scored.
+class AxisReport:
+    """A body of findings reported beside the score rather than inside it.
 
-    Not a score. The test tree is a third axis beside findings and coverage,
-    for the same reason those two are separate: averaging things that mean
-    different things destroys both. A hardcoded password in a test double and
-    one in a request handler are not the same defect, and a single number
-    cannot say so.
+    Two things live here: the repository's own test tree, and its dependency
+    advisories. Both are real findings and both are the wrong thing to average
+    into a code-condition grade.
+
+    A hardcoded password in a test double and one in a request handler are not
+    the same defect. A CVE in a pinned dev-dependency and an injection flaw you
+    wrote are not the same defect either — one is fixed with a version bump and
+    the other with a rewrite. `maintainability-agent`'s ADR-007 draws the same
+    line when it refuses to average a practice level with a code condition.
+
+    Reported, never discarded: every finding is carried in full, counted, and
+    broken down by severity and category. Separating them from the score is the
+    opposite of hiding them — before this, seven thousand `assert` statements
+    in a test suite outweighed everything a reader needed to see.
     """
 
-    loc: int
+    #: What this axis is, in report-facing words: "test tree", "dependencies".
+    name: str
     findings: tuple[Finding, ...]
     per_severity_count: dict[Severity, int]
     per_category_count: dict[Category, int]
+    #: Lines of code the axis covers, where that means anything. Dependency
+    #: advisories are counted against a lockfile, not a line count, so this is
+    #: None for them rather than a misleading zero.
+    loc: int | None = None
 
     @property
     def count(self) -> int:
         return len(self.findings)
 
+    @property
+    def worst_severity(self) -> Severity | None:
+        return max(self.per_severity_count, key=lambda s: s.rank, default=None)
+
     def headline(self) -> str:
+        scope = f" across {self.loc:,} LOC" if self.loc is not None else ""
         if not self.findings:
-            return f"test tree: {self.loc:,} LOC, nothing found"
-        worst = max(self.per_severity_count, key=lambda s: s.rank, default=None)
+            return f"{self.name}: nothing found{scope}"
+        worst = self.worst_severity
         return (
-            f"test tree: {self.count} finding(s) across {self.loc:,} LOC"
+            f"{self.name}: {self.count} finding(s){scope}"
             + (f", worst {worst.value}" if worst else "")
             + " — reported, not scored"
         )
 
 
-def summarize_test_tree(findings: Iterable[Finding], loc: int) -> TestTreeReport:
-    """Count the test tree without scoring it.
+def summarize_axis(name: str, findings: Iterable[Finding], loc: int | None = None) -> AxisReport:
+    """Count an axis without scoring it.
 
-    Named `summarize_test_tree` rather than `test_tree_report` because
-    pytest collects any callable whose name begins with `test_`, including
-    imported ones — a public function so named would break the suite of
-    every project that imported it.
+    Not named `test_*` anything: pytest collects any callable whose name begins
+    with `test_`, including imported ones, so a public function so named would
+    break the suite of every project that imported it.
     """
     findings = tuple(f for f in findings if not f.suppressed)
     per_severity: dict[Severity, int] = {}
@@ -275,12 +293,32 @@ def summarize_test_tree(findings: Iterable[Finding], loc: int) -> TestTreeReport
     for finding in findings:
         per_severity[finding.severity] = per_severity.get(finding.severity, 0) + 1
         per_category[finding.category] = per_category.get(finding.category, 0) + 1
-    return TestTreeReport(
+    return AxisReport(
+        name=name,
         loc=loc,
         findings=findings,
         per_severity_count=per_severity,
         per_category_count=per_category,
     )
+
+
+#: Categories reported on their own axis instead of being scored as code
+#: condition. Measured at a median `worst_normalized` of 15.36 with them in the
+#: score against 7.32 without — the largest single distortion left after the
+#: test tree was separated. See docs/calibration.md.
+#:
+#: They are still *gated*: a critical CVE in a runtime dependency must fail a
+#: build. Only the code-condition grade stops absorbing them.
+SIDE_AXIS_CATEGORIES: frozenset[Category] = frozenset({Category.DEPENDENCIES})
+
+
+def split_side_axes(findings: Iterable[Finding]) -> tuple[list[Finding], list[Finding]]:
+    """Split findings into (scored, reported-on-their-own-axis)."""
+    scored: list[Finding] = []
+    side: list[Finding] = []
+    for finding in findings:
+        (side if finding.category in SIDE_AXIS_CATEGORIES else scored).append(finding)
+    return scored, side
 
 
 #: A category with nothing against it grades here, so nothing below this

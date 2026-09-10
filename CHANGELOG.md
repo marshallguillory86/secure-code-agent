@@ -4,7 +4,56 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.5.0 — unreleased
+
+### Fixed — 0.4.0 reports itself as 0.3.0
+
+`__version__` was a literal in `src/secure_code_audit/__init__.py` and the
+version was *also* a literal in `pyproject.toml`. They drifted: pyproject moved
+to 0.4.0 and the package did not.
+
+**The released 0.4.0 wheel on PyPI contains `__version__ = "0.3.0"`.** Verified
+by downloading it. Every artifact that build produces names the wrong producer:
+SARIF `tool.driver.version`, the JSON report's `version`, the Markdown report
+header, `--version`, and `security-pillar.json`'s `producer.version`.
+
+The release workflow verified the tag against *pyproject's* line and never read
+the package, so it checked the half that was right and shipped the half that
+was wrong.
+
+PyPI is immutable, so **0.4.0 stays wrong**. If you have artifacts produced by
+0.4.0, their producer version is understated by one release. Upgrade to 0.5.0,
+which is the first build whose artifacts name themselves correctly.
+
+The fix removes the duplication rather than policing it. `pyproject.toml` now
+declares `dynamic = ["version"]` and reads
+`secure_code_audit.__version__`, so there is one literal and the two cannot
+disagree. The release workflow reads the package. A first attempt used
+`importlib.metadata` instead and was worse — it reports whatever distribution
+happens to be installed, which in a working checkout was a stale 0.1.0, and
+provenance that depends on the reader's install state is not provenance.
+
+### Added
+
+- **`--security-pillar <path>`** emits `security-pillar.json` for
+  `maintainability-agent` to ingest ([D3](docs/decisions.md), contract in
+  [`docs/ma-integration.md`](docs/ma-integration.md)). Carries a practice level
+  read from configuration and CI beside a code condition read from the
+  scanners, as two values that are never averaged. `condition` is `null`
+  whenever coverage is incomplete. Standalone use is unaffected.
+- **Dependency findings move to their own reported axis**, still gated. A CVE
+  in a pinned dependency is fixed with a version bump; an injection flaw is
+  fixed with a rewrite. Measured as the largest remaining scoring distortion
+  after the test tree — median `worst_normalized` 15.36 against 7.32.
+- `maintainability-agent`'s **P1–P8 promise table** adopted into
+  [`product-intent.md`](docs/product-intent.md), with P6 recorded as currently
+  unmet because the calibration study ran Semgrep online.
+
 ## 0.4.0 — 2026-09-09
+
+> **Correction.** This build reports itself as `0.3.0` in every artifact it
+> produces — see 0.5.0 above. The release is otherwise as described; only the
+> producer version is wrong, and PyPI cannot be amended in place.
 
 All eight v0.3.0 release blockers are closed, and so are the four structural
 problems the architecture audit ranked

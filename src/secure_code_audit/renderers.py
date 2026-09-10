@@ -12,7 +12,7 @@ from secure_code_audit import __version__
 from secure_code_audit.findings import Finding, Severity
 from secure_code_audit.scanner_status import CoverageReport
 from secure_code_audit.scanners import floor
-from secure_code_audit.scoring import GateResult, ScoreReport, TestTreeReport, Verdict
+from secure_code_audit.scoring import AxisReport, GateResult, ScoreReport, Verdict
 from secure_code_audit.standards import cwe_url, owasp_label
 
 # ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ def to_json(
     gate: GateResult,
     coverage: CoverageReport | None = None,
     verdict: Verdict | None = None,
-    test_tree: TestTreeReport | None = None,
+    axes: Iterable[AxisReport] = (),
 ) -> dict:
     findings = list(findings)
     return {
@@ -51,32 +51,8 @@ def to_json(
             "tripped": list(gate.tripped),
         },
         "coverage": _coverage_to_dict(coverage),
-        "test_tree": _test_tree_to_dict(test_tree),
+        "reported_not_scored": _axes_to_dict(axes),
         "findings": [_finding_to_dict(f) for f in findings],
-    }
-
-
-def _test_tree_to_dict(report: TestTreeReport | None) -> dict | None:
-    """Reported beside the score, never folded into it.
-
-    The findings are carried in full. Filing them under a separate key is the
-    opposite of hiding them: before this they were mixed into the score, where
-    seven thousand `assert` statements in a test suite outweighed everything a
-    reader actually needed to see.
-    """
-    if report is None:
-        return None
-    return {
-        "loc": report.loc,
-        "count": report.count,
-        "scored": False,
-        "note": (
-            "Reported, not scored. Secrets are the exception and stay in the "
-            "score, because a committed credential is a leak wherever it lives."
-        ),
-        "per_severity_count": {s.value: n for s, n in report.per_severity_count.items()},
-        "per_category_count": {c.value: n for c, n in report.per_category_count.items()},
-        "findings": [_finding_to_dict(f) for f in report.findings],
     }
 
 
@@ -129,6 +105,52 @@ def _coverage_to_dict(coverage: CoverageReport | None) -> dict | None:
     }
 
 
+def _axes_to_dict(axes: Iterable[AxisReport]) -> dict:
+    """Axes reported beside the score, never folded into it.
+
+    Findings are carried in full. Filing them under their own key is the
+    opposite of hiding them: before this, seven thousand `assert` statements in
+    a test suite outweighed everything a reader actually needed to see, and a
+    library's dev-dependency CVEs sank its code-condition grade.
+    """
+    return {
+        _axis_key(axis.name): {
+            "name": axis.name,
+            "loc": axis.loc,
+            "count": axis.count,
+            "scored": False,
+            "gated": axis.name == "dependencies",
+            "note": _AXIS_NOTES.get(axis.name, ""),
+            "per_severity_count": {s.value: n for s, n in axis.per_severity_count.items()},
+            "per_category_count": {c.value: n for c, n in axis.per_category_count.items()},
+            "findings": [_finding_to_dict(f) for f in axis.findings],
+        }
+        for axis in axes
+    }
+
+
+def _axis_key(name: str) -> str:
+    return name.replace(" ", "_")
+
+
+#: Why each axis sits outside the score. Stated in the artifact rather than
+#: only in the docs, because the reader who most needs it is the one looking at
+#: a number they did not expect.
+_AXIS_NOTES = {
+    "test tree": (
+        "Reported, not scored. A project graded on its test fixtures is graded "
+        "on the wrong thing. Secrets are the exception and stay in the score, "
+        "because a committed credential is a leak wherever it lives."
+    ),
+    "dependencies": (
+        "Reported and gated, but not scored as code condition. A CVE in a "
+        "pinned dependency is fixed with a version bump; an injection flaw is "
+        "fixed with a rewrite. Gates still apply, so a critical runtime CVE "
+        "still fails a build."
+    ),
+}
+
+
 def write_json(
     findings: Iterable[Finding],
     score: ScoreReport,
@@ -136,10 +158,10 @@ def write_json(
     path: Path,
     coverage: CoverageReport | None = None,
     verdict: Verdict | None = None,
-    test_tree: TestTreeReport | None = None,
+    axes: Iterable[AxisReport] = (),
 ) -> None:
     path.write_text(
-        json.dumps(to_json(findings, score, gate, coverage, verdict, test_tree), indent=2),
+        json.dumps(to_json(findings, score, gate, coverage, verdict, axes), indent=2),
         encoding="utf-8",
     )
 
@@ -158,11 +180,11 @@ def write_markdown(
     scanners_unavailable: list[str],
     coverage: CoverageReport | None = None,
     verdict: Verdict | None = None,
-    test_tree: TestTreeReport | None = None,
+    axes: Iterable[AxisReport] = (),
 ) -> None:
     path.write_text(
         _markdown(
-            findings, score, gate, scanners_run, scanners_unavailable, coverage, verdict, test_tree
+            findings, score, gate, scanners_run, scanners_unavailable, coverage, verdict, axes
         ),
         encoding="utf-8",
     )
@@ -176,7 +198,7 @@ def _markdown(
     scanners_unavailable: list[str],
     coverage: CoverageReport | None = None,
     verdict: Verdict | None = None,
-    test_tree: TestTreeReport | None = None,
+    axes: Iterable[AxisReport] = (),
 ) -> str:
     lines: list[str] = []
     lines.append("# secure-code-agent report\n")
@@ -188,7 +210,8 @@ def _markdown(
     lines.append(_summary_section(score, gate, coverage, verdict))
     lines.append(_categories_table(score))
     lines.append(_severity_table(score))
-    lines.append(_test_tree_section(test_tree))
+    for axis in axes or ():
+        lines.append(_axis_section(axis))
     lines.append(_scanners_section(scanners_run, scanners_unavailable, coverage))
     lines.append(_findings_sections(findings))
     return "\n".join(lines)
@@ -239,18 +262,25 @@ def _summary_section(
     return "\n".join(out)
 
 
-def _test_tree_section(report: TestTreeReport | None) -> str:
-    """The test tree, beside the score rather than inside it.
+def _axis_section(report: AxisReport | None) -> str:
+    """One axis, beside the score rather than inside it.
 
     Shown even when empty, because "we looked and found nothing" and "we never
-    looked" are different statements and a reader cannot tell them apart from
-    a missing section.
+    looked" are different statements and a reader cannot tell them apart from a
+    missing section.
     """
     if report is None:
         return ""
-    out = ["## Test tree", ""]
-    out.append(f"- **Lines:** {report.loc:,}")
-    out.append(f"- **Findings:** {report.count} — reported, not scored")
+    title = report.name[:1].upper() + report.name[1:]
+    out = [f"## {title}", ""]
+    if report.loc is not None:
+        out.append(f"- **Lines:** {report.loc:,}")
+    gated = report.name == "dependencies"
+    out.append(
+        f"- **Findings:** {report.count} — reported"
+        + (" and gated, " if gated else ", ")
+        + "not scored"
+    )
     if report.per_severity_count:
         by_severity = ", ".join(
             f"{severity.value}: {count}"
@@ -259,12 +289,9 @@ def _test_tree_section(report: TestTreeReport | None) -> str:
             )
         )
         out.append(f"- **By severity:** {by_severity}")
-    out.append(
-        "- Findings in the test tree do not move the score. A project graded on "
-        "its test fixtures is graded on the wrong thing. Secrets are the "
-        "exception: they stay in the score, because a committed credential is a "
-        "leak wherever it lives."
-    )
+    note = _AXIS_NOTES.get(report.name)
+    if note:
+        out.append(f"- {note}")
     out.append("")
     return "\n".join(out)
 
