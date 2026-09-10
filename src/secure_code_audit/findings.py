@@ -1,7 +1,9 @@
 """Canonical Finding type — the lingua franca between scanners, scoring, and renderers.
 
 Every scanner returns a list[Finding]. Stable fingerprints support baseline
-matching; the current scoring layer does not collapse cross-scanner findings.
+matching. `merge_corroborating` collapses repeat reports of one weakness at
+one line — two checks agreeing is one finding with two witnesses, not two
+findings — and records the witnesses rather than dropping them.
 Renderers consume the same dataclass — markdown, JSON, SARIF,
 PR-comment, remediation prompt all read these fields directly.
 
@@ -12,7 +14,8 @@ from __future__ import annotations
 
 import enum
 import hashlib
-from dataclasses import dataclass, field
+from collections.abc import Iterable
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 
@@ -76,6 +79,18 @@ class Confidence(str, enum.Enum):
             return cls.LOW
         return cls.MEDIUM  # default when scanner doesn't emit confidence
 
+    @property
+    def rank(self) -> int:
+        """Higher = more certain. For choosing between duplicate reports."""
+        return CONFIDENCE_RANK[self]
+
+
+CONFIDENCE_RANK: dict[Confidence, int] = {
+    Confidence.HIGH: 3,
+    Confidence.MEDIUM: 2,
+    Confidence.LOW: 1,
+}
+
 
 class Category(str, enum.Enum):
     SECRETS = "secrets"
@@ -130,6 +145,13 @@ class Finding:
     # --- flags -------------------------------------------------------------
     cwe_top25: bool = False  # set by scoring layer
 
+    #: Other `scanner:rule_id` pairs that reported this same weakness at this
+    #: same line, folded in by `merge_corroborating`. Empty for the common
+    #: case of one check firing once. Non-empty is *stronger* evidence, not
+    #: weaker — two independent checks agreeing is worth saying out loud —
+    #: which is why they are recorded here rather than discarded.
+    corroborated_by: tuple[str, ...] = field(default_factory=tuple)
+
     # ------------------------------------------------------------------ ctor
     @staticmethod
     def make_fingerprint(
@@ -163,3 +185,77 @@ class Finding:
 def severity_at_or_above(target: Severity) -> set[Severity]:
     """Return the set of severities >= target. Useful for gate filters."""
     return {s for s in Severity if s.rank >= target.rank}
+
+
+# ---------------------------------------------------------------------------
+# Corroboration
+# ---------------------------------------------------------------------------
+
+#: Scanner rules that are the same check under two ids. Bandit ships
+#: `mark_safe` (B308) as a generic blacklist call *and* `django_mark_safe`
+#: (B703) as a Django-specific plugin; both fire on the same expression. Across
+#: the calibration corpus Django carried 56 B703 and 51 B308 findings that
+#: shared 50 lines — a third of its reported code findings were one issue
+#: counted twice.
+#:
+#: Keyed by `scanner`, mapping the alias to the id kept. Deliberately a short
+#: hand-checked table rather than a heuristic: two rules firing on one line
+#: usually means two different weaknesses, and collapsing those would hide
+#: findings rather than tidy them.
+RULE_ALIASES: dict[str, dict[str, str]] = {
+    "bandit": {"B703": "B308"},
+}
+
+
+def _merge_key(finding: Finding) -> tuple:
+    """What makes two reports the same report.
+
+    The CWE is the discriminator wherever one is mapped: two checks at one
+    line with different CWEs are two weaknesses and both are kept. Where no
+    CWE is mapped — most of Bandit — the alias table is the only safe signal,
+    so the rule id stands in and nothing merges unless it is listed there.
+    """
+    alias = RULE_ALIASES.get(finding.scanner, {})
+    rule = alias.get(finding.rule_id, finding.rule_id)
+    return (
+        finding.file_path.as_posix(),
+        finding.line_start,
+        finding.canonical_cwe or f"{finding.scanner}:{rule}",
+    )
+
+
+def merge_corroborating(findings: Iterable[Finding]) -> list[Finding]:
+    """Collapse repeat reports of one weakness, keeping the strongest.
+
+    Order is preserved and the first report of each weakness is the one kept,
+    raised to the highest severity and confidence anything reported for it,
+    with every other `scanner:rule_id` recorded in `corroborated_by`.
+
+    This is a reporting-correctness fix, not a scoring one. Measured across
+    the corpus it moved no repository's grade: Django, the only one with a
+    meaningful number of duplicates, was already clamped at 0. It matters
+    because a report that lists one line twice is wrong about the code, and
+    a work order derived from it would ask for the same fix twice.
+    """
+    merged: dict[tuple, Finding] = {}
+    extra: dict[tuple, list[str]] = {}
+
+    for finding in findings:
+        key = _merge_key(finding)
+        kept = merged.get(key)
+        if kept is None:
+            merged[key] = finding
+            extra[key] = []
+            continue
+        label = f"{finding.scanner}:{finding.rule_id}"
+        if label not in extra[key] and label != f"{kept.scanner}:{kept.rule_id}":
+            extra[key].append(label)
+        if finding.severity.rank > kept.severity.rank or (
+            finding.severity.rank == kept.severity.rank
+            and CONFIDENCE_RANK[finding.confidence] > CONFIDENCE_RANK[kept.confidence]
+        ):
+            merged[key] = replace(finding, corroborated_by=kept.corroborated_by)
+
+    return [
+        replace(f, corroborated_by=tuple(extra[k])) if extra[k] else f for k, f in merged.items()
+    ]

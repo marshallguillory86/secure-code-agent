@@ -1,16 +1,14 @@
-"""The test tree is reported beside the score, not folded into it.
+"""Findings are scored, reported, or gated by which tree they came from.
 
 A project graded on its test fixtures is graded on the wrong thing. The
 calibration corpus measured how badly: including test directories moved the
 median normalized subtotal from 4.36 to 50.15 and put ten of fourteen
-well-maintained open-source projects at F. Across six large repositories the
-test trees held 7,688 Bandit `B101` assert findings — against 17 real secrets.
+well-maintained open-source projects at F.
 
 The fix is not to discard them. `password="hunter2"` in a test double and a
 committed private key are both "findings in a test file", and only one is a
-defect. So the tree is a third axis beside findings and coverage, for the same
-reason those two are separate: averaging things that mean different things
-destroys both.
+defect. So a side axis is reported in full, gated where the operator says the
+category matters, and never folded into the code-condition grade.
 """
 
 from __future__ import annotations
@@ -21,18 +19,20 @@ from secure_code_audit import config as config_mod
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.git_tools import is_test_path, loc_under
 from secure_code_audit.scoring import (
-    ALWAYS_SCORED_CATEGORIES,
-    partition_by_tree,
+    GATED_FROM_ANY_AXIS,
+    gated_findings,
+    partition_by_path,
     score,
     summarize_axis,
 )
 
 
 def _finding(path: str, category: Category = Category.CODE_VULNERABILITIES, **kw) -> Finding:
+    rule_id = kw.get("rule_id", "B101")
     return Finding(
-        rule_id=kw.get("rule_id", "B101"),
+        rule_id=rule_id,
         scanner="bandit",
-        fingerprint=path,
+        fingerprint=path + rule_id,
         canonical_cwe=None,
         owasp_top10=None,
         asvs_section=None,
@@ -48,76 +48,137 @@ def _finding(path: str, category: Category = Category.CODE_VULNERABILITIES, **kw
     )
 
 
-def _is_test(root: Path, patterns):
-    return lambda f: is_test_path(f.file_path, root, patterns)
+def _classify(root: Path, patterns=config_mod.DEFAULT_TEST_PATTERNS):
+    def inner(finding: Finding) -> str:
+        return "test tree" if is_test_path(finding.file_path, root, patterns) else "primary"
+
+    return inner
+
+
+# --------------------------------------------------------------------------
+# Partitioning
+# --------------------------------------------------------------------------
 
 
 def test_test_tree_findings_are_partitioned_out_of_the_score(tmp_path):
-    patterns = config_mod.DEFAULT_TEST_PATTERNS
     findings = [
         _finding(str(tmp_path / "src" / "app.py")),
         _finding(str(tmp_path / "tests" / "test_app.py")),
         _finding(str(tmp_path / "tests" / "helpers.py")),
     ]
 
-    primary, test = partition_by_tree(findings, _is_test(tmp_path, patterns))
+    primary, axes = partition_by_path(findings, _classify(tmp_path))
 
     assert [str(f.file_path) for f in primary] == [str(tmp_path / "src" / "app.py")]
-    assert len(test) == 2
+    assert len(axes["test tree"]) == 2
 
 
-def test_a_secret_in_a_test_file_is_still_scored(tmp_path):
-    """The exemption that keeps this from being a loophole.
-
-    A committed credential is a leak wherever it lives, and the corpus backs
-    it: every `secrets` finding inside a test tree came from gitleaks — private
-    keys, JWTs, API keys — and none from Bandit's hardcoded-password
-    heuristics, which are categorised `code_vulnerabilities` and are the actual
-    noise.
-    """
-    assert Category.SECRETS in ALWAYS_SCORED_CATEGORIES
-
+def test_nothing_is_dropped_by_the_partition(tmp_path):
+    """Every finding lands on an axis. A side axis is not a filter."""
     findings = [
-        _finding(
-            str(tmp_path / "tests" / "conftest.py"),
-            Category.SECRETS,
-            severity=Severity.CRITICAL,
-            rule_id="gitleaks.private-key",
-        ),
-        _finding(str(tmp_path / "tests" / "test_app.py")),
+        _finding(str(tmp_path / "app.py")),
+        _finding(str(tmp_path / "tests" / "t.py")),
     ]
 
-    primary, test = partition_by_tree(
-        findings, _is_test(tmp_path, config_mod.DEFAULT_TEST_PATTERNS)
-    )
+    primary, axes = partition_by_path(findings, _classify(tmp_path))
 
-    assert [f.rule_id for f in primary] == ["gitleaks.private-key"]
-    assert [f.rule_id for f in test] == ["B101"]
+    assert len(primary) + sum(len(v) for v in axes.values()) == len(findings)
 
 
 def test_the_score_ignores_test_findings_entirely(tmp_path):
     """Seven hundred test findings must not move the number by one point."""
     primary_only = [_finding(str(tmp_path / "app.py"), severity=Severity.HIGH)]
     with_tests = primary_only + [
-        _finding(str(tmp_path / "tests" / f"test_{n}.py")) for n in range(700)
+        _finding(str(tmp_path / "tests" / f"test_{n}.py"), rule_id=f"R{n}") for n in range(700)
     ]
 
-    kept, dropped = partition_by_tree(
-        with_tests, _is_test(tmp_path, config_mod.DEFAULT_TEST_PATTERNS)
-    )
+    kept, axes = partition_by_path(with_tests, _classify(tmp_path))
 
-    assert len(dropped) == 700
+    assert len(axes["test tree"]) == 700
     assert score(kept, 10_000).overall == score(primary_only, 10_000).overall
 
 
-def test_loc_splits_so_the_denominator_moves_with_the_numerator(tmp_path):
-    """The mistake this split would otherwise reintroduce.
+# --------------------------------------------------------------------------
+# Secrets: gated from any axis, scored only from the primary tree
+# --------------------------------------------------------------------------
 
-    Scoring primary findings over a LOC count that still included the test tree
-    would understate every repository in proportion to how well it is tested.
-    An earlier revision of the calibration analysis did exactly that and made
-    every figure too generous.
+
+def test_a_secret_in_a_test_file_is_gated_but_not_scored(tmp_path):
+    """The exemption was too broad, and the corpus said so.
+
+    Secrets used to be forced back onto the primary axis wherever they were
+    found, reasoning that every test-tree secret came from gitleaks rather
+    than Bandit's heuristics. True, and insufficient: `requests` had four
+    criticals in `tests/certs/*.key` — certificates its own suite generates —
+    and FastAPI had example JWTs in four translations of one tutorial. Those
+    alone held six repositories at F.
+
+    Nothing static separates a live credential from a test certificate, so the
+    answer is neither to score them nor to ignore them.
     """
+    secret = _finding(
+        str(tmp_path / "tests" / "conftest.py"),
+        Category.SECRETS,
+        severity=Severity.CRITICAL,
+        rule_id="gitleaks.private-key",
+    )
+    smell = _finding(str(tmp_path / "tests" / "test_app.py"))
+
+    primary, axes = partition_by_path([secret, smell], _classify(tmp_path))
+
+    # Neither grades the code condition.
+    assert primary == []
+    assert {f.rule_id for f in axes["test tree"]} == {"gitleaks.private-key", "B101"}
+
+    # The secret still reaches the gate. The code smell does not.
+    gated = gated_findings([], (axes["test tree"],), {"fail_on_category": ["secrets"]})
+    assert [f.rule_id for f in gated] == ["gitleaks.private-key"]
+    assert Category.SECRETS in GATED_FROM_ANY_AXIS
+
+
+def test_a_test_tree_smell_does_not_reach_a_severity_gate(tmp_path):
+    """The other half: escalating everything would fail every build.
+
+    A test tree holds deliberately-vulnerable fixtures — ours has ten HIGH
+    findings that exist precisely to be vulnerable. Feeding those to
+    `fail_on_severity` would trip on code doing its job.
+    """
+    smell = _finding(str(tmp_path / "tests" / "t.py"), severity=Severity.HIGH)
+
+    assert gated_findings([], ([smell],), {"fail_on_severity": ["high"]}) == []
+
+
+def test_escalation_requires_the_operator_to_have_named_the_category(tmp_path):
+    """`fail_on_category` is the operator saying *these matter anywhere*.
+
+    Without it nothing is escalated off a side axis — the tool does not invent
+    a policy the configuration did not ask for.
+    """
+    secret = _finding(
+        str(tmp_path / "tests" / "conftest.py"), Category.SECRETS, severity=Severity.CRITICAL
+    )
+
+    assert gated_findings([], ([secret],), {}) == []
+    assert len(gated_findings([], ([secret],), {"fail_on_category": ["secrets"]})) == 1
+
+
+def test_the_scored_set_always_reaches_the_gate(tmp_path):
+    """Moving things off the score must never remove them from the gate."""
+    primary = [_finding(str(tmp_path / "app.py"), severity=Severity.CRITICAL)]
+
+    assert gated_findings(primary, (), {}) == primary
+
+
+# --------------------------------------------------------------------------
+# The denominator moves with the numerator
+# --------------------------------------------------------------------------
+
+
+def test_loc_splits_so_the_denominator_moves_with_the_numerator(tmp_path):
+    """Scoring primary findings over a LOC count that still included the test
+    tree would understate every repository in proportion to how well it is
+    tested. An earlier revision of the calibration analysis did exactly that
+    and made every figure too generous."""
     (tmp_path / "src").mkdir()
     (tmp_path / "tests").mkdir()
     (tmp_path / "src" / "app.py").write_text("a = 1\nb = 2\nc = 3\n", encoding="utf-8")
@@ -134,16 +195,19 @@ def test_no_test_patterns_means_everything_is_primary(tmp_path):
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_app.py").write_text("x = 1\ny = 2\n", encoding="utf-8")
 
-    primary, test = loc_under(tmp_path, (".py",), (), ())
+    assert loc_under(tmp_path, (".py",), (), ()) == (2, 0)
 
-    assert (primary, test) == (2, 0)
+
+# --------------------------------------------------------------------------
+# Reporting
+# --------------------------------------------------------------------------
 
 
 def test_the_report_counts_without_scoring(tmp_path):
     findings = [
-        _finding(str(tmp_path / "tests" / "a.py"), severity=Severity.LOW),
-        _finding(str(tmp_path / "tests" / "b.py"), severity=Severity.MEDIUM),
-        _finding(str(tmp_path / "tests" / "c.py"), severity=Severity.MEDIUM),
+        _finding(str(tmp_path / "tests" / "a.py"), severity=Severity.LOW, rule_id="a"),
+        _finding(str(tmp_path / "tests" / "b.py"), severity=Severity.MEDIUM, rule_id="b"),
+        _finding(str(tmp_path / "tests" / "c.py"), severity=Severity.MEDIUM, rule_id="c"),
     ]
 
     report = summarize_axis("test tree", findings, loc=4_284)
@@ -152,10 +216,9 @@ def test_the_report_counts_without_scoring(tmp_path):
     assert report.loc == 4_284
     assert report.per_severity_count == {Severity.LOW: 1, Severity.MEDIUM: 2}
     assert "not scored" in report.headline()
-    assert "3 finding" in report.headline()
 
 
-def test_an_empty_test_tree_still_reports(tmp_path):
+def test_an_empty_axis_still_reports():
     """ "We looked and found nothing" and "we never looked" are different."""
     report = summarize_axis("test tree", [], loc=1_200)
 
@@ -163,9 +226,10 @@ def test_an_empty_test_tree_still_reports(tmp_path):
     assert "nothing found" in report.headline()
 
 
-def test_a_suppressed_test_finding_is_not_counted():
-    kept = _finding("tests/a.py")
-    muted = _finding("tests/b.py")
-    object.__setattr__(muted, "suppressed", True)
+def test_a_documentation_axis_reports_without_a_line_count():
+    """Documentation advisories are counted against prose, not a LOC figure."""
+    report = summarize_axis("documentation", [_finding("docs/tutorial.md")])
 
-    assert summarize_axis("test tree", [kept, muted], loc=10).count == 1
+    assert report.loc is None
+    assert report.count == 1
+    assert "documentation" in report.headline()

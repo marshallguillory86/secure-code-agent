@@ -3,8 +3,20 @@
   "version": 1,
   "paths": {
     "include_extensions": [
-      ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rb", ".java",
-      ".sh", ".yaml", ".yml", ".json", ".tf", "Dockerfile"
+      ".py",
+      ".js",
+      ".jsx",
+      ".ts",
+      ".tsx",
+      ".go",
+      ".rb",
+      ".java",
+      ".sh",
+      ".yaml",
+      ".yml",
+      ".json",
+      ".tf",
+      "Dockerfile"
     ],
     "exclude_patterns": [
       ".git/",
@@ -22,5 +34,11 @@
       "**/*.min.js",
       "**/*.lock"
     ]
+  },
+  "scanners": {
+    "semgrep": {
+      "enabled": true,
+      "online": false
+    }
   }
 }

@@ -15,3 +15,9 @@
     - "*/calibration/calibrate.py"
   reason: "Reviewed subprocess calls use resolved executables or configured argument arrays, sanitized inputs where applicable, and never invoke a shell. calibration/calibrate.py shells out to git and to this tool's own CLI the same way, and is a study tool rather than part of the shipped package."
   expires: "2027-08-01"
+
+- rule_id: gitleaks.generic-api-key
+  paths:
+    - "*/tests/unit/test_test_tree.py"
+  reason: "False positive on source text, not a credential. The generic-api-key heuristic fires on an enum member name followed by an argument in a test that builds a synthetic finding of that category; the redacted match is the expression itself. No credential is present. Renaming the enum to dodge a regex would be the wrong fix. Note the reason above is deliberately paraphrased: quoting the offending expression verbatim here made this file trip the same rule, which the self-audit demonstrated."
+  expires: "2027-09-10"

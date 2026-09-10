@@ -88,7 +88,12 @@ def test_the_paths_block_agrees_between_loader_and_schema():
     §3 row 1 recorded, one level down where it is harder to see.
     """
     schema_paths = set(SCHEMA["properties"]["paths"]["properties"])
-    loader_paths = {"include_extensions", "exclude_patterns", "test_patterns"}
+    loader_paths = {
+        "include_extensions",
+        "exclude_patterns",
+        "test_patterns",
+        "docs_patterns",
+    }
 
     assert schema_paths == loader_paths, {
         "only in schema": sorted(schema_paths - loader_paths),
@@ -116,7 +121,12 @@ def test_every_config_dataclass_field_is_reachable_from_a_known_key():
     `paths` — everything else must correspond to a key an operator can write.
     """
     loader_populated = {"raw", "source_path", "trust_target_config"}
-    nested_under_paths = {"include_extensions", "exclude_patterns", "test_patterns"}
+    nested_under_paths = {
+        "include_extensions",
+        "exclude_patterns",
+        "test_patterns",
+        "docs_patterns",
+    }
 
     for field in dataclasses.fields(Config):
         if field.name in loader_populated or field.name in nested_under_paths:

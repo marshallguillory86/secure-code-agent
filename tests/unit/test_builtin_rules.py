@@ -127,3 +127,44 @@ def test_finding_carries_cwe_owasp_asvs(tmp_path):
     assert hits[0].asvs_section is not None
     assert hits[0].nist_ssdf is not None
     assert hits[0].category.value == "crypto"
+
+
+def test_a_method_named_eval_is_not_arbitrary_code_execution(tmp_path):
+    """`sca.python.eval` matched vocabulary rather than risk.
+
+    The pattern used `\\b`, which matches after a dot, so `self.eval(` and
+    `def eval(` both fired. Measured against Django: 28 of its 35 hits were in
+    `django/template/smartif.py`, which implements the template `if` parser
+    and gives its operator nodes an `eval` method. Those 35 findings were the
+    third-largest contributor to Django scoring F, and every one of them was
+    ours and wrong.
+
+    A tool that penalises a project for naming a method `eval` is measuring
+    the wrong thing, and it is the kind of false positive that teaches people
+    to stop reading the report.
+    """
+    (tmp_path / "parser.py").write_text(
+        "class Op:\n"
+        "    def eval(self, context):\n"
+        "        return self.value\n"
+        "\n"
+        "def render(node, ctx):\n"
+        "    return node.eval(ctx)\n",
+        encoding="utf-8",
+    )
+
+    findings = _run(tmp_path)
+
+    assert [f.rule_id for f in findings if f.rule_id == "sca.python.eval"] == []
+
+
+def test_real_eval_and_exec_are_still_caught(tmp_path):
+    """The narrowing must not buy quiet by missing the actual defect."""
+    (tmp_path / "danger.py").write_text(
+        "def run(user_input):\n    eval(user_input)\n    exec(user_input)\n",
+        encoding="utf-8",
+    )
+
+    findings = _run(tmp_path)
+
+    assert len([f for f in findings if f.rule_id == "sca.python.eval"]) == 2

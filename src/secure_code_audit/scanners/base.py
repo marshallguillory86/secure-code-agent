@@ -15,7 +15,7 @@ from pathlib import Path
 from secure_code_audit.config import Config, is_within, scanner_cfg, target_executables_allowed
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanner_status import ScannerOutcome, ScanResult
-from secure_code_audit.standards import StandardsEntry, is_top25, lookup
+from secure_code_audit.standards import StandardsEntry, is_top25, lookup, owasp_for_cwe
 
 
 class Scanner(ABC):
@@ -44,6 +44,7 @@ class Scanner(ABC):
         """Resolve the command once so probing and execution use the same tool."""
         self._allow_target_executables = target_executables_allowed(config, target)
         self._resolved_command = self._resolve_command(target, self.cfg(config))
+        self._target_root = target if target.is_dir() else target.parent
 
     @property
     def command(self) -> tuple[str, ...]:
@@ -187,19 +188,40 @@ class Scanner(ABC):
         confidence: Confidence | None = None,
         category: Category | None = None,
         cwe_override: str | None = None,
+        scanner_cwe: str | None = None,
         scanner_name: str | None = None,
     ) -> Finding:
         """Construct a canonical Finding from scanner-emitted bits, layering
         in the standards mapping. Scanner-emitted severity wins over the
         map's default; confidence falls back to the map; category is set
-        per the map unless explicitly overridden."""
+        per the map unless explicitly overridden.
+
+        Three sources of a CWE, in descending authority:
+
+        `cwe_override` is the adapter asserting it knows better than both the
+        map and the tool — Semgrep uses it, because a Semgrep rule's own
+        metadata is more specific than anything we could curate for it.
+
+        The curated `_MAP` comes next. It is reviewed, and it is the only
+        source that also carries OWASP, ASVS, SSDF and a fix hint.
+
+        `scanner_cwe` is the last resort: what the tool said about its own
+        rule. Bandit publishes a CWE for every plugin and gosec for every
+        rule, and we were discarding both — 86% of real corpus findings
+        carried no CWE at all while the README led with "Anchored to NIST
+        SSDF · OWASP ASVS · OWASP Top 10 · MITRE CWE Top 25". It ranks below
+        the curated map because upstream picks a defensible CWE rather than
+        the most specific one (Bandit files `assert_used` under CWE-703,
+        "improper check for unusual conditions"), but a defensible CWE beats
+        none.
+        """
 
         scanner_label = scanner_name or self.name
         entry: StandardsEntry | None = lookup(scanner_label, rule_id)
 
         # Mapping fallback to wildcard (handled inside lookup).
-        canonical_cwe = cwe_override or (entry.canonical_cwe if entry else None)
-        owasp_top10 = entry.owasp_top10 if entry else None
+        canonical_cwe = cwe_override or (entry.canonical_cwe if entry else None) or scanner_cwe
+        owasp_top10 = (entry.owasp_top10 if entry else None) or owasp_for_cwe(canonical_cwe)
         asvs_section = entry.asvs_section if entry else None
         nist_ssdf = entry.nist_ssdf if entry else None
         chosen_cat = category or (entry.category if entry else self.default_category)
@@ -207,6 +229,8 @@ class Scanner(ABC):
         chosen_conf = confidence or (entry.confidence if entry else Confidence.MEDIUM)
         short_desc = entry.short_desc if entry else None
         fix_hint = entry.fix_hint if entry else None
+
+        file_path = self._rooted(file_path)
 
         fingerprint = Finding.make_fingerprint(
             canonical_cwe=canonical_cwe,
@@ -235,6 +259,36 @@ class Scanner(ABC):
             fix_hint=fix_hint,
             cwe_top25=is_top25(canonical_cwe),
         )
+
+    def _rooted(self, file_path: Path) -> Path:
+        """Anchor a scanner-reported path to the audited tree.
+
+        Adapters do not agree on this. Bandit, Semgrep, RuboCop and the rest
+        report absolute paths; gitleaks reports paths relative to the
+        repository it scanned. Both are reasonable and neither is negotiable
+        from here, so the difference is absorbed at the one boundary every
+        adapter passes through.
+
+        Leaving it unabsorbed was not cosmetic. Every consumer that answers
+        "where is this?" — `is_excluded`, `is_test_path`, the axis split —
+        resolves a relative path against the *process* working directory,
+        which is wherever the operator happened to invoke the CLI. From there
+        `relative_to(root)` raises and the answer comes back "no". So
+        `exclude_patterns` silently did not apply to gitleaks findings at all:
+        an operator excluding `vendor/` still had vendor secrets scored, and
+        the calibration corpus scored four `tests/certs/*.key` files in
+        `requests` and six documentation examples in `flask` as production
+        secrets, holding both at F.
+
+        A path that is already absolute is returned untouched, including one
+        outside the target — an imported SARIF may legitimately name another
+        machine's tree, and inventing a root for it would be worse than
+        leaving it where it is.
+        """
+        if file_path.is_absolute():
+            return file_path
+        root = getattr(self, "_target_root", None)
+        return root / file_path if root is not None else file_path
 
     def _findings_exit_contradiction(
         self,

@@ -1,4 +1,4 @@
-# Calibration study — 2026-09-09
+# Calibration study — 2026-09-10
 
 The study [D5](decisions.md) has owed since 2026-09-08. The letter bands were
 borrowed from `maintainability-agent` without its calibration study, and the
@@ -9,120 +9,202 @@ Raw data: [`calibration/results.json`](../calibration/results.json).
 
 ## Result in one line
 
-**The bands are approximately right; the inputs are wrong, and there is more
-than one of them.** Separating the test tree from the primary tree — the single
-biggest input error — cuts the corpus median distortion by seventy percent. It
-is not enough on its own. Dependency findings are the next lever, and after
-both the median still sits below the bottom of the scale.
+**Most of the floor was our own bug.** The corpus median went from **0.00 (F)**
+to **4.37 (A−)** across three rounds of fixes, and all but the last round were
+defects in this tool rather than properties of the code it was reading. Four
+repositories remain at F, every one of them on findings that were checked
+individually and are **true positives**. Band edges are now a question about
+what a grade should *mean*, not about arithmetic.
 
-## A correction to an earlier version of this study
+## Run of record — 2026-09-10, pinned
 
-The first pass of this analysis filtered test findings out of the numerator
-while still dividing by the **whole tree's** LOC. Every "excluding tests"
-figure it produced was therefore too generous — it reported a median of 4.36
-and a corrected grade of B, and both were wrong.
+Fourteen repositories pinned by commit; one shared config; ten scanners;
+Semgrep pinned to `sca-offline@1.2.0 (e861a891559f)` rather than the online
+registry, so **this run is exactly reproducible** and P6 is met.
 
-That is the same numerator/denominator mismatch `paths.exclude_patterns` caused
-before it was fixed, arriving by a different door and in the tool built to
-measure it. The split is now done inside the product, where `loc_under()`
-returns primary and test counts together and the denominator cannot drift from
-the numerator. The numbers below are the product's own.
+| repo | lang | primary LOC | findings | score |
+| --- | --- | ---: | ---: | --- |
+| django | python | 145,456 | 260 | 0.00 **F** |
+| fastapi | python | 35,655 | 167 | 0.00 **F** |
+| httpx | python | 7,585 | 35 | 0.13 **F** |
+| flask | python | 8,284 | 20 | 0.15 **F** |
+| requests | python | 5,965 | 21 | 2.54 B- |
+| sinatra | ruby | 7,135 | 7 | 3.10 B |
+| commons-lang | java | 97,561 | 8 | 4.15 A- |
+| lodash | javascript | 25,944 | 7 | 4.59 A |
+| jekyll | ruby | 14,590 | 6 | 4.61 A |
+| axios | javascript | 26,788 | 5 | 5.00 A+ |
+| express | javascript | 4,497 | 5 | 5.00 A+ |
+| gin | go | 7,146 | 5 | 5.00 A+ |
+| gson | java | 21,784 | 5 | 5.00 A+ |
+| logrus | go | 2,964 | 5 | 5.00 A+ |
 
-## What was measured
+Median reported score **4.37 (A−)**. Median `worst_normalized` **1.27**,
+against 50.15 when this study began.
 
-Fourteen repositories pinned by commit, spanning Python, JavaScript, Go, Ruby
-and Java. Each audited through the real CLI with one shared config and a fixed
-ten-scanner set, with the primary tree scored and the test tree reported
-separately.
+## What each fix was worth
 
-| repo | lang | primary LOC | findings | test LOC | test findings | score |
-| --- | --- | ---: | ---: | ---: | ---: | --- |
-| django | python | 145,456 | 364 | 319,577 | 987 | 0.00 **F** |
-| flask | python | 8,284 | 80 | 6,077 | 1071 | 0.00 **F** |
-| requests | python | 5,965 | 23 | 4,284 | 692 | 0.00 **F** |
-| httpx | python | 7,585 | 85 | 16,674 | 1304 | 0.00 **F** |
-| fastapi | python | 35,655 | 257 | 69,283 | 4896 | 0.00 **F** |
-| lodash | javascript | 25,944 | 159 | 22,198 | 0 | 0.00 **F** |
-| gin | go | 16,823 | 14 | 4,032 | 0 | 0.00 **F** |
-| sinatra | ruby | 7,135 | 13 | 13,759 | 5 | 0.00 **F** |
-| axios | javascript | 26,788 | 21 | 28,423 | 45 | 1.69 D |
-| jekyll | ruby | 14,590 | 10 | 8,900 | 0 | 2.55 B− |
-| commons-lang | java | 97,561 | 7 | 92,783 | 0 | 4.15 A− |
-| logrus | go | 6,609 | 4 | 1,155 | 0 | 4.64 A |
-| express | javascript | 4,497 | 3 | 13,483 | 90 | 5.00 A+ |
-| gson | java | 21,784 | 4 | 29,087 | 0 | 5.00 A+ |
+| | median score | at F |
+| --- | --- | ---: |
+| everything scored, Semgrep online | 0.00 **F** | 10/14 |
+| test tree separated | 0.00 **F** | — |
+| dependencies separated, Semgrep pinned offline | 1.87 **D** | 6/14 |
+| documentation axis; secrets gated rather than force-scored | 1.34 **D** | 7/14 |
+| **finding paths anchored to the audited tree** | **4.37 A−** | 4/14 |
+| corroborating duplicates merged | 4.37 A− | 4/14 |
 
-Note the test trees. Django's is **larger than its primary tree** — 319,577
-lines against 145,456 — and `gson`, `express` and `sinatra` all have more test
-code than source. Before the split, all of that sat in the denominator making
-scores look better while its findings made them worse. Now both move together.
+### The path bug was the largest single input error
 
-## What the split was worth, and what it was not
+Two defects in this tool, both fail-open, both silent:
 
-| | median `worst_normalized` | median grade |
-| --- | ---: | --- |
-| before the split (whole tree scored) | 50.15 | 0.00 **F** |
-| **after the split** (primary tree scored) | **15.36** | 0.00 **F** |
-| after the split, dependencies also excluded | 7.32 | 1.34 **D** |
-| dropping LOW severity instead | 15.36 | 0.00 **F** |
+**gitleaks reports repository-relative paths; every other scanner reports
+absolute ones.** Every consumer that asks *"where is this?"* resolved a
+relative path against the **process working directory** — wherever the
+operator happened to invoke the CLI — so `relative_to(root)` raised and the
+answer came back "no". Consequences:
 
-Separating the test tree removes about seventy percent of the distortion, and
-median unclamped score improves from **−20.08 to −2.68**. Eight repositories
-still score F rather than ten. Dropping LOW severity now changes *nothing* at
-the median, because the low-severity noise was overwhelmingly in the test tree
-and has already been moved out of the score.
+- `exclude_patterns` **did not apply to gitleaks findings at all**. An
+  operator excluding `vendor/` still had vendor secrets scored.
+- Every gitleaks finding was scored as primary-tree regardless of where it
+  lived. `requests` was held at F by four `tests/certs/*.key` files its own
+  suite generates; `flask` by six documentation examples.
 
-**It is still not a usable scale.** The median repository remains past the
-floor, and the ordering still tracks scanner verbosity: every Python project is
-F, while Java and Go sit at A− to A+.
+**`**/` did not include depth zero.** The pattern carries a literal `/`, so
+`**/*_test.go` matched `router/context_test.go` and never `context_test.go`.
+Gin keeps its tests beside the code they test, so three of its four
+"production" secrets were root-level test fixtures. Gin went **F → A+**, and
+its measured LOC fell from 16,823 to 7,146 once `testdata/` was recognised.
 
-## What remains, measured
+Both now ship a structural block:
+[`test_finding_paths.py`](../tests/unit/test_finding_paths.py) anchors paths at
+`Scanner._make_finding` — the one constructor every adapter passes through —
+and asserts no adapter bypasses it.
 
-**Dependency findings are now the largest single lever** — median 15.36 → 7.32.
-For `lodash`, 154 of 159 findings are CVEs in `package-lock.json`. For `httpx`,
-54 of 85. These are true positives; the question is whether a library's
-dev-dependency CVEs should sink its *code* security grade, or belong on their
-own axis the way the test tree now does.
+### Two rules of our own were wrong
 
-**Bandit's low-confidence output on primary source is the rest.** With tests
-excluded, Django still carries 107 `B703`/`B308` findings — `mark_safe`, which
-is Django's own template-escaping API, flagged in the framework that defines
-it. FastAPI carries 107 `B101` asserts in non-test source.
+`sca.python.eval` matched `eval("literal")`. `sca.offline.ruby.code-injection`
+matched `class_eval(&block)` — Ruby's **safe** form, where a proc is handed
+over and nothing is ever parsed. Four of Sinatra's five code-injection
+findings were that single expression; Sinatra went **F → B**.
+
+Narrowing a rule changes its meaning, which under [D10](decisions.md) requires
+a profile version bump. It did not get one, and nothing caught that, so
+[`test_ruleset_version.py`](../tests/unit/test_ruleset_version.py) now pins the
+ruleset digest to `PROFILE_VERSION`.
+
+### Merging duplicates was worth nothing, and was done anyway
+
+Bandit ships `mark_safe` as both `B308` and `B703`; Django carried 56 and 51 of
+them sharing 50 lines. Merging changed **no repository's grade** — Django was
+already clamped at 0 — and it is fixed because a report that lists one line
+twice is wrong about the code, and a work order built from it asks for the
+same fix twice. The second check is recorded as `corroborated_by` rather than
+discarded: two scanners agreeing is stronger evidence, not weaker.
+
+## What is left is not a bug
+
+Four repositories remain at F. Every contributing finding was inspected.
+
+| repo | normalized | dominant rule | share |
+| --- | ---: | --- | ---: |
+| django | 33.4 | `B703` `mark_safe` | 31% |
+| fastapi | 20.3 | `B101` bare `assert` | 50% |
+| httpx | 9.7 | `B101` bare `assert` | 76% |
+| flask | 9.7 | `sca.python.eval` | 32% |
+
+They floor at `normalized = 10`.
+
+**None of these are false positives.** Django's `exec()` calls are in
+`commands/shell.py`, its MD5 in `auth/hashers.py` and the SQLite `MD5()` SQL
+function, its `mark_safe` in the framework that *defines* `mark_safe`. Flask's
+`exec()` loads config from a Python file; its SHA-1 tags sessions. FastAPI's 81
+bare `assert`s are bare `assert`s.
+
+Django is graded F because **it is a framework whose job is to do dangerous
+things safely**. That is the distance between *"contains dangerous
+constructs"* and *"is insecure"*, and no amount of pattern-narrowing closes
+it — the constructs really are there.
+
+The product already has the mechanism for that distance: a baseline, and
+suppressions with a required note. What it does not have is a decision about
+whether an *untriaged* run of a framework should read F. That is a product
+decision, not an arithmetic one.
+
+## Two candidate adjustments, measured
+
+Neither is adopted. Both are recorded so the choice is argued rather than
+discovered.
+
+| | median | at F |
+| --- | ---: | ---: |
+| as run | 4.37 A− | 4 |
+| √n per rule (diminishing returns on repeats) | 4.56 A | 1 |
+| drop LOW severity entirely | 4.80 A+ | — |
+
+**√n per rule** treats 81 instances of one rule as one strongly-evidenced fact
+rather than 81 independent defects. It is the only lever that moves the four
+floored repositories — fastapi 0.00 → 3.41, httpx 0.13 → 3.10, requests 2.54 →
+4.39 — and Django stays at F under it regardless.
+
+It should not be adopted to reach a target, because **the target is already
+met**: `maintainability-agent` calibrates so a mature-OSS median earns a B, and
+this corpus medians at A−. √n would move it to A, further past the mark rather
+than toward it. The argument for it has to be that repeated identical findings
+are correlated evidence — which is a claim about what a rule count means, and
+is arguable on its merits.
+
+The real remaining distortion is **spread, not centre**: nine repositories sit
+at 4.15 or better and four at 0.15 or worse, with almost nothing between. That
+is a cliff produced by clamping a linear slope at zero, and it is a
+slope-and-bands question.
 
 ## Limits of this study, stated
 
 - **Corpus bias.** Fourteen well-maintained OSS projects with their own
-  security processes. A median calibrated to earn a B here means "as clean as a
-  well-run OSS project", not "average code". `maintainability-agent` has the
-  same limitation.
-- **Not exactly re-runnable.** Semgrep ran in its default online mode, so the
-  registry rules are not pinned and a later run will differ for reasons
-  unrelated to the code. Re-running with `scanners.semgrep.online: false` would
-  pin the rules to `sca-offline@1.1.0` at the cost of breadth. Which mode the
-  scale is calibrated *for* is itself unsettled: bands chosen from an online run
-  do not fit an offline one, because offline finds less.
+  security processes. A median calibrated here means "as clean as a well-run
+  OSS project", not "average code". `maintainability-agent` has the same
+  limitation.
+- **Untriaged.** No repository has a baseline or suppressions. This measures
+  first-run output, which is the worst case by construction.
+- **Reproducible, at the cost of breadth.** Semgrep is pinned to
+  `sca-offline@1.2.0 (e861a891559f)`, so the run re-derives exactly — that is
+  what P6 requires. The cost is real: the offline profile is 20 rules against
+  the registry's thousands, so the corpus looks cleaner than an online run
+  would. **Bands chosen here do not transfer to an online run.** If the tool's
+  default stays online, a second calibration is owed for that mode.
 - **Shallow clones.** `--depth 1`, so gitleaks sees one commit rather than full
   history. Uniform across the corpus, but it understates secret findings.
 - **Fourteen is small.** Enough to show saturation, not enough to place a band
   edge precisely.
+- **One language dominates the floor.** All four floored repositories are
+  Python, which is also the language with the most talkative floor scanner.
 
 ## Status
 
-D5 stays **open**, and one of its two input questions is now answered in code.
+D5 stays **open**, narrowed to one question.
 
-**Answered — test directories.** They are separated rather than excluded: the
-primary tree is scored, the test tree is reported beside it, and `secrets`
-findings stay in the score wherever they live, because a committed credential
-is a leak whatever directory it sits in. The corpus supports the exemption
-directly: every `secrets` finding inside a test tree came from gitleaks, and
-none from Bandit's hardcoded-password heuristics. Configurable via
-`paths.test_patterns`.
+**Answered — test directories.** Separated, not excluded: the primary tree is
+scored, the test tree reported beside it and gated where the operator names
+the category.
 
-**Still open — dependency findings.** Worth a median of 15.36 → 7.32. Whether a
-library's dev-dependency CVEs should sink its code-security grade, or sit on
-their own axis the way the test tree now does, is the same shape of question
-and has the same shape of answer available.
+**Answered — documentation.** Its own axis, on the same terms.
 
-**Still open — band edges.** They cannot be chosen while the median sits past
-the floor. Choosing them now would be fitting numbers to noise, which is what
-D5 was raised to prevent.
+**Answered — dependencies.** Their own axis, still gated. A critical runtime
+CVE fails a build; it no longer sinks a code-condition grade.
+
+**Answered — secrets.** No longer force-scored onto the primary axis. Nothing
+static separates a live credential from a test certificate, so they are gated
+from any axis rather than graded from all of them.
+
+**Answered — which mode to calibrate.** Offline and pinned, so the study
+re-derives. P6 is met.
+
+**Answered — is the residue noise?** No. It was measured finding by finding
+and it is true positives.
+
+**Still open — band edges, and what a grade means.** The corpus median is
+4.37 (A−) against MA's 4.0 target, so the centre is defensible. The
+distribution is not: it is bimodal, and the four at the bottom are frameworks
+being graded on constructs they exist to provide. Whether that is the right
+answer, or whether an untriaged framework should read lower-but-not-F, is a
+product decision.

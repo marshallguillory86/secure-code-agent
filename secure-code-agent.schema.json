@@ -40,6 +40,13 @@
             "type": "string"
           },
           "description": "Paths that are this repository's own test tree. Findings there are reported separately rather than scored \u2014 a project graded on its test fixtures is graded on the wrong thing. Not an exclusion: the findings are still collected and reported, and secrets among them still score and still gate, because a committed credential is a leak wherever it lives. Same glob syntax as exclude_patterns."
+        },
+        "docs_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Documentation and tutorial sources. Prose is not the shipped source, and a credential in a tutorial is an illustration \u2014 FastAPI's docs_src/ carries example JWTs that scored as critical secrets. Findings here are reported and still gated, never scored as code condition. Same glob syntax as exclude_patterns."
         }
       }
     },

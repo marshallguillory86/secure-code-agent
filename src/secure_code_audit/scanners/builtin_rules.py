@@ -38,8 +38,14 @@ _RULES: tuple[_Rule, ...] = (
     _Rule(
         rule_id="sca.python.eval",
         # eval/exec with a non-string-literal first arg. Allow eval('lit').
+        #
+        # `\b` matched after a dot, so `self.eval(` and `def eval(` both fired.
+        # Measured on Django: 28 of 35 hits were `django/template/smartif.py`,
+        # which implements the template `if` parser and defines its own `eval`
+        # method. A rule that flags a codebase for naming a method `eval` is
+        # reporting on vocabulary, not on risk.
         pattern=re.compile(
-            r"\b(?:eval|exec)\s*\(\s*(?!['\"][^'\"]*['\"]\s*\))",
+            r"(?<![\w.])(?<!def )(?:eval|exec)\s*\(\s*(?!['\"][^'\"]*['\"]\s*\))",
             re.MULTILINE,
         ),
         file_globs=(".py",),

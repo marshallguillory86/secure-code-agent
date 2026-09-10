@@ -96,7 +96,7 @@ All Tier-1 scanners are wired and emit canonical findings.
 | **Semgrep**           | `code_vulnerabilities` | `semgrep --config=auto --sarif --output=...`                     | SARIF       | CWE per rule (multi-language), OWASP all          |
 | **pip-audit**         | `dependencies`         | requirements, local project, lock, or configured environment mode | JSON      | CWE-1104, OWASP A06                               |
 | **npm audit**         | `dependencies`         | `npm audit --json`                                               | JSON        | CWE-1104, OWASP A06                               |
-| **Gitleaks**          | `secrets`              | `gitleaks detect --no-banner --report-format=json --report-path=`| JSON        | CWE-798, OWASP A07                                |
+| **Gitleaks**          | `secrets`              | `gitleaks dir <t>` **and** `gitleaks git <t>`, both `--redact`   | JSON        | CWE-798, OWASP A07                                |
 | **TruffleHog**        | `secrets`              | `trufflehog filesystem --json --no-update <path>`                | JSON Lines  | CWE-798, OWASP A07                                |
 | **njsscan**           | `code_vulnerabilities` | `njsscan --json <target>`                                        | JSON        | CWE-327/330/295/79/78 (JS/TS)                     |
 | **Built-in regex rules** | `multiple`           | Internal — no subprocess                                         | (in-proc)   | CWE-798, CWE-89, CWE-78, CWE-22, CWE-918          |
@@ -220,7 +220,16 @@ class Scanner(Protocol):
 
 ### Gitleaks
 - Default config is `gitleaks.toml` — we ship a curated one in `secure_code_audit/data/gitleaks.toml`.
-- Run against history: `gitleaks detect --redact` to avoid leaking secrets in the report itself.
+- **Two passes, every run: `gitleaks dir` and `gitleaks git`.** `detect` (now
+  deprecated) scans commits only, so a plaintext key in the working tree that
+  had not been committed yet reported *no leaks found* — a clean bill of
+  health for a repository with a key sitting in it. Scanning only the
+  directory instead would drop the case a secret scanner exists for: a
+  credential committed, later deleted, still in the object store and still
+  needing rotation. The two overlap on anything committed and unchanged, and
+  `merge_corroborating` collapses that to one finding.
+- A target with no `.git` gets the directory pass alone, and the coverage
+  block says so in its `scope` rather than implying history was examined.
 - We render the **redacted** match in the report, not the raw secret. The fingerprint is derived from the redacted evidence and location; the adapter never receives the raw secret from Gitleaks JSON.
 
 ### TruffleHog

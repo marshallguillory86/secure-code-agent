@@ -84,6 +84,20 @@ Hand the prompt to Claude Code, Codex, Cursor, Copilot, or any agent. The agent 
 Known rules map to fields from five public standards. Unmapped and scanner-control
 findings retain null standards fields rather than receiving invented mappings.
 
+A CWE comes from one of three places, in descending authority: an adapter's
+explicit override, the curated map in `standards.py`, then whatever the
+scanner itself declared. That last source was being discarded — Bandit
+publishes a CWE for all ~70 of its plugins and gosec for every rule, and both
+were dropped on the floor, leaving **14% of real findings with any CWE at
+all** against a corpus measurement. Reading them takes it to 100%, and the
+OWASP category is derived from the CWE using OWASP's own published
+category-to-CWE lists where the curated map has none.
+
+Derivation stops where the standard does. `CWE-703` — Bandit's classification
+for a bare `assert` — belongs to no OWASP Top 10 category, so that field stays
+null. 62% of findings carry an OWASP category and the rest say nothing, which
+is the honest answer.
+
 | Source                                       | What we use it for                                       |
 |----------------------------------------------|----------------------------------------------------------|
 | [NIST SSDF SP 800-218](https://csrc.nist.gov/pubs/sp/800/218/final) | Process practice id (e.g. `PW.5.1`) |

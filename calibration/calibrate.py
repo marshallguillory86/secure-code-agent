@@ -146,11 +146,22 @@ def _finding_score(finding: dict) -> float:
     return base
 
 
+def scored_findings(payload: dict) -> list[dict]:
+    """Only what the score actually counted.
+
+    `findings` is the complete list and carries an `axis` tag; anything not on
+    the primary axis was reported beside the score, not in it. An earlier
+    version of this harness summed the whole array and so reported a median
+    over dependency findings the product does not score.
+    """
+    return [f for f in payload["findings"] if f.get("axis", "primary") == "primary"]
+
+
 def measure(payload: dict) -> dict:
     """Per-category subtotals and *unclamped* normalized values."""
     loc = int(payload["score"]["loc_scanned"])
     subtotals: dict[str, float] = {c.value: 0.0 for c in Category}
-    for finding in payload["findings"]:
+    for finding in scored_findings(payload):
         subtotals[finding["category"]] += _finding_score(finding)
 
     divisor = math.sqrt(max(loc, 1) / 1000) if loc > 0 else 1.0
@@ -169,7 +180,8 @@ def measure(payload: dict) -> dict:
         "reported_overall": payload["score"]["overall"],
         "reported_letter": payload["score"]["letter"],
         "worst_category": payload["score"]["worst_category"],
-        "finding_count": len(payload["findings"]),
+        "finding_count": len(scored_findings(payload)),
+        "reported_count": len(payload["findings"]),
         "per_severity": payload["score"]["per_severity_count"],
         "coverage_status": (payload.get("coverage") or {}).get("status"),
     }
@@ -213,13 +225,19 @@ def variants(reports: Path) -> dict:
     for path in sorted(reports.glob("*.json")):
         payload = json.loads(path.read_text(encoding="utf-8"))
         loc = int(payload["score"]["loc_scanned"])
+        scored = scored_findings(payload)
         rows[path.stem] = {
-            name: round(worst_normalized([f for f in payload["findings"] if keep(f)], loc), 4)
+            name: round(worst_normalized([f for f in scored if keep(f)], loc), 4)
             for name, keep in VARIANTS.items()
         }
-        tree = payload.get("test_tree") or {}
-        rows[path.stem]["test_tree_findings"] = float(tree.get("count", 0))
-        rows[path.stem]["test_tree_loc"] = float(tree.get("loc", 0))
+        # The side axes moved under `reported_not_scored` when the test tree
+        # stopped being the only one. Reading the old top-level key did not
+        # fail — it defaulted to zero, so the study reported that no corpus
+        # repository had a test tree while the product was correctly setting
+        # 983 test findings aside for Django alone.
+        tree = payload["reported_not_scored"]["test_tree"]
+        rows[path.stem]["test_tree_findings"] = float(tree["count"])
+        rows[path.stem]["test_tree_loc"] = float(tree["loc"] or 0)
     medians = {
         name: round(statistics.median([r[name] for r in rows.values()]), 4)
         for name in VARIANTS

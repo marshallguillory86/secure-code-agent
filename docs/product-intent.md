@@ -122,13 +122,13 @@ together.
 | **P7** | A score is issued only where enough was examined to support it, and never as a consequence of not looking | A number a reader with the repository in front of them would call absurd |
 | **P8** | Every report states what examined it — which scanners ran, which did not, at what version, and over what scope | A reported value with no attributable source, or a run whose coverage cannot be recovered from its output |
 
-**P6 is currently unmet, and stated rather than quietly excepted.** The
-calibration study ([`calibration.md`](calibration.md)) ran Semgrep in its
-default online mode, so its registry rules are not pinned and the numbers
-cannot be re-derived offline. Re-running against the pinned `sca-offline`
-profile is the agreed fix and is owed. Everything else in this repository that
-quotes a number — the coverage measurements, the overlap checks, the fixture
-results — re-derives from checked-in inputs.
+**P6 was unmet and now is not.** The calibration study
+([`calibration.md`](calibration.md)) originally ran Semgrep in its default
+online mode, so its registry rules were unpinned and its numbers could not be
+re-derived. It has been re-run against `sca-offline@1.1.0 (357b8d7e6652)` and
+now re-derives exactly, at the cost of breadth — a note the study carries,
+because bands chosen from a pinned offline run do not transfer to an online
+one.
 
 **P3 and P7 are why the pillar artifact withholds a condition.** A repository
 where nothing could run reports zero findings, and zero findings grades 5.0.

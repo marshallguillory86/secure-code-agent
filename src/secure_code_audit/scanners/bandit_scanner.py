@@ -5,18 +5,37 @@ Invocation:
 
 Output: JSON with results[] array. Each result has filename, line_number,
 test_id (B102, B608, ...), issue_text, issue_severity, issue_confidence,
-and code (the offending snippet).
+code (the offending snippet), and issue_cwe.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Confidence, Finding, Severity
 from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
+
+
+def _cwe_of(result: dict[str, Any]) -> str | None:
+    """Bandit's own CWE for the plugin that fired.
+
+    Every Bandit plugin declares one, and we were discarding all of them.
+    Seven Bandit rules are curated in `standards.py` against roughly seventy
+    the tool ships, so 86% of real corpus findings carried no CWE while the
+    README led with "Anchored to … MITRE CWE Top 25".
+
+    The curated map still wins where it exists — it is reviewed and it also
+    carries OWASP, ASVS, SSDF and a fix hint, none of which Bandit emits.
+    """
+    cwe = result.get("issue_cwe")
+    if not isinstance(cwe, dict):
+        return None
+    identifier = cwe.get("id")
+    return f"CWE-{identifier}" if identifier else None
 
 
 class BanditScanner(Scanner):
@@ -69,6 +88,7 @@ class BanditScanner(Scanner):
             findings.append(
                 self._make_finding(
                     rule_id=rule_id,
+                    scanner_cwe=_cwe_of(result),
                     message=str(result.get("issue_text") or "").strip(),
                     file_path=Path(result.get("filename", "")),
                     line_start=int(result.get("line_number") or 0),
