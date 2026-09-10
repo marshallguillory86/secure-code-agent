@@ -13,7 +13,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | --- | --- | --- | --- |
 | D1 | The line is at executing what the tree supplies, not at distrusting repositories | 2026-09-08 | Accepted |
 | D2 | Unknown configuration keys are rejected, not ignored | 2026-09-08 | Accepted |
-| D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | Accepted |
+| D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | Accepted — [built](ma-integration.md) |
 | D4 | A failing security audit fails MA's CI | 2026-09-08 | Accepted |
 | D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — [study run](calibration.md); test tree answered, dependencies owed |
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
@@ -101,6 +101,27 @@ ingest an artifact it produces?
 
 **Decision.** This tool writes `security-pillar.json`; MA ingests it via
 `--security-pillar <path>`.
+
+**Built 2026-09-09.** `--security-pillar <path>` emits it; the contract is
+[`ma-integration.md`](ma-integration.md). The document carries MA's own two
+axes — practice level from configuration and CI, code condition from the
+scanners — and never their mean. Everything structural is reused rather than
+re-derived: the scope vocabulary, the posture matrix and its thresholds come
+from MA's `_pillars.py`, and the maturity rubric with its `MAX_WITHOUT_CI` cap
+from `_practice.py`. Two tools reporting "level 3" or "healthy" about the same
+repository must mean the same thing by it.
+
+Copied by value, not imported. A dependency edge between the two packages would
+make them releasable only together, which is the property MA's ADR 008 protects
+when it refuses a combined MCP server. `test_posture_matches_mas_matrix` is
+what keeps the copies honest.
+
+**`condition` is null whenever coverage is incomplete**, and this is the half
+that matters most. Our score is a rate over findings, so removing scanners
+removes findings and the number rises — measured once at 0.00/F to 5.00/A+.
+Handing that to MA would launder an unscanned repository into a pillar report
+that looks measured. A perfect practice level with no evidence reports
+`unverified`, never `healthy`.
 
 **Why not have MA execute this tool.** MA's P1 keeps analysis free of network
 access and tool acquisition opt-in. Shelling out would put a network-capable

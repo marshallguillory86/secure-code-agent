@@ -329,6 +329,31 @@ SARIF upload. Pin production usage to a full commit SHA; the version tag above
 is shown for readability. See [`action.yml`](action.yml) and
 [`examples/github-actions/`](examples/github-actions/) for full workflows.
 
+## maintainability-agent integration
+
+`maintainability-agent` declares Security a **delegated** pillar naming this
+tool, and reports it as `NotApplicable` so silence is never read as safety.
+This tool emits the artifact that completes the picture:
+
+```bash
+secure-code-agent . --security-pillar security-pillar.json
+maintainability-agent . --security-pillar security-pillar.json
+```
+
+Standalone use is unaffected — without the flag nothing is written and every
+other output is identical. MA never executes this tool, and this tool never
+imports MA; two independently releasable packages exchanging one document.
+
+The artifact carries **two values that are never averaged**: a practice level
+read from configuration and CI (*is anything preventing the next
+vulnerability?*) and a code condition read from the scanners (*what did they
+find?*). `condition` is `null` whenever scanner coverage is incomplete — this
+tool's score is a rate over findings, so removing scanners makes the raw number
+go **up**, and an unscanned repository must not arrive at MA looking measured.
+
+Full contract, invariants and the practice rubric:
+[`docs/ma-integration.md`](docs/ma-integration.md).
+
 ## What this is NOT
 
 - ❌ **Not a SAST engine.** We delegate to Semgrep / Bandit / CodeQL / etc. — we don't write yet another AST analyzer.
@@ -352,6 +377,8 @@ Full design philosophy in [`docs/design.md`](docs/design.md).
 
 - [`docs/product-intent.md`](docs/product-intent.md) — Why this exists, who it serves, what it refuses to become
 - [`docs/decisions.md`](docs/decisions.md)        — Decision register: rulings the code alone cannot answer
+- [`docs/ma-integration.md`](docs/ma-integration.md) — The `security-pillar.json` contract maintainability-agent reads
+- [`docs/calibration.md`](docs/calibration.md)   — The calibration study, its corpus, and what it found
 - [`docs/design.md`](docs/design.md)              — Architecture + non-goals + scanner protocol
 - [`docs/architecture.md`](docs/architecture.md)  — Audit of the system as built + remediation sequence
 - [`docs/release-blockers.md`](docs/release-blockers.md) — Open v0.3.0 release blockers (do not tag until closed)

@@ -23,9 +23,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Read from the package, which is now the only place the version is
+      # written — pyproject derives it via `[tool.setuptools.dynamic]`. This
+      # step used to read pyproject's own `version =` line, so when that line
+      # and the package disagreed it compared the tag against the half that was
+      # right and shipped the half that was wrong: v0.4.0 went out stamping
+      # 0.3.0 into every artifact it produced.
       - name: Verify tag matches package version
         run: |
-          PACKAGE_VERSION="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          PACKAGE_VERSION="$(python -c 'import sys; sys.path.insert(0, "src"); import secure_code_audit; print(secure_code_audit.__version__)')"
+          echo "tag=${GITHUB_REF_NAME} package=v${PACKAGE_VERSION}"
           test "${GITHUB_REF_NAME}" = "v${PACKAGE_VERSION}"
 
       # The verification step below runs this repository's own gate, and the
