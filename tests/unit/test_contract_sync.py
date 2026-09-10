@@ -150,3 +150,29 @@ def test_the_offline_ruleset_is_declared_as_package_data():
 
     # And the loader can actually find it through the packaging machinery.
     assert offline_ruleset_path() is not None
+
+
+def test_the_package_version_matches_pyproject():
+    """A version is provenance, and it drifted once already.
+
+    `__version__` was a hardcoded string. `pyproject.toml` moved to 0.4.0 and it
+    did not, so the released wheel stamped 0.3.0 into every SARIF document,
+    every JSON report, the Markdown header, `--version` and the pillar artifact
+    handed to maintainability-agent. The release workflow checks the tag against
+    pyproject and never looked at the package.
+
+    Reading it from `importlib.metadata` instead was tried and is worse: it
+    reports whatever distribution happens to be installed, which in a working
+    checkout was a stale 0.1.0. Provenance that depends on the reader's install
+    state is not provenance. So the literal stays and this test is what stops
+    it drifting.
+    """
+    from secure_code_audit import __version__
+
+    declared = _pyproject()["project"]["version"]
+
+    assert __version__ == declared, (
+        f"secure_code_audit.__version__ is {__version__!r} but pyproject "
+        f"declares {declared!r}; every SARIF document, JSON report and pillar "
+        f"artifact stamps the former"
+    )

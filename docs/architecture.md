@@ -226,7 +226,7 @@ the severity ordering, the worst-category rule, and the property that a perfect
 score sits beside failed coverage without either deriving from the other. It
 proves the scale is *stable*, not that it is *correct* — D5 is still open.
 
-## 5. Problem 4 — the score's null state is "perfect"
+## 5. Problem 4 — the score's null state is "perfect" — PARTLY CLOSED 2026-09-09
 
 **Severity: medium. Design decision required before any code changes.**
 
@@ -252,7 +252,26 @@ Two smaller consequences of the same model:
   denominator. Narrowing scan scope therefore moves the grade in a direction
   that is not obvious from the config.
 
+### Closed at the pillar boundary, still open internally
+
+`security-pillar.json` reports `condition: null` whenever coverage is
+incomplete, so the artifact `maintainability-agent` reads can never present an
+unscanned repository as measured — a perfect practice level with no evidence
+reports `unverified`, never `healthy`. That is MA's own rule
+([ADR 007](https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/adr-007-pillars-and-practice.md)
+§2) applied at the seam between the two tools.
+
+**Internally the null state is unchanged.** A category with no scanner that
+could read it still grades 5.0 rather than `None`, and `overall` is still a
+float in every standalone report. `Verdict` withholds the *letter*, which is
+why standalone use is not misleading — but the underlying number still says
+"perfect" where it means "nothing looked". Pushing `None` down into
+`ScoreReport.per_category` is the remaining work and is a larger change than it
+looks: gates, renderers and the scoring-drift suite all assume a float.
+
 ### Open question
+
+
 
 Should the deliverable be a single verdict rather than a score plus a coverage
 status the reader must combine? Resolve this before touching the scoring code;

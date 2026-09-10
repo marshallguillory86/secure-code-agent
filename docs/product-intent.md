@@ -98,6 +98,44 @@ because it encodes the anti-patterns in §2 as explicit constraints, but no
 empirical evaluation has been run. This is stated as an open question in §8
 rather than claimed as a result.
 
+## 4a. What it promises
+
+Adopted from `maintainability-agent`'s
+[product intent](https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/product-intent.md),
+in the same shape and with the same second column, because a promise that
+cannot be falsified is a slogan. Where a promise reads differently here, it is
+because the failure mode differs — most sharply at P3, where this tool's score
+is a *rate over findings*, so withholding a scanner makes the number go **up**.
+
+The pair is deliberate: MA's ADR-007 delegates the Security pillar to this
+tool, and two tools whose promises are worded differently cannot be read
+together.
+
+| | Promise | Violated by |
+| --- | --- | --- |
+| **P1** | The audit is deterministic: same tree, same config, same pinned scanner versions in — same findings, coverage and score out. The analysis invokes no language model. | Two runs disagreeing on identical inputs, or a model in the gate path |
+| **P2** | The same rubric applies to every repository, and the rubric is readable in source | A repository-specific code path changing a weight or a band |
+| **P3** | **Withholding evidence cannot improve the reported grade.** The score is a rate over findings, so removing a scanner removes findings and the raw number rises — coverage is a separate axis for exactly this reason, and a grade is withheld when it cannot be supported | Any input whose removal raises the graded field. Measured once at 0.00/F to 5.00/A+ by disabling scanners |
+| **P4** | The overall score is the worst category printed beside it, never their mean | A report where the arithmetic does not check |
+| **P5** | The remediation prompt names only findings the audit actually produced | A prompt instruction with no corresponding finding |
+| **P6** | Every empirical claim in this repository is reproducible from checked-in pinned inputs | A quoted number that cannot be re-derived offline |
+| **P7** | A score is issued only where enough was examined to support it, and never as a consequence of not looking | A number a reader with the repository in front of them would call absurd |
+| **P8** | Every report states what examined it — which scanners ran, which did not, at what version, and over what scope | A reported value with no attributable source, or a run whose coverage cannot be recovered from its output |
+
+**P6 is currently unmet, and stated rather than quietly excepted.** The
+calibration study ([`calibration.md`](calibration.md)) ran Semgrep in its
+default online mode, so its registry rules are not pinned and the numbers
+cannot be re-derived offline. Re-running against the pinned `sca-offline`
+profile is the agreed fix and is owed. Everything else in this repository that
+quotes a number — the coverage measurements, the overlap checks, the fixture
+results — re-derives from checked-in inputs.
+
+**P3 and P7 are why the pillar artifact withholds a condition.** A repository
+where nothing could run reports zero findings, and zero findings grades 5.0.
+Handing that number to `maintainability-agent` would launder an unscanned
+repository into a pillar report that looks measured, so `condition` is `null`
+whenever coverage is incomplete. See [`ma-integration.md`](ma-integration.md).
+
 ## 5. Product principles
 
 Each principle exists to settle a class of future argument. When a proposed
