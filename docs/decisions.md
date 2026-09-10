@@ -15,7 +15,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D2 | Unknown configuration keys are rejected, not ignored | 2026-09-08 | Accepted |
 | D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | Accepted — [built](ma-integration.md) |
 | D4 | A failing security audit fails MA's CI | 2026-09-08 | Accepted |
-| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — [study run](calibration.md); test tree answered, dependencies owed |
+| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — [study run](calibration.md); inputs answered, band edges owed |
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
 | D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
 | D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
@@ -156,47 +156,66 @@ repository *size*, scoring Django, pytest, black, tornado, httpx, lodash,
 svelte and fastapi all at 0.0/F while a 53-file toy scored 4.6/A. The fix was
 rates, normalized per dimension, calibrated so the corpus median earns a B.
 
-**State: open — but the method now exists and has been run.** See
+**State: open, and narrowed to one question.** See
 [`calibration.md`](calibration.md) for the study and
 [`calibration/`](../calibration/README.md) for the harness and pinned corpus.
 
-**What the study found.** As the tool runs today, ten of fourteen
-well-maintained open-source projects score **F**, and the median repository
-sits *five times* past the point where the grade floors. The ordering is not a
-security ordering: worst-first it reads Python → JavaScript → Go/Ruby → Java,
-which is the order of how talkative each language's scanner is at low severity
-and low confidence. This is MA's 0.5.0 lesson in a new form — there absolute
-counts graded repository size, here raw counts grade scanner verbosity.
+**What the study found, in the end: most of the floor was our own bug.** The
+corpus median moved **0.00 (F) → 4.37 (A−)**, and every round of that except
+the last was a defect in this tool rather than a property of the code it read.
 
-**The test tree was the largest input error, and it is now fixed in the
-product.** The primary tree is scored; the test tree is reported beside it.
-That cuts the median distortion by seventy percent — `worst_normalized` 50.15 →
-15.36, median unclamped score −20.08 → −2.68. Django's test tree turned out to
-be *larger than its primary tree*, 319,577 lines against 145,456, all of it
-previously inflating the denominator while its findings deflated the score.
+The largest single one: **gitleaks reports repository-relative paths and every
+other scanner reports absolute ones**, and every consumer that asked "where is
+this?" resolved a relative path against the process working directory. So
+`exclude_patterns` silently did not apply to gitleaks findings at all, and
+every gitleaks finding scored as primary-tree wherever it lived — four
+`tests/certs/*.key` files held `requests` at F, six documentation examples held
+`flask` at F. Separately, `**/` did not match at depth zero, so `**/*_test.go`
+never matched a root-level `context_test.go` and three of Gin's four
+"production" secrets were test fixtures. Gin: **F → A+**.
 
-`secrets` findings are exempt and stay scored wherever they live: across the
-corpus every test-tree secret came from gitleaks — private keys, JWTs, API keys
-— and none from Bandit's hardcoded-password heuristics, which are the actual
-noise and are categorised `code_vulnerabilities`.
+**The inputs are now all answered.** The primary tree is scored; the test tree
+and documentation are reported beside it and gated where the operator names
+the category; dependencies are their own axis, gated but not graded as code
+condition. Secrets are no longer force-scored onto the primary axis — nothing
+static separates a live credential from a test certificate, so they are gated
+from any axis rather than graded from all of them.
 
-**It was not sufficient.** Eight of fourteen still score F, and the ordering
-still tracks scanner verbosity rather than security. Dependency findings are
-now the largest remaining lever, worth a median of 15.36 → 7.32: whether a
-library's dev-dependency CVEs should sink its *code* security grade, or sit on
-their own axis the way the test tree now does, is the next decision and is a
-product decision. Band edges cannot be chosen while the median sits past the
-floor.
+**What is left is not noise, and that is the finding.** Four repositories
+remain at F and every contributing finding was inspected individually. They
+are **true positives**: Django's `exec()` in `commands/shell.py`, its MD5 in
+`auth/hashers.py`, its `mark_safe` in the framework that defines `mark_safe`;
+Flask's `exec()` config loader and SHA-1 session tag; FastAPI's 81 bare
+`assert`s. Django is graded F because it is a framework whose job is to do
+dangerous things safely.
+
+That is the distance between *"contains dangerous constructs"* and *"is
+insecure"*, and no pattern-narrowing closes it — the constructs really are
+there. The product already has the mechanism for that distance: a baseline,
+and suppressions with a required note. What it lacks is a decision about
+whether an *untriaged* run of a framework should read F.
+
+**Still open — band edges.** The centre is now defensible: 4.37 (A−) against
+MA's 4.0 target. The *distribution* is not — nine repositories at 4.15 or
+better, four at 0.15 or worse, almost nothing between. That cliff comes from
+clamping a linear slope at zero, not from the inputs.
+
+Two adjustments were measured and neither is adopted. **√n per rule** — one
+rule firing 81 times as one strongly-evidenced fact rather than 81 defects —
+is the only lever that moves the floored repositories (median 4.56, one at F).
+It must not be adopted to hit a target, because the target is already met and
+√n overshoots it; the argument has to be that repeated identical findings are
+correlated evidence, which is a claim about what a rule count means.
 
 **An earlier version of this study was wrong and is corrected in place.** It
 filtered test findings out of the numerator while still dividing by the whole
 tree's LOC, and reported a median of 3.10 — a B — that the corrected
 measurement does not support. That is the same numerator/denominator mismatch
-`exclude_patterns` caused once already, reproduced in the tool built to measure
-it. Doing the split inside the product is what makes it unavailable.
+`exclude_patterns` caused once already, reproduced in the tool built to
+measure it. Doing the split inside the product is what makes it unavailable.
 
-Until then the scale is uncalibrated, and anything consuming it (D3, D4) should
-treat it as such.
+Until band edges are chosen the scale is uncalibrated, and anything consuming
+it (D3, D4) should treat it as such.
 
 ## D6 — Scanner licences are judged by mechanism, not by name
 

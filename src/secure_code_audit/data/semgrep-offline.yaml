@@ -278,24 +278,44 @@ rules:
 
   - id: sca.offline.ruby.code-injection
     message: >-
-      instance_eval and class_eval execute their argument as code in the
-      receiver's context. If any part is attacker-influenced this is code
-      injection.
+      instance_eval, class_eval and module_eval execute a *string* argument as
+      code in the receiver's context. If any part is attacker-influenced this
+      is code injection. The block form is safe and is not matched.
     languages: [ruby]
     severity: ERROR
     metadata:
       cwe: "CWE-95"
       owasp: "A03:2021-Injection"
       confidence: MEDIUM
-      version: "1.1.0"
+      version: "1.2.0"
       # D12: RuboCop's Security/Eval covers plain `eval` and is wired in the
       # floor, so this rule no longer matches it. Measured 2026-09-09: RuboCop
       # reports zero offenses for instance_eval and class_eval, which is the
       # ground left over.
       covers-gap: "RuboCop Security/Eval does not flag instance_eval or class_eval"
-    pattern-either:
-      - pattern: instance_eval(...)
-      - pattern: class_eval(...)
+      version-note: >-
+        1.2.0 stopped matching the block form. `class_eval(&block)` and
+        `class_eval do ... end` hand over a proc that Ruby never parses, so
+        there is no string for an attacker to influence — it is the safe form
+        and the idiomatic one. Matching it put four findings in Sinatra's
+        `lib/`, three of them the single expression `class_eval(&block)`, and
+        those four alone held the repository at F. Only the string form is
+        code injection. `module_eval` is an alias of `class_eval` and was
+        simply missing.
+    patterns:
+      # `$X, ...` requires a first *argument*, which is what distinguishes the
+      # string form from every block form. `class_eval { }` and
+      # `class_eval do ... end` pass no argument at all, so they never match;
+      # `class_eval(&block)` does pass one and is excluded below. The trailing
+      # `...` keeps the three-arity `class_eval(str, __FILE__, __LINE__)`,
+      # which is the form most real metaprogramming actually uses.
+      - pattern-either:
+          - pattern: instance_eval($X, ...)
+          - pattern: class_eval($X, ...)
+          - pattern: module_eval($X, ...)
+      - pattern-not: instance_eval(&$B)
+      - pattern-not: class_eval(&$B)
+      - pattern-not: module_eval(&$B)
 
   - id: sca.offline.ruby.weak-hash
     message: >-

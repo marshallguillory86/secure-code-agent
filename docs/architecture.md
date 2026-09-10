@@ -226,7 +226,7 @@ the severity ordering, the worst-category rule, and the property that a perfect
 score sits beside failed coverage without either deriving from the other. It
 proves the scale is *stable*, not that it is *correct* — D5 is still open.
 
-## 5. Problem 4 — the score's null state is "perfect" — PARTLY CLOSED 2026-09-09
+## 5. Problem 4 — the score's null state is "perfect" — CLOSED 2026-09-09
 
 **Severity: medium. Design decision required before any code changes.**
 
@@ -252,7 +252,7 @@ Two smaller consequences of the same model:
   denominator. Narrowing scan scope therefore moves the grade in a direction
   that is not obvious from the config.
 
-### Closed at the pillar boundary, still open internally
+### Closed
 
 `security-pillar.json` reports `condition: null` whenever coverage is
 incomplete, so the artifact `maintainability-agent` reads can never present an
@@ -261,13 +261,24 @@ reports `unverified`, never `healthy`. That is MA's own rule
 ([ADR 007](https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/adr-007-pillars-and-practice.md)
 §2) applied at the seam between the two tools.
 
-**Internally the null state is unchanged.** A category with no scanner that
-could read it still grades 5.0 rather than `None`, and `overall` is still a
-float in every standalone report. `Verdict` withholds the *letter*, which is
-why standalone use is not misleading — but the underlying number still says
-"perfect" where it means "nothing looked". Pushing `None` down into
-`ScoreReport.per_category` is the remaining work and is a larger change than it
-looks: gates, renderers and the scoring-drift suite all assume a float.
+**And internally.** `ScoreReport.per_category` grades `None` where no scanner
+in the run could read that category, `overall` is `None` when nothing was
+measurable, and `letter` is `None` beside it. Never zero — a 0.0 would claim
+knowledge of poor quality nobody has.
+
+Measurability is computed in the orchestrator, not in `scoring`. Working it out
+means knowing which scanners ran and what each reads, and a rubric that can
+reach into the scanner layer is a rubric that can grow a special case for a
+particular repository — MA keeps the same boundary. A scanner counts only if it
+*covered* its ground, and a category with findings is measurable by definition
+whatever the domain table says, because scanners report outside their declared
+domain routinely.
+
+**This closed the half of P3 that survived.** The P3 test used to assert that
+removing a scanner *raises* the raw estimate — 0.00/F to 5.00/A+ — and then
+that the grade was withheld anyway. The estimate no longer rises. It
+disappears: the run that looked at nothing reports no number at all, and
+`min_score` refuses it rather than passing by default.
 
 ### Open question
 
@@ -322,8 +333,15 @@ it is a product decision, not a refactor.
    layer that would itself be a third source of truth.
    `tests/unit/test_contract_sync.py` holds them in step instead.
 5. **Decide the score model** (§5). Conversation before code. **Still open.**
-6. **Calibrate the condition scale** (D5). Still open — the method is owed, and
-   `test_scoring_drift.py` pins the scale's *stability*, not its correctness.
+6. **Calibrate the condition scale** (D5). **Method delivered 2026-09-09,
+   narrowed 2026-09-10.** The harness, the fourteen-repository pinned corpus
+   and the study exist and re-derive exactly ([`calibration/`](../calibration/README.md),
+   [`calibration.md`](calibration.md)). Every *input* question is answered and
+   the corpus median is 4.37 (A−). What remains open is band edges: the
+   distribution is bimodal, and the four repositories at the floor are
+   frameworks graded on constructs they exist to provide. That is a product
+   decision, not a method gap. `test_scoring_drift.py` still pins the scale's
+   *stability* rather than its correctness, and will until the bands are set.
 7. Resume feature work and defect fixing.
 
 Steps 1–4 are done as of 2026-09-09. Most defects traded during recent review

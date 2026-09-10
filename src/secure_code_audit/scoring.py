@@ -105,10 +105,13 @@ class Verdict:
     every output reads it rather than re-deriving it.
     """
 
-    estimate: float
+    #: None when nothing could be measured. Not zero: a run with no
+    #: measurable category has no estimate to report, and a 0.00 would read as
+    #: "we looked and it was terrible".
+    estimate: float | None
     #: The letter the estimate alone would earn. Not a grade — an arithmetic
     #: consequence, kept so a reader can see what the evidence suggested.
-    estimated_letter: str
+    estimated_letter: str | None
     verified_grade: str | None
     reasons: tuple[str, ...]
 
@@ -122,6 +125,8 @@ class Verdict:
 
     def headline(self) -> str:
         """One line, used by every renderer that shows a score."""
+        if self.estimate is None:
+            return "no score — nothing measurable was scanned"
         if self.is_verified:
             return f"{self.estimate:.2f} ({self.verified_grade})"
         return f"{self.estimate:.2f} — grade withheld ({self.estimated_letter} unverified)"
@@ -129,12 +134,17 @@ class Verdict:
 
 def verdict(report: ScoreReport, gate_config: dict, coverage: CoverageReport | None) -> Verdict:
     """Decide the letter, or withhold it, once for the whole run."""
-    reasons = evidence_reasons(gate_config, coverage)
+    reasons = list(evidence_reasons(gate_config, coverage))
+    if report.overall is None:
+        # Nothing measurable ran. There is no estimate to qualify, so the
+        # reason is stated rather than a letter being caveated — a caveated
+        # letter still shows a letter.
+        reasons.append("no category could be measured by the scanners that ran")
     return Verdict(
         estimate=report.overall,
         estimated_letter=report.letter,
         verified_grade=None if reasons else report.letter,
-        reasons=reasons,
+        reasons=tuple(reasons),
     )
 
 
@@ -180,54 +190,111 @@ def category_grade(normalized: float) -> float:
 class ScoreReport:
     """Per-category + overall score breakdown. Renderers consume this directly."""
 
-    per_category: dict[Category, float]  # category → 0.0-5.0 grade
+    #: category → 0.0-5.0 grade, or **None where nothing could measure it**.
+    #: Never a default. A category graded 5.0 because no scanner in the run can
+    #: read that language is the absence-as-value defect: the number says
+    #: "clean" and means "nobody looked". `architecture.md` §5.
+    per_category: dict[Category, float | None]
     per_category_count: dict[Category, int]  # category → unsuppressed finding count
     per_severity_count: dict[Severity, int]  # severity → unsuppressed finding count
-    overall: float  # 0.0-5.0
-    letter: str  # A+, A, A-, B+, ...
+    #: The worst *measured* category, or None when nothing was measured at all.
+    overall: float | None
+    letter: str | None  # A+, A, A-, B+, ... or None alongside a None overall
     worst_category: Category | None  # which category drove the grade
     loc_scanned: int  # for the report header
 
-    def as_table(self) -> list[tuple[str, str, float, int]]:
+    @property
+    def is_measured(self) -> bool:
+        return self.overall is not None
+
+    def as_table(self) -> list[tuple[str, str, float | None, int]]:
         """[(category_name, grade_letter, grade_score, finding_count), ...]
-        sorted worst → best for the operator report."""
+        sorted worst → best, with unmeasured categories last.
+
+        An unmeasured category reports "—" rather than a letter. Sorting it to
+        the end is deliberate: it is not the worst thing found, it is a thing
+        nobody looked at, and putting it at the top of a worst-first table
+        would read as an accusation.
+        """
         rows = []
         for cat in Category:
-            grade = self.per_category.get(cat, 5.0)
+            grade = self.per_category.get(cat)
             count = self.per_category_count.get(cat, 0)
-            rows.append((cat.value, letter_grade(grade), grade, count))
-        rows.sort(key=lambda r: r[2])  # worst first
+            rows.append(
+                (cat.value, letter_grade(grade) if grade is not None else "—", grade, count)
+            )
+        rows.sort(key=lambda r: (r[2] is None, r[2] if r[2] is not None else 0.0))
         return rows
 
 
-#: Categories that are scored wherever they are found, test tree included.
-#:
-#: A committed credential is a leak whatever directory it sits in, and the
-#: corpus supports treating it that way: across six large repositories every
-#: single `secrets` finding inside a test tree came from gitleaks — private
-#: keys, JWTs, API keys — and not one from Bandit's hardcoded-password
-#: heuristics, which land in `code_vulnerabilities` and are the actual noise
-#: (7,688 `B101` asserts against 17 real secrets). See docs/calibration.md.
-ALWAYS_SCORED_CATEGORIES: frozenset[Category] = frozenset({Category.SECRETS})
+def partition_by_path(
+    findings: Iterable[Finding], classify: Callable[[Finding], str]
+) -> tuple[list[Finding], dict[str, list[Finding]]]:
+    """Split findings by which tree they came from.
 
+    `classify` returns "primary" for the project's own source, or the name of
+    a side axis — "test tree", "documentation". Nothing is dropped: every
+    finding lands somewhere and every axis is reported.
 
-def partition_by_tree(
-    findings: Iterable[Finding], is_test: Callable[[Finding], bool]
-) -> tuple[list[Finding], list[Finding]]:
-    """Split findings into (primary, test-tree).
-
-    `is_test` decides on path; this decides on policy. A finding in a category
-    that is always scored stays primary however it is classified, which is what
-    keeps a real key in a fixture from being filed away as test noise.
+    Secrets are no longer exempted back onto the primary axis. They follow
+    their path like everything else and are escalated at the *gate* instead —
+    see `gated_findings`. A test certificate is not a code-condition defect,
+    and a leaked key still fails the build.
     """
     primary: list[Finding] = []
-    test: list[Finding] = []
+    axes: dict[str, list[Finding]] = {}
     for finding in findings:
-        if is_test(finding) and finding.category not in ALWAYS_SCORED_CATEGORIES:
-            test.append(finding)
-        else:
+        name = classify(finding)
+        if name == "primary":
             primary.append(finding)
-    return primary, test
+        else:
+            axes.setdefault(name, []).append(finding)
+    return primary, axes
+
+
+#: Categories that still **fail a build** from a side axis, even though they
+#: do not grade code condition.
+#:
+#: The exemption used to be the other way round: secrets were *scored*
+#: wherever they lived, on the reasoning that every test-tree secret in the
+#: corpus came from gitleaks rather than Bandit's heuristics. That was true and
+#: insufficient. Measured again with paths: `requests` had four criticals in
+#: `tests/certs/*.key` — certificates its own suite generates — and FastAPI had
+#: JWTs in four translations of one tutorial. gitleaks being a real secret
+#: scanner does not make a test fixture a real secret.
+#:
+#: Nothing static separates a live credential from a test cert, which is why
+#: the remedy is not to score them and not to ignore them. They are reported in
+#: full and they still trip `fail_on_category`, so a genuinely leaked key fails
+#: the build from anywhere in the tree. Only the code-condition grade stops
+#: absorbing them.
+GATED_FROM_ANY_AXIS: frozenset[Category] = frozenset({Category.SECRETS})
+
+
+def gated_findings(
+    scored: Iterable[Finding], side_axes: Iterable[Iterable[Finding]], gate_config: dict
+) -> list[Finding]:
+    """Everything the gate should see: the scored set plus side-axis findings
+    in categories the operator named.
+
+    Not simply "everything". A test tree holds hundreds of HIGH findings that
+    are deliberately vulnerable fixtures, and feeding those to
+    `fail_on_severity` would fail every build in the corpus. A secret is
+    different: `fail_on_category: ["secrets"]` is the operator saying *these
+    matter wherever they are*, and honouring that is what keeps moving secrets
+    off the score from becoming a way to hide one.
+    """
+    named = {
+        Category(value)
+        for value in (gate_config.get("fail_on_category") or [])
+        if value in {c.value for c in Category}
+    }
+    escalate = named & GATED_FROM_ANY_AXIS
+    out = list(scored)
+    if escalate:
+        for axis in side_axes:
+            out.extend(f for f in axis if f.category in escalate)
+    return out
 
 
 @dataclass(frozen=True)
@@ -252,6 +319,19 @@ class AxisReport:
 
     #: What this axis is, in report-facing words: "test tree", "dependencies".
     name: str
+    #: Every finding on this axis, **suppressed ones included**. This is the
+    #: axis's membership, and the renderer reads it to tag each finding with
+    #: the axis it came from.
+    #:
+    #: Suppressed findings used to be filtered out here. The counts were right
+    #: and the membership was wrong, so a suppressed test-tree finding matched
+    #: no axis, fell through to the "primary" default, and was published as
+    #: `axis: primary, scored: true`. Suppressing a finding is not supposed to
+    #: move it into the scored set — the tool's own self-audit did exactly
+    #: that after one gitleaks false positive was suppressed.
+    #:
+    #: The counts below still exclude suppressed findings: an operator who
+    #: accepted a finding should not keep reading it in the totals.
     findings: tuple[Finding, ...]
     per_severity_count: dict[Severity, int]
     per_category_count: dict[Category, int]
@@ -262,7 +342,12 @@ class AxisReport:
 
     @property
     def count(self) -> int:
-        return len(self.findings)
+        """Live findings on this axis. Suppressed ones are members, not counts."""
+        return sum(1 for f in self.findings if not f.suppressed)
+
+    @property
+    def suppressed_count(self) -> int:
+        return sum(1 for f in self.findings if f.suppressed)
 
     @property
     def worst_severity(self) -> Severity | None:
@@ -270,7 +355,7 @@ class AxisReport:
 
     def headline(self) -> str:
         scope = f" across {self.loc:,} LOC" if self.loc is not None else ""
-        if not self.findings:
+        if not self.count:
             return f"{self.name}: nothing found{scope}"
         worst = self.worst_severity
         return (
@@ -287,10 +372,15 @@ def summarize_axis(name: str, findings: Iterable[Finding], loc: int | None = Non
     with `test_`, including imported ones, so a public function so named would
     break the suite of every project that imported it.
     """
-    findings = tuple(f for f in findings if not f.suppressed)
+    # Membership keeps everything; the counts keep only what is still live.
+    # Dropping suppressed findings from `findings` broke the renderer's axis
+    # lookup and republished them as scored primary-tree findings.
+    findings = tuple(findings)
     per_severity: dict[Severity, int] = {}
     per_category: dict[Category, int] = {}
     for finding in findings:
+        if finding.suppressed:
+            continue
         per_severity[finding.severity] = per_severity.get(finding.severity, 0) + 1
         per_category[finding.category] = per_category.get(finding.category, 0) + 1
     return AxisReport(
@@ -352,31 +442,58 @@ def _worst_category(
     return max(tied, key=lambda category: per_category_count.get(category, 0))
 
 
-def score(findings: Iterable[Finding], loc_scanned: int) -> ScoreReport:
+def score(
+    findings: Iterable[Finding],
+    loc_scanned: int,
+    measurable: Iterable[Category] | None = None,
+) -> ScoreReport:
+    """Grade the findings. Categories nothing could measure grade None.
+
+    `measurable` is the set of categories some scanner in this run could
+    actually have reported on. Passing None means "assume everything was
+    measurable", which keeps the arithmetic tests honest and is wrong for a
+    real audit — the orchestrator derives the real set from coverage.
+
+    It is computed by the caller rather than here on purpose. Working it out
+    means knowing which scanners ran and what each one reads, and a rubric
+    that can reach into the scanner layer is a rubric that can grow a special
+    case for a particular repository. MA keeps the same boundary and enforces
+    it with `test_scoring_never_imports_scanners_or_assembly`.
+    """
     findings = list(findings)
-    per_category: dict[Category, float] = {}
+    measured = set(Category) if measurable is None else set(measurable)
+    per_category: dict[Category, float | None] = {}
     per_category_count: dict[Category, int] = {}
     per_severity_count: dict[Severity, int] = dict.fromkeys(Severity, 0)
 
     for cat in Category:
+        count = sum(1 for f in findings if f.category == cat and not f.suppressed)
+        per_category_count[cat] = count
+        # A finding *is* evidence the category was measurable, whatever the
+        # scanner inventory says — otherwise a tool reporting outside its
+        # declared domain would have its findings graded as unmeasured.
+        if cat not in measured and count == 0:
+            per_category[cat] = None
+            continue
         subtotal = category_subtotal(findings, cat)
-        normalized = normalize(subtotal, loc_scanned)
-        per_category[cat] = category_grade(normalized)
-        per_category_count[cat] = sum(1 for f in findings if f.category == cat and not f.suppressed)
+        per_category[cat] = category_grade(normalize(subtotal, loc_scanned))
 
     for f in findings:
         if not f.suppressed:
             per_severity_count[f.severity] += 1
 
-    worst_category = _worst_category(per_category, per_category_count)
-
-    overall = min(per_category.values()) if per_category else 5.0
+    graded = {cat: grade for cat, grade in per_category.items() if grade is not None}
+    worst_category = _worst_category(graded, per_category_count)
+    # None, not 5.0. A run where nothing could be measured has no grade, and
+    # this is the defect architecture.md §5 named: the score's null state was
+    # "perfect", so a repository nobody scanned reported A+.
+    overall = min(graded.values()) if graded else None
     return ScoreReport(
         per_category=per_category,
         per_category_count=per_category_count,
         per_severity_count=per_severity_count,
         overall=overall,
-        letter=letter_grade(overall),
+        letter=letter_grade(overall) if overall is not None else None,
         worst_category=worst_category,
         loc_scanned=loc_scanned,
     )
@@ -520,6 +637,15 @@ def _gate_min_score(
     reasons: list[str],
 ) -> None:
     min_score = gate_config.get("min_score")
+    if min_score is not None and report.overall is None:
+        # A minimum cannot be met by a run that measured nothing, and it
+        # certainly is not met *because* nothing was measured. This is the
+        # gate half of P3: withholding evidence must not buy a pass.
+        tripped.append("min_score")
+        reasons.append(
+            f"a minimum score of {min_score} is required, and nothing measurable was scanned"
+        )
+        return
     if min_score is None or report.overall >= min_score:
         return
     tripped.append("min_score")

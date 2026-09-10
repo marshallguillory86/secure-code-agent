@@ -122,6 +122,11 @@ class GosecScanner(Scanner):
         start, _, end = line.partition("-")
         return self._make_finding(
             rule_id=str(issue.get("rule_id") or "unknown"),
+            # gosec declares a CWE per rule. It was being appended to the
+            # message text and then dropped on the floor, so the finding
+            # carried the id where a human could read it and nowhere the
+            # scoring, the Top-25 bonus or the SARIF taxonomy could.
+            scanner_cwe=f"CWE-{cwe_id}" if cwe_id else None,
             message=message,
             file_path=Path(str(issue.get("file") or "")),
             line_start=int(start or 0),

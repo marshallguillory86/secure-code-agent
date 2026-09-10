@@ -521,3 +521,112 @@ def owasp_label(owasp_id: str) -> str:
     """'A03' → 'A03:2021-Injection'. Returns the id unchanged if not mapped."""
     bucket = owasp_id.split(":", 1)[0] if ":" in owasp_id else owasp_id
     return OWASP_TOP10_2021.get(bucket, owasp_id)
+
+
+# --- CWE → OWASP Top 10 (2021) --------------------------------------------
+# Each 2021 category is *defined* by a list of CWEs, published with the Top 10
+# itself. This is that mapping, restricted to the CWEs the floor scanners
+# actually emit — a partial table that says "unknown" honestly is worth more
+# than a complete one built by guessing.
+#
+# Source: https://owasp.org/Top10/ — each category page lists its "Mapped
+# CWEs". Where a CWE appears under more than one category the more specific
+# one is used, which is the convention the category pages themselves follow.
+_CWE_TO_OWASP: dict[str, str] = {
+    # A01 Broken Access Control
+    "CWE-22": "A01",
+    "CWE-200": "A01",
+    "CWE-284": "A01",
+    "CWE-285": "A01",
+    "CWE-352": "A01",
+    "CWE-359": "A01",
+    "CWE-425": "A01",
+    "CWE-639": "A01",
+    "CWE-862": "A01",
+    "CWE-863": "A01",
+    # A02 Cryptographic Failures
+    "CWE-259": "A02",
+    "CWE-295": "A02",
+    "CWE-319": "A02",
+    "CWE-326": "A02",
+    "CWE-327": "A02",
+    "CWE-328": "A02",
+    "CWE-330": "A02",
+    "CWE-331": "A02",
+    "CWE-338": "A02",
+    "CWE-798": "A02",
+    "CWE-916": "A02",
+    # A03 Injection
+    "CWE-77": "A03",
+    "CWE-78": "A03",
+    "CWE-79": "A03",
+    "CWE-80": "A03",
+    "CWE-88": "A03",
+    "CWE-89": "A03",
+    "CWE-90": "A03",
+    "CWE-91": "A03",
+    "CWE-94": "A03",
+    "CWE-95": "A03",
+    "CWE-96": "A03",
+    "CWE-113": "A03",
+    "CWE-116": "A03",
+    "CWE-643": "A03",
+    "CWE-917": "A03",
+    # A04 Insecure Design
+    "CWE-209": "A04",
+    "CWE-256": "A04",
+    "CWE-501": "A04",
+    "CWE-522": "A04",
+    # A05 Security Misconfiguration
+    "CWE-16": "A05",
+    "CWE-260": "A05",
+    "CWE-611": "A05",
+    "CWE-614": "A05",
+    "CWE-732": "A05",
+    "CWE-776": "A05",
+    "CWE-1004": "A05",
+    # A06 Vulnerable and Outdated Components
+    "CWE-1035": "A06",
+    "CWE-1104": "A06",
+    # A07 Identification and Authentication Failures
+    "CWE-287": "A07",
+    "CWE-290": "A07",
+    "CWE-297": "A07",
+    "CWE-306": "A07",
+    "CWE-307": "A07",
+    "CWE-384": "A07",
+    "CWE-521": "A07",
+    "CWE-613": "A07",
+    "CWE-620": "A07",
+    # A08 Software and Data Integrity Failures
+    "CWE-345": "A08",
+    "CWE-347": "A08",
+    "CWE-494": "A08",
+    "CWE-502": "A08",
+    "CWE-829": "A08",
+    # A09 Security Logging and Monitoring Failures
+    "CWE-117": "A09",
+    "CWE-223": "A09",
+    "CWE-532": "A09",
+    "CWE-778": "A09",
+    # A10 Server-Side Request Forgery
+    "CWE-918": "A10",
+}
+
+
+def owasp_for_cwe(canonical_cwe: str | None) -> str | None:
+    """Derive an OWASP Top 10 (2021) category key from a CWE, or None.
+
+    Returns the short key — "A03", the same shape the curated map stores and
+    `owasp_label()` expands — so a derived value and a curated one are
+    indistinguishable downstream.
+
+    Used only where the curated map has no OWASP id of its own. Returning
+    None is a normal outcome and is the point: Bandit files `assert_used`
+    under CWE-703 ("improper check for unusual conditions"), which is a real
+    weakness class and belongs to no Top 10 category. Inventing one would put
+    a standard's name behind a claim it does not make.
+    """
+    if canonical_cwe is None:
+        return None
+    return _CWE_TO_OWASP.get(canonical_cwe)
