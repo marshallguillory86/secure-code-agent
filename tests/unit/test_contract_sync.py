@@ -152,27 +152,49 @@ def test_the_offline_ruleset_is_declared_as_package_data():
     assert offline_ruleset_path() is not None
 
 
-def test_the_package_version_matches_pyproject():
-    """A version is provenance, and it drifted once already.
+def test_the_version_is_written_in_exactly_one_place():
+    """Not "the two agree" — there is only one.
 
-    `__version__` was a hardcoded string. `pyproject.toml` moved to 0.4.0 and it
-    did not, so the released wheel stamped 0.3.0 into every SARIF document,
-    every JSON report, the Markdown header, `--version` and the pillar artifact
-    handed to maintainability-agent. The release workflow checks the tag against
-    pyproject and never looked at the package.
+    The version was duplicated: `pyproject.toml` carried `version = "0.4.0"`
+    while the package carried `0.3.0`. The released v0.4.0 wheel therefore
+    stamped 0.3.0 into every SARIF document, every JSON report, the Markdown
+    header, `--version` and the pillar artifact handed to
+    maintainability-agent. The release workflow compared the tag against
+    pyproject's line and never looked at the package, so it verified the half
+    that was right and shipped the half that was wrong.
 
-    Reading it from `importlib.metadata` instead was tried and is worse: it
-    reports whatever distribution happens to be installed, which in a working
-    checkout was a stale 0.1.0. Provenance that depends on the reader's install
-    state is not provenance. So the literal stays and this test is what stops
-    it drifting.
+    An earlier fix asserted the two literals matched. That polices a
+    duplication rather than removing it, and leaves the next person free to
+    edit either one. pyproject now derives the version from the package via
+    `[tool.setuptools.dynamic]`, so this asserts the duplication has not come
+    back rather than that it is currently consistent.
+    """
+    project = _pyproject()["project"]
+
+    assert "version" not in project, (
+        "pyproject declares a literal version again; it must stay derived from "
+        "secure_code_audit.__version__ via [tool.setuptools.dynamic]"
+    )
+    assert project.get("dynamic") == ["version"]
+    assert (
+        _pyproject()["tool"]["setuptools"]["dynamic"]["version"]["attr"]
+        == "secure_code_audit.__version__"
+    )
+
+
+def test_the_build_stamps_the_package_version_into_its_metadata():
+    """The property that actually failed, checked end to end.
+
+    A single source of truth is only worth anything if the build honours it.
+    This asserts the version setuptools would publish is the one the package
+    reports — the exact comparison nobody was making when 0.4.0 shipped
+    reporting 0.3.0.
     """
     from secure_code_audit import __version__
 
-    declared = _pyproject()["project"]["version"]
+    attr = _pyproject()["tool"]["setuptools"]["dynamic"]["version"]["attr"]
+    module_name, _, attribute = attr.rpartition(".")
+    module = __import__(module_name, fromlist=[attribute])
 
-    assert __version__ == declared, (
-        f"secure_code_audit.__version__ is {__version__!r} but pyproject "
-        f"declares {declared!r}; every SARIF document, JSON report and pillar "
-        f"artifact stamps the former"
-    )
+    assert getattr(module, attribute) == __version__
+    assert __version__.count(".") >= 2, f"{__version__!r} is not a release version"

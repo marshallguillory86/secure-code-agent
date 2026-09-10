@@ -1,16 +1,15 @@
 """secure-code-agent — deterministic security gate + bounded AI remediation prompts."""
 
-#: Kept in step with `pyproject.toml` by `test_the_package_version_matches_pyproject`.
+#: The only place the version is written. `pyproject.toml` derives it via
+#: `[tool.setuptools.dynamic]`, so the two cannot drift.
 #:
-#: This drifted once: pyproject moved to 0.4.0 and this string did not, so the
-#: released v0.4.0 wheel reported itself as 0.3.0 in every SARIF document, every
-#: JSON report, the Markdown header, `--version`, and the `security-pillar.json`
-#: handed to maintainability-agent. The release workflow verifies the *tag*
-#: against pyproject and never looked here, so nothing caught it.
+#: They did drift once, and it shipped: pyproject said 0.4.0 while this said
+#: 0.3.0, so the released v0.4.0 wheel stamped 0.3.0 into every SARIF document,
+#: every JSON report, the Markdown header, `--version`, and the
+#: `security-pillar.json` handed to maintainability-agent. The release workflow
+#: compared the tag against pyproject's line and never looked here — it
+#: verified the half that was right and shipped the half that was wrong.
 #:
-#: Reading it from `importlib.metadata` instead was tried and is worse: it
-#: reports whatever distribution happens to be installed, which in a working
-#: checkout was a stale 0.1.0. A version is provenance, and provenance that
-#: depends on the reader's install state is not provenance. A literal plus a
-#: test that fails on drift is both simpler and harder to get wrong.
-__version__ = "0.4.0"
+#: PyPI is immutable, so 0.4.0 stays wrong. 0.5.0 is the first build whose
+#: artifacts name their own producer correctly.
+__version__ = "0.5.0"

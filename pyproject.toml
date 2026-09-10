@@ -4,7 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "secure-code-agent"
-version = "0.4.0"
+# Derived from `secure_code_audit.__version__`, which is the only place the
+# number is written. It used to be duplicated here, and the two drifted: this
+# file said 0.4.0 while the package said 0.3.0, so the released v0.4.0 wheel
+# stamped 0.3.0 into every SARIF document, JSON report, Markdown header,
+# `--version` and the pillar artifact handed to maintainability-agent. The
+# release workflow compared the tag against *this* line and never looked at the
+# package, so nothing caught it. A test asserting the two agree would only
+# police the duplication; removing it is the fix.
+dynamic = ["version"]
 description = "Deterministic security gate + bounded AI remediation prompt generator. NIST SSDF / OWASP ASVS / CWE Top 25 anchored."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -85,6 +93,12 @@ Repository    = "https://github.com/marshallguillory86/secure-code-agent"
 Documentation = "https://github.com/marshallguillory86/secure-code-agent/tree/main/docs"
 Issues        = "https://github.com/marshallguillory86/secure-code-agent/issues"
 Changelog     = "https://github.com/marshallguillory86/secure-code-agent/blob/main/CHANGELOG.md"
+
+[tool.setuptools.dynamic]
+# The single source of truth for the version. `src/secure_code_audit/__init__.py`
+# holds the literal; this reads it. The two cannot drift because there is only
+# one of them.
+version = { attr = "secure_code_audit.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
