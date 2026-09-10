@@ -41,7 +41,11 @@ def to_json(
             "coverage_complete": coverage is None or coverage.status.value == "complete",
             "loc_scanned": score.loc_scanned,
             "worst_category": score.worst_category.value if score.worst_category else None,
-            "per_category": {c.value: round(v, 2) for c, v in score.per_category.items()},
+            # null where nothing could measure the category — never a default
+            "per_category": {
+                c.value: (round(v, 2) if v is not None else None)
+                for c, v in score.per_category.items()
+            },
             "per_category_count": {c.value: n for c, n in score.per_category_count.items()},
             "per_severity_count": {s.value: n for s, n in score.per_severity_count.items()},
         },
@@ -242,10 +246,16 @@ def _summary_section(
     # cannot. Falling back to a locally-invented condition here is what put a
     # second decision rule in the codebase in the first place.
     if verdict is None or not verdict.is_verified:
-        out.append(
-            f"- **Finding score (not a verified grade):** {score.overall:.2f} / 5.00 — "
-            f"**{score.letter}**"
-        )
+        if score.overall is None:
+            out.append(
+                "- **No score:** nothing measurable was scanned. This is not a "
+                "clean result; it is the absence of one."
+            )
+        else:
+            out.append(
+                f"- **Finding score (not a verified grade):** {score.overall:.2f} / 5.00 — "
+                f"**{score.letter}**"
+            )
         for reason in verdict.reasons if verdict else ():
             out.append(f"    - {reason}")
     else:
@@ -299,7 +309,11 @@ def _axis_section(report: AxisReport | None) -> str:
 def _categories_table(score: ScoreReport) -> str:
     out = ["## Categories", "", "| Category | Grade | Score | Findings |", "|---|---|---:|---:|"]
     for cat_name, grade_letter, grade_score, count in score.as_table():
-        out.append(f"| `{cat_name}` | **{grade_letter}** | {grade_score:.2f} | {count} |")
+        # An unmeasured category shows a dash, not a number. Printing 5.00
+        # for a category no scanner could read is the defect this whole
+        # column exists to stop reporting.
+        shown = f"{grade_score:.2f}" if grade_score is not None else "—"
+        out.append(f"| `{cat_name}` | **{grade_letter}** | {shown} | {count} |")
     out.append("")
     return "\n".join(out)
 
@@ -475,9 +489,13 @@ def _pr_comment(
     # never caveat on its own terms.
     unverified = verdict is None or not verdict.is_verified
     score_label = "finding score, not a verified grade" if unverified else "verified grade"
+    headline = (
+        "no score — nothing measurable was scanned"
+        if score.overall is None
+        else f"{score_label} **{score.letter}** ({score.overall:.2f}/5.00)"
+    )
     out = [
-        f"### secure-code-agent {status} — {score_label} **{score.letter}** "
-        f"({score.overall:.2f}/5.00)",
+        f"### secure-code-agent {status} — {headline}",
         "",
         f"- Critical: **{n_crit}** · High: **{n_high}** · New since baseline: **{n_new}**",
         f"- Worst category: `{score.worst_category.value if score.worst_category else '_none_'}`",

@@ -29,6 +29,7 @@ from secure_code_audit import practice as practice_mod
 from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.git_tools import find_repo_root, is_excluded, is_test_path, loc_under
 from secure_code_audit.scanner_status import (
+    COVERING_OUTCOMES,
     ScannerExecution,
     ScannerOutcome,
     evaluate_coverage,
@@ -333,7 +334,8 @@ def _do_audit(args: argparse.Namespace) -> int:
     # runtime CVE still fails a build exactly as before.
     gated_findings = all_findings
     scored_findings, dependency_findings = split_side_axes(all_findings)
-    score = score_findings(scored_findings, loc)
+    measurable = _measurable_categories(executions, scored_findings)
+    score = score_findings(scored_findings, loc, measurable)
     test_tree = summarize_axis("test tree", test_findings, test_loc)
     dependencies = summarize_axis("dependencies", dependency_findings)
     axes = (test_tree, dependencies)
@@ -496,6 +498,46 @@ def _selected_scanners(args: argparse.Namespace, cfg: config_mod.Config) -> list
         for name in scanners.SCANNERS
         if not (only and name not in only) and name not in skip and _scanner_enabled(cfg, name)
     ]
+
+
+def _measurable_categories(
+    executions: list[ScannerExecution], findings: list[Finding]
+) -> set[Category]:
+    """Categories some scanner in this run could actually have reported on.
+
+    Computed here rather than in `scoring` because working it out means knowing
+    which scanners ran and what each one reads, and a rubric that can reach
+    into the scanner layer is a rubric that can grow a special case for a
+    particular repository. MA keeps the same boundary.
+
+    A scanner counts only if it *covered* its ground — a tool that failed or
+    was never installed measured nothing, which is the whole point: a category
+    graded 5.0 because nothing could read it is the absence-as-value defect.
+
+    A category with findings is measurable by definition, whatever the domain
+    table says. Scanners report outside their declared domain routinely —
+    Bandit emits crypto findings — and grading those as unmeasured would throw
+    away real evidence.
+    """
+    domains: set[str] = set()
+    for execution in executions:
+        if execution.outcome not in COVERING_OUTCOMES:
+            continue
+        policy = floor.policy(execution.name)
+        if policy is not None:
+            domains.add(policy.domain)
+
+    measurable = {category for category in Category if category.value in domains}
+    if "multiple" in domains:
+        # builtin_rules reads several categories and declares none of them.
+        measurable |= {
+            Category.SECRETS,
+            Category.CODE_VULNERABILITIES,
+            Category.CRYPTO,
+            Category.CONFIG_IAC,
+        }
+    measurable |= {finding.category for finding in findings if not finding.suppressed}
+    return measurable
 
 
 def _drop_excluded(findings: list[Finding], target: Path, cfg: config_mod.Config) -> list[Finding]:

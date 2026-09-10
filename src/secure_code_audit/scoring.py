@@ -105,10 +105,13 @@ class Verdict:
     every output reads it rather than re-deriving it.
     """
 
-    estimate: float
+    #: None when nothing could be measured. Not zero: a run with no
+    #: measurable category has no estimate to report, and a 0.00 would read as
+    #: "we looked and it was terrible".
+    estimate: float | None
     #: The letter the estimate alone would earn. Not a grade — an arithmetic
     #: consequence, kept so a reader can see what the evidence suggested.
-    estimated_letter: str
+    estimated_letter: str | None
     verified_grade: str | None
     reasons: tuple[str, ...]
 
@@ -122,6 +125,8 @@ class Verdict:
 
     def headline(self) -> str:
         """One line, used by every renderer that shows a score."""
+        if self.estimate is None:
+            return "no score — nothing measurable was scanned"
         if self.is_verified:
             return f"{self.estimate:.2f} ({self.verified_grade})"
         return f"{self.estimate:.2f} — grade withheld ({self.estimated_letter} unverified)"
@@ -129,12 +134,17 @@ class Verdict:
 
 def verdict(report: ScoreReport, gate_config: dict, coverage: CoverageReport | None) -> Verdict:
     """Decide the letter, or withhold it, once for the whole run."""
-    reasons = evidence_reasons(gate_config, coverage)
+    reasons = list(evidence_reasons(gate_config, coverage))
+    if report.overall is None:
+        # Nothing measurable ran. There is no estimate to qualify, so the
+        # reason is stated rather than a letter being caveated — a caveated
+        # letter still shows a letter.
+        reasons.append("no category could be measured by the scanners that ran")
     return Verdict(
         estimate=report.overall,
         estimated_letter=report.letter,
         verified_grade=None if reasons else report.letter,
-        reasons=reasons,
+        reasons=tuple(reasons),
     )
 
 
@@ -180,23 +190,40 @@ def category_grade(normalized: float) -> float:
 class ScoreReport:
     """Per-category + overall score breakdown. Renderers consume this directly."""
 
-    per_category: dict[Category, float]  # category → 0.0-5.0 grade
+    #: category → 0.0-5.0 grade, or **None where nothing could measure it**.
+    #: Never a default. A category graded 5.0 because no scanner in the run can
+    #: read that language is the absence-as-value defect: the number says
+    #: "clean" and means "nobody looked". `architecture.md` §5.
+    per_category: dict[Category, float | None]
     per_category_count: dict[Category, int]  # category → unsuppressed finding count
     per_severity_count: dict[Severity, int]  # severity → unsuppressed finding count
-    overall: float  # 0.0-5.0
-    letter: str  # A+, A, A-, B+, ...
+    #: The worst *measured* category, or None when nothing was measured at all.
+    overall: float | None
+    letter: str | None  # A+, A, A-, B+, ... or None alongside a None overall
     worst_category: Category | None  # which category drove the grade
     loc_scanned: int  # for the report header
 
-    def as_table(self) -> list[tuple[str, str, float, int]]:
+    @property
+    def is_measured(self) -> bool:
+        return self.overall is not None
+
+    def as_table(self) -> list[tuple[str, str, float | None, int]]:
         """[(category_name, grade_letter, grade_score, finding_count), ...]
-        sorted worst → best for the operator report."""
+        sorted worst → best, with unmeasured categories last.
+
+        An unmeasured category reports "—" rather than a letter. Sorting it to
+        the end is deliberate: it is not the worst thing found, it is a thing
+        nobody looked at, and putting it at the top of a worst-first table
+        would read as an accusation.
+        """
         rows = []
         for cat in Category:
-            grade = self.per_category.get(cat, 5.0)
+            grade = self.per_category.get(cat)
             count = self.per_category_count.get(cat, 0)
-            rows.append((cat.value, letter_grade(grade), grade, count))
-        rows.sort(key=lambda r: r[2])  # worst first
+            rows.append(
+                (cat.value, letter_grade(grade) if grade is not None else "—", grade, count)
+            )
+        rows.sort(key=lambda r: (r[2] is None, r[2] if r[2] is not None else 0.0))
         return rows
 
 
@@ -352,31 +379,58 @@ def _worst_category(
     return max(tied, key=lambda category: per_category_count.get(category, 0))
 
 
-def score(findings: Iterable[Finding], loc_scanned: int) -> ScoreReport:
+def score(
+    findings: Iterable[Finding],
+    loc_scanned: int,
+    measurable: Iterable[Category] | None = None,
+) -> ScoreReport:
+    """Grade the findings. Categories nothing could measure grade None.
+
+    `measurable` is the set of categories some scanner in this run could
+    actually have reported on. Passing None means "assume everything was
+    measurable", which keeps the arithmetic tests honest and is wrong for a
+    real audit — the orchestrator derives the real set from coverage.
+
+    It is computed by the caller rather than here on purpose. Working it out
+    means knowing which scanners ran and what each one reads, and a rubric
+    that can reach into the scanner layer is a rubric that can grow a special
+    case for a particular repository. MA keeps the same boundary and enforces
+    it with `test_scoring_never_imports_scanners_or_assembly`.
+    """
     findings = list(findings)
-    per_category: dict[Category, float] = {}
+    measured = set(Category) if measurable is None else set(measurable)
+    per_category: dict[Category, float | None] = {}
     per_category_count: dict[Category, int] = {}
     per_severity_count: dict[Severity, int] = dict.fromkeys(Severity, 0)
 
     for cat in Category:
+        count = sum(1 for f in findings if f.category == cat and not f.suppressed)
+        per_category_count[cat] = count
+        # A finding *is* evidence the category was measurable, whatever the
+        # scanner inventory says — otherwise a tool reporting outside its
+        # declared domain would have its findings graded as unmeasured.
+        if cat not in measured and count == 0:
+            per_category[cat] = None
+            continue
         subtotal = category_subtotal(findings, cat)
-        normalized = normalize(subtotal, loc_scanned)
-        per_category[cat] = category_grade(normalized)
-        per_category_count[cat] = sum(1 for f in findings if f.category == cat and not f.suppressed)
+        per_category[cat] = category_grade(normalize(subtotal, loc_scanned))
 
     for f in findings:
         if not f.suppressed:
             per_severity_count[f.severity] += 1
 
-    worst_category = _worst_category(per_category, per_category_count)
-
-    overall = min(per_category.values()) if per_category else 5.0
+    graded = {cat: grade for cat, grade in per_category.items() if grade is not None}
+    worst_category = _worst_category(graded, per_category_count)
+    # None, not 5.0. A run where nothing could be measured has no grade, and
+    # this is the defect architecture.md §5 named: the score's null state was
+    # "perfect", so a repository nobody scanned reported A+.
+    overall = min(graded.values()) if graded else None
     return ScoreReport(
         per_category=per_category,
         per_category_count=per_category_count,
         per_severity_count=per_severity_count,
         overall=overall,
-        letter=letter_grade(overall),
+        letter=letter_grade(overall) if overall is not None else None,
         worst_category=worst_category,
         loc_scanned=loc_scanned,
     )
@@ -520,6 +574,15 @@ def _gate_min_score(
     reasons: list[str],
 ) -> None:
     min_score = gate_config.get("min_score")
+    if min_score is not None and report.overall is None:
+        # A minimum cannot be met by a run that measured nothing, and it
+        # certainly is not met *because* nothing was measured. This is the
+        # gate half of P3: withholding evidence must not buy a pass.
+        tripped.append("min_score")
+        reasons.append(
+            f"a minimum score of {min_score} is required, and nothing measurable was scanned"
+        )
+        return
     if min_score is None or report.overall >= min_score:
         return
     tripped.append("min_score")

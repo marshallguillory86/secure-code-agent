@@ -7,6 +7,7 @@ from secure_code_audit.cli import (
     _under_root,
     main,
 )
+from secure_code_audit.findings import Category
 from secure_code_audit.scanners.bandit_scanner import BanditScanner
 from secure_code_audit.scanners.pip_audit_scanner import PipAuditScanner
 
@@ -307,6 +308,11 @@ def test_removing_a_scanner_cannot_buy_a_better_grade(tmp_path):
     # the graded field. The score is a rate over findings, so disabling
     # scanners took this same tree from 0.00/F to 5.00/A+ — the best possible
     # letter, bought by looking less hard.
+    #
+    # That estimate no longer rises, it disappears. A category no scanner could
+    # read grades None rather than 5.0 (architecture.md §5), so the run that
+    # looked at nothing reports no score at all. This test asserted the rise as
+    # documentation of the defect; it now asserts the defect is gone.
     target = _vulnerable_repo(tmp_path)
 
     def run(config_payload, out_name):
@@ -337,12 +343,23 @@ def test_removing_a_scanner_cannot_buy_a_better_grade(tmp_path):
         {"scanners": {"builtin_rules": {"enabled": False}}, "gates": {"min_score": 4.0}}, "blind"
     )
 
-    # The estimate still rises — that is arithmetic over what was found.
-    assert did_not_look["overall"] > looked["overall"]
-    # The *grade* does not, because neither run declared a scanner set.
+    # Looking produced a number. Not looking produces no number — not a
+    # better one, and not a zero either, which would claim knowledge of poor
+    # quality nobody has.
+    assert isinstance(looked["overall"], float)
+    assert did_not_look["overall"] is None
+    assert did_not_look["letter"] is None
+
+    # The grade is withheld in both, because neither run declared a scanner set.
     assert looked["verified_grade"] is None
     assert did_not_look["verified_grade"] is None
     assert "require_scanners" in " ".join(did_not_look["evidence_reasons"])
+    assert "no category could be measured" in " ".join(did_not_look["evidence_reasons"])
+
+    # The per-category grades say null rather than 5.0 — the half of this that
+    # a reader sees. A 5.0 there means "clean"; null means "nobody looked".
+    assert did_not_look["per_category"][Category.CODE_VULNERABILITIES.value] is None
+    assert looked["per_category"][Category.CODE_VULNERABILITIES.value] is not None
 
 
 def test_a_grade_is_issued_only_when_a_declared_scanner_set_actually_ran(tmp_path):
