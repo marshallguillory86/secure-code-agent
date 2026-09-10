@@ -33,7 +33,7 @@ PROFILE_ID = "sca-offline"
 #: pattern is broadened has changed meaning even if its id is unchanged, and a
 #: report that cites an unchanged version after that is claiming a comparison
 #: it cannot support.
-PROFILE_VERSION = "1.1.0"
+PROFILE_VERSION = "1.2.0"
 
 
 @dataclass(frozen=True)

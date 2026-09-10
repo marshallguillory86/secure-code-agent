@@ -19,18 +19,40 @@ def find_repo_root(start: Path) -> Path:
 
 def is_excluded(path: Path, root: Path, patterns: Iterable[str]) -> bool:
     """Check if `path` matches any exclude glob. Patterns are tested against
-    the POSIX-relative path from `root`."""
+    the POSIX-relative path from `root`.
+
+    A relative path is taken as relative to `root`, not to the process working
+    directory. `Path.resolve()` would otherwise anchor it wherever the CLI
+    happened to be invoked from, `relative_to(root)` would raise, and the
+    answer would come back "not excluded" — fail-open, and silently. The
+    adapter boundary now roots every finding path, so this is the second line
+    rather than the first, but a rule that reads paths must not depend on the
+    caller's shell.
+    """
+    if not path.is_absolute():
+        path = root / path
     try:
         rel = path.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
         return False
-    for pat in patterns:
-        if pat.endswith("/"):
-            if rel.startswith(pat) or f"/{pat}" in f"/{rel}/":
-                return True
-        elif fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(path.name, pat):
-            return True
-    return False
+    return any(_matches(rel, path.name, pat) for pat in patterns)
+
+
+def _matches(rel: str, name: str, pat: str) -> bool:
+    """One glob against one path, already made relative to the root.
+
+    A trailing slash means "this directory, at any depth". Everything else is
+    `fnmatch`, with one correction: `**/` reads as "at any depth" and every
+    operator who writes it means to include depth zero. `fnmatch` does not,
+    because the pattern carries a literal `/` — so `**/*_test.go` matched
+    `router/context_test.go` and never `context_test.go`. Gin keeps its tests
+    beside the code they test, so three of its four "production" secrets were
+    test fixtures at the repository root, and that alone held it at F.
+    """
+    if pat.endswith("/"):
+        return rel.startswith(pat) or f"/{pat}" in f"/{rel}/"
+    bare = pat[3:] if pat.startswith("**/") else pat
+    return fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(rel, bare) or fnmatch.fnmatch(name, bare)
 
 
 def in_scope(path: Path, include_exts: Iterable[str]) -> bool:

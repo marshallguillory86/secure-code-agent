@@ -44,6 +44,7 @@ class Scanner(ABC):
         """Resolve the command once so probing and execution use the same tool."""
         self._allow_target_executables = target_executables_allowed(config, target)
         self._resolved_command = self._resolve_command(target, self.cfg(config))
+        self._target_root = target if target.is_dir() else target.parent
 
     @property
     def command(self) -> tuple[str, ...]:
@@ -208,6 +209,8 @@ class Scanner(ABC):
         short_desc = entry.short_desc if entry else None
         fix_hint = entry.fix_hint if entry else None
 
+        file_path = self._rooted(file_path)
+
         fingerprint = Finding.make_fingerprint(
             canonical_cwe=canonical_cwe,
             rule_id=rule_id,
@@ -235,6 +238,36 @@ class Scanner(ABC):
             fix_hint=fix_hint,
             cwe_top25=is_top25(canonical_cwe),
         )
+
+    def _rooted(self, file_path: Path) -> Path:
+        """Anchor a scanner-reported path to the audited tree.
+
+        Adapters do not agree on this. Bandit, Semgrep, RuboCop and the rest
+        report absolute paths; gitleaks reports paths relative to the
+        repository it scanned. Both are reasonable and neither is negotiable
+        from here, so the difference is absorbed at the one boundary every
+        adapter passes through.
+
+        Leaving it unabsorbed was not cosmetic. Every consumer that answers
+        "where is this?" — `is_excluded`, `is_test_path`, the axis split —
+        resolves a relative path against the *process* working directory,
+        which is wherever the operator happened to invoke the CLI. From there
+        `relative_to(root)` raises and the answer comes back "no". So
+        `exclude_patterns` silently did not apply to gitleaks findings at all:
+        an operator excluding `vendor/` still had vendor secrets scored, and
+        the calibration corpus scored four `tests/certs/*.key` files in
+        `requests` and six documentation examples in `flask` as production
+        secrets, holding both at F.
+
+        A path that is already absolute is returned untouched, including one
+        outside the target — an imported SARIF may legitimately name another
+        machine's tree, and inventing a root for it would be worse than
+        leaving it where it is.
+        """
+        if file_path.is_absolute():
+            return file_path
+        root = getattr(self, "_target_root", None)
+        return root / file_path if root is not None else file_path
 
     def _findings_exit_contradiction(
         self,

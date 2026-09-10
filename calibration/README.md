@@ -34,20 +34,30 @@ the tool correctly refused. Hence this README.
 **`calibrate.py`** — audits each repository through the real CLI and
 recomputes per-category subtotals from the findings.
 
-## Three choices that move the result
+## Four choices that move the result
 
 Stated here so they can be argued with, rather than discovered in the numbers.
 
-1. **Test directories are included.** The tool's own `DEFAULT_EXCLUDES` do not
-   exclude them, and a calibration should measure what the tool does by
-   default. Test trees carry deliberately-odd code, so this biases the corpus
-   slightly worse than production-only would. Excluding them is defensible and
-   would need a re-run, not an adjustment.
+1. **Test directories are scanned, and scored on their own axis.** They are
+   not excluded — the run still reports what is in them, and still gates on
+   categories the operator names there. They simply do not grade the code
+   condition, because a project graded on its test fixtures is graded on the
+   wrong thing. Documentation is handled the same way. This is what the
+   product does by default, so the corpus measures the product.
+
+   Getting this wrong was the study's largest input error, twice: first by
+   including test trees at all (median `worst_normalized` 50.15 → 15.36), then
+   by anchoring finding paths so badly that the split silently did not apply
+   to gitleaks (median score 1.34 → 4.37).
 2. **`vendor/` and `target/` are excluded** on top of the defaults. Both hold
    third-party or generated code — Go vendoring, Maven output — and scoring a
    project on its dependencies' source measures the wrong thing. This is the
    only deviation from `DEFAULT_EXCLUDES`.
-3. **Scorecard and gosec are not in the scanner set.** Scorecard is
+3. **No repository has a baseline or suppressions.** This measures untriaged
+   first-run output, which is the worst case by construction. It is also why
+   four frameworks sit at F on true positives they would ordinarily accept —
+   see [`docs/calibration.md`](../docs/calibration.md).
+4. **Scorecard and gosec are not in the scanner set.** Scorecard is
    repository-cadence and needs a GitHub token; gosec needs each project's own
    Go toolchain ([D12](../docs/decisions.md)). Including a tool that runs for
    some repositories and not others would put the difference into the

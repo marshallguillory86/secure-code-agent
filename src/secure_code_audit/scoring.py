@@ -227,34 +227,74 @@ class ScoreReport:
         return rows
 
 
-#: Categories that are scored wherever they are found, test tree included.
-#:
-#: A committed credential is a leak whatever directory it sits in, and the
-#: corpus supports treating it that way: across six large repositories every
-#: single `secrets` finding inside a test tree came from gitleaks — private
-#: keys, JWTs, API keys — and not one from Bandit's hardcoded-password
-#: heuristics, which land in `code_vulnerabilities` and are the actual noise
-#: (7,688 `B101` asserts against 17 real secrets). See docs/calibration.md.
-ALWAYS_SCORED_CATEGORIES: frozenset[Category] = frozenset({Category.SECRETS})
+def partition_by_path(
+    findings: Iterable[Finding], classify: Callable[[Finding], str]
+) -> tuple[list[Finding], dict[str, list[Finding]]]:
+    """Split findings by which tree they came from.
 
+    `classify` returns "primary" for the project's own source, or the name of
+    a side axis — "test tree", "documentation". Nothing is dropped: every
+    finding lands somewhere and every axis is reported.
 
-def partition_by_tree(
-    findings: Iterable[Finding], is_test: Callable[[Finding], bool]
-) -> tuple[list[Finding], list[Finding]]:
-    """Split findings into (primary, test-tree).
-
-    `is_test` decides on path; this decides on policy. A finding in a category
-    that is always scored stays primary however it is classified, which is what
-    keeps a real key in a fixture from being filed away as test noise.
+    Secrets are no longer exempted back onto the primary axis. They follow
+    their path like everything else and are escalated at the *gate* instead —
+    see `gated_findings`. A test certificate is not a code-condition defect,
+    and a leaked key still fails the build.
     """
     primary: list[Finding] = []
-    test: list[Finding] = []
+    axes: dict[str, list[Finding]] = {}
     for finding in findings:
-        if is_test(finding) and finding.category not in ALWAYS_SCORED_CATEGORIES:
-            test.append(finding)
-        else:
+        name = classify(finding)
+        if name == "primary":
             primary.append(finding)
-    return primary, test
+        else:
+            axes.setdefault(name, []).append(finding)
+    return primary, axes
+
+
+#: Categories that still **fail a build** from a side axis, even though they
+#: do not grade code condition.
+#:
+#: The exemption used to be the other way round: secrets were *scored*
+#: wherever they lived, on the reasoning that every test-tree secret in the
+#: corpus came from gitleaks rather than Bandit's heuristics. That was true and
+#: insufficient. Measured again with paths: `requests` had four criticals in
+#: `tests/certs/*.key` — certificates its own suite generates — and FastAPI had
+#: JWTs in four translations of one tutorial. gitleaks being a real secret
+#: scanner does not make a test fixture a real secret.
+#:
+#: Nothing static separates a live credential from a test cert, which is why
+#: the remedy is not to score them and not to ignore them. They are reported in
+#: full and they still trip `fail_on_category`, so a genuinely leaked key fails
+#: the build from anywhere in the tree. Only the code-condition grade stops
+#: absorbing them.
+GATED_FROM_ANY_AXIS: frozenset[Category] = frozenset({Category.SECRETS})
+
+
+def gated_findings(
+    scored: Iterable[Finding], side_axes: Iterable[Iterable[Finding]], gate_config: dict
+) -> list[Finding]:
+    """Everything the gate should see: the scored set plus side-axis findings
+    in categories the operator named.
+
+    Not simply "everything". A test tree holds hundreds of HIGH findings that
+    are deliberately vulnerable fixtures, and feeding those to
+    `fail_on_severity` would fail every build in the corpus. A secret is
+    different: `fail_on_category: ["secrets"]` is the operator saying *these
+    matter wherever they are*, and honouring that is what keeps moving secrets
+    off the score from becoming a way to hide one.
+    """
+    named = {
+        Category(value)
+        for value in (gate_config.get("fail_on_category") or [])
+        if value in {c.value for c in Category}
+    }
+    escalate = named & GATED_FROM_ANY_AXIS
+    out = list(scored)
+    if escalate:
+        for axis in side_axes:
+            out.extend(f for f in axis if f.category in escalate)
+    return out
 
 
 @dataclass(frozen=True)

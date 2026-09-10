@@ -56,12 +56,37 @@ def to_json(
         },
         "coverage": _coverage_to_dict(coverage),
         "reported_not_scored": _axes_to_dict(axes),
-        "findings": [_finding_to_dict(f) for f in findings],
+        # Every finding, tagged with the axis it belongs to. `findings` stays
+        # the complete list so nothing is hidden from a consumer that reads
+        # only this key, and `axis` says which of them the score counted.
+        #
+        # Without the tag this array mixed scored and unscored findings while
+        # the axis blocks repeated the unscored ones, so a consumer summing
+        # both double-counted — and the calibration harness did exactly that,
+        # reporting a median over dependency findings the product does not
+        # score.
+        "findings": [_finding_to_dict(f, _axis_of(f, axes)) for f in findings],
     }
 
 
-def _finding_to_dict(f: Finding) -> dict:
+def _axis_key_of(finding: Finding) -> tuple:
+    return (finding.fingerprint, str(finding.file_path), finding.line_start, finding.rule_id)
+
+
+def _axis_of(finding: Finding, axes: Iterable[AxisReport]) -> str:
+    """Which axis a finding was reported on. "primary" means it was scored."""
+    key = _axis_key_of(finding)
+    for axis in axes or ():
+        if any(_axis_key_of(other) == key for other in axis.findings):
+            return axis.name
+    return "primary"
+
+
+def _finding_to_dict(f: Finding, axis: str = "primary") -> dict:
     return {
+        # "primary" was scored; anything else was reported beside the score.
+        "axis": axis,
+        "scored": axis == "primary",
         "rule_id": f.rule_id,
         "scanner": f.scanner,
         "fingerprint": f.fingerprint,
@@ -73,6 +98,11 @@ def _finding_to_dict(f: Finding) -> dict:
         "severity": f.severity.value,
         "confidence": f.confidence.value,
         "cwe_top25": f.cwe_top25,
+        # Other checks that reported this same weakness at this same line.
+        # Corroboration is reported rather than dropped: two independent
+        # scanners agreeing is stronger evidence than one, and an operator
+        # deciding what to fix first should be able to see it.
+        "corroborated_by": list(f.corroborated_by),
         "file_path": f.file_path.as_posix(),
         "line_start": f.line_start,
         "line_end": f.line_end,
@@ -127,7 +157,9 @@ def _axes_to_dict(axes: Iterable[AxisReport]) -> dict:
             "note": _AXIS_NOTES.get(axis.name, ""),
             "per_severity_count": {s.value: n for s, n in axis.per_severity_count.items()},
             "per_category_count": {c.value: n for c, n in axis.per_category_count.items()},
-            "findings": [_finding_to_dict(f) for f in axis.findings],
+            # Not repeated here: every one of these appears in the top-level
+            # `findings` array tagged with this axis name. Duplicating them
+            # invited a consumer to count them twice.
         }
         for axis in axes
     }
@@ -143,8 +175,14 @@ def _axis_key(name: str) -> str:
 _AXIS_NOTES = {
     "test tree": (
         "Reported, not scored. A project graded on its test fixtures is graded "
-        "on the wrong thing. Secrets are the exception and stay in the score, "
-        "because a committed credential is a leak wherever it lives."
+        "on the wrong thing. Secrets found here are still gated when the "
+        "configuration names the category, because nothing static separates a "
+        "live credential from a test certificate."
+    ),
+    "documentation": (
+        "Reported, not scored. Prose is not the shipped source, and a "
+        "credential in a tutorial is an illustration. Gated on the same terms "
+        "as the test tree."
     ),
     "dependencies": (
         "Reported and gated, but not scored as code condition. A CVE in a "

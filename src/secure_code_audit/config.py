@@ -43,6 +43,12 @@ DEFAULT_TEST_PATTERNS: tuple[str, ...] = (
     "**/tests/",
     "**/spec/",
     "**/__tests__/",
+    # Go's own toolchain reserves `testdata/` — the go command refuses to
+    # build it. Gin keeps a TLS keypair there for its server tests, and
+    # gitleaks correctly called it a private key; scoring it as a production
+    # secret was our mistake, not gitleaks'.
+    "testdata/",
+    "**/testdata/",
     "**/test_*.py",
     "**/*_test.py",
     "**/*_test.go",
@@ -95,6 +101,29 @@ _CATEGORIES = {
 }
 
 
+#: Documentation trees across the conventions projects actually use. Prose,
+#: tutorials and their runnable sources — `docs_src/` is FastAPI's, and missing
+#: it left four example JWTs scoring as critical secrets.
+DEFAULT_DOCS_PATTERNS: tuple[str, ...] = (
+    "doc/",
+    "docs/",
+    "docs_src/",
+    "documentation/",
+    "examples/",
+    "example/",
+    "samples/",
+    "**/doc/",
+    "**/docs/",
+    "**/docs_src/",
+    "**/examples/",
+    "site/",
+    "website/",
+    "**/*.md",
+    "**/*.rst",
+    "**/*.txt",
+)
+
+
 @dataclass
 class ScannerConfig:
     enabled: bool = True
@@ -123,6 +152,11 @@ class Config:
     #: the findings are still collected, still reported, and secrets among them
     #: still score and still gate.
     test_patterns: tuple[str, ...] = DEFAULT_TEST_PATTERNS
+    #: Documentation and tutorial sources. Prose is not the shipped source, and
+    #: a credential in a tutorial is an illustration — FastAPI's `docs_src/`
+    #: carries example JWTs that scored as critical secrets and drove it to F.
+    #: Reported and gated like the test tree, never scored as code condition.
+    docs_patterns: tuple[str, ...] = DEFAULT_DOCS_PATTERNS
     scanners: dict[str, ScannerConfig] = field(default_factory=dict)
     severity_overrides: dict[str, str] = field(default_factory=dict)
     category_overrides: dict[str, str] = field(default_factory=dict)
@@ -252,6 +286,8 @@ def _from_dict(raw: dict[str, Any]) -> Config:
         )
     if "test_patterns" in paths:
         cfg.test_patterns = tuple(_string_list(paths["test_patterns"], "paths.test_patterns"))
+    if "docs_patterns" in paths:
+        cfg.docs_patterns = tuple(_string_list(paths["docs_patterns"], "paths.docs_patterns"))
 
     scanners_raw = raw.get("scanners", {})
     if not isinstance(scanners_raw, dict):

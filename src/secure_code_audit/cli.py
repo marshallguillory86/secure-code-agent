@@ -26,7 +26,7 @@ from secure_code_audit import baseline as baseline_mod
 from secure_code_audit import config as config_mod
 from secure_code_audit import pillar as pillar_mod
 from secure_code_audit import practice as practice_mod
-from secure_code_audit.findings import Category, Finding, Severity
+from secure_code_audit.findings import Category, Finding, Severity, merge_corroborating
 from secure_code_audit.git_tools import find_repo_root, is_excluded, is_test_path, loc_under
 from secure_code_audit.scanner_status import (
     COVERING_OUTCOMES,
@@ -39,9 +39,12 @@ from secure_code_audit.scanners import floor
 from secure_code_audit.scoring import (
     active_gates,
     evaluate_gates,
-    partition_by_tree,
+    partition_by_path,
     split_side_axes,
     summarize_axis,
+)
+from secure_code_audit.scoring import (
+    gated_findings as gate_set,
 )
 from secure_code_audit.scoring import score as score_findings
 from secure_code_audit.scoring import verdict as build_verdict
@@ -271,6 +274,14 @@ def _do_audit(args: argparse.Namespace) -> int:
     # ----- scan scope, enforced once -----
     all_findings = _drop_excluded(all_findings, target, cfg)
 
+    # ----- one weakness, one finding -----
+    # Before overrides and suppressions, so an operator writing either one
+    # sees the same finding the report will show. Bandit's B308 and B703 are
+    # the same check under two ids and shared fifty lines in Django; a report
+    # that lists a line twice is wrong about the code, and a work order built
+    # from it would ask for the same fix twice.
+    all_findings = merge_corroborating(all_findings)
+
     # ----- overrides from config -----
     all_findings = _apply_overrides(all_findings, cfg)
 
@@ -311,12 +322,23 @@ def _do_audit(args: argparse.Namespace) -> int:
     # fixtures is graded on the wrong thing: across the calibration corpus,
     # including test directories moved the median normalized subtotal from
     # 4.36 to 50.15 and put ten of fourteen well-maintained projects at F.
-    # Secrets are exempt and stay in the score — see ALWAYS_SCORED_CATEGORIES.
+    # Secrets are no longer exempt from the split. Forcing them back onto the
+    # primary axis wherever they were found assumed every test-tree secret was
+    # a real credential; the corpus disagreed, with `requests` holding four
+    # criticals in `tests/certs/*.key` that its own suite generates. They are
+    # gated instead — see GATED_FROM_ANY_AXIS.
     root_for_tests = target if target.is_dir() else target.parent
-    all_findings, test_findings = partition_by_tree(
-        all_findings,
-        lambda f: is_test_path(f.file_path, root_for_tests, cfg.test_patterns),
-    )
+
+    def _classify(finding: Finding) -> str:
+        if is_test_path(finding.file_path, root_for_tests, cfg.test_patterns):
+            return "test tree"
+        if is_test_path(finding.file_path, root_for_tests, cfg.docs_patterns):
+            return "documentation"
+        return "primary"
+
+    all_findings, path_axes = partition_by_path(all_findings, _classify)
+    test_findings = path_axes.get("test tree", [])
+    docs_findings = path_axes.get("documentation", [])
     if cfg.loc_for_scoring:
         loc = int(cfg.loc_for_scoring.get("value", 0))
         test_loc = 0
@@ -332,13 +354,19 @@ def _do_audit(args: argparse.Namespace) -> int:
     # The split is between *scoring* and *gating*, not between reported and
     # hidden: `gated_findings` keeps the dependency advisories, so a critical
     # runtime CVE still fails a build exactly as before.
-    gated_findings = all_findings
     scored_findings, dependency_findings = split_side_axes(all_findings)
+    # Dependencies always gate. Path axes gate only on categories the operator
+    # named — a secret matters wherever it lives, a test fixture's HIGH code
+    # smell does not, and feeding a deliberately-vulnerable fixture tree to
+    # `fail_on_severity` would fail every build in the corpus.
+    gated = gate_set(all_findings, (test_findings, docs_findings), cfg.gates)
     measurable = _measurable_categories(executions, scored_findings)
     score = score_findings(scored_findings, loc, measurable)
-    test_tree = summarize_axis("test tree", test_findings, test_loc)
-    dependencies = summarize_axis("dependencies", dependency_findings)
-    axes = (test_tree, dependencies)
+    axes = (
+        summarize_axis("test tree", test_findings, test_loc),
+        summarize_axis("documentation", docs_findings),
+        summarize_axis("dependencies", dependency_findings),
+    )
     # Naming an import on the command line asserts that it contributes coverage,
     # so a broken one fails the gate even if no config requires that scanner.
     # Requiring a tool that has nothing to look at would make every
@@ -356,7 +384,7 @@ def _do_audit(args: argparse.Namespace) -> int:
     ]
     coverage = evaluate_coverage(executions, required)
     # Gates see the dependency advisories; the score does not.
-    gate = evaluate_gates(gated_findings, score, cfg.gates, coverage)
+    gate = evaluate_gates(gated, score, cfg.gates, coverage)
     verdict = build_verdict(score, cfg.gates, coverage)
 
     # ----- write outputs -----
