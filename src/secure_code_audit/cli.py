@@ -24,6 +24,8 @@ from secure_code_audit import (
 )
 from secure_code_audit import baseline as baseline_mod
 from secure_code_audit import config as config_mod
+from secure_code_audit import pillar as pillar_mod
+from secure_code_audit import practice as practice_mod
 from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.git_tools import find_repo_root, is_excluded, is_test_path, loc_under
 from secure_code_audit.scanner_status import (
@@ -66,6 +68,14 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--sarif-output", help="SARIF 2.1.0 output path.")
     p.add_argument("--comment-output", help="PR-comment markdown output path.")
     p.add_argument("--prompt-output", help="Remediation prompt output path.")
+    p.add_argument(
+        "--security-pillar",
+        help=(
+            "Write security-pillar.json for maintainability-agent to ingest "
+            "via --security-pillar (D3). Carries practice level and code "
+            "condition as two values that are never averaged."
+        ),
+    )
     p.add_argument("--baseline", help="Baseline file path (read).")
     p.add_argument(
         "--bump-baseline", action="store_true", help="Rewrite the baseline from current findings."
@@ -349,7 +359,22 @@ def _do_audit(args: argparse.Namespace) -> int:
 
     # ----- write outputs -----
     paths = _resolve_outputs(args, cfg, root)
-    _write_outputs(paths, all_findings, score, gate, coverage, ran, unavailable, verdict, axes)
+    # The pillar artifact is what maintainability-agent ingests (D3). Built
+    # here rather than inside a renderer because it needs the practice level,
+    # which is read from configuration and CI rather than from findings.
+    security_pillar = pillar_mod.build(score, verdict, coverage, practice_mod.assess(target), axes)
+    _write_outputs(
+        paths,
+        all_findings,
+        score,
+        gate,
+        coverage,
+        ran,
+        unavailable,
+        verdict,
+        axes,
+        security_pillar,
+    )
     if args.bump_baseline:
         baseline_mod.write(baseline_path, all_findings, baseline)
 
@@ -559,7 +584,7 @@ def _ingest_sarif_imports(specs: list[str]) -> tuple[list[Finding], list[Scanner
 
 
 def _write_outputs(
-    paths, findings, score, gate, coverage, ran, unavailable, verdict, axes=()
+    paths, findings, score, gate, coverage, ran, unavailable, verdict, axes=(), pillar=None
 ) -> None:
     if paths.markdown is not None:
         renderers.write_markdown(
@@ -573,6 +598,10 @@ def _write_outputs(
         renderers.write_pr_comment(findings, score, gate, paths.comment, coverage, verdict)
     if paths.prompt is not None:
         remediation.write(findings, paths.prompt)
+    # The artifact maintainability-agent ingests (D3). Written last because it
+    # is the only output that carries both axes plus the practice level.
+    if paths.security_pillar is not None and pillar is not None:
+        pillar_mod.write(pillar, paths.security_pillar)
 
 
 def _apply_overrides(findings: list[Finding], cfg: config_mod.Config) -> list[Finding]:
@@ -599,6 +628,7 @@ class _OutputPaths:
     sarif: Path | None
     comment: Path | None
     prompt: Path | None
+    security_pillar: Path | None
 
 
 def _resolve_outputs(args: argparse.Namespace, cfg: config_mod.Config, root: Path) -> _OutputPaths:
@@ -617,6 +647,7 @@ def _resolve_outputs(args: argparse.Namespace, cfg: config_mod.Config, root: Pat
         sarif=_p(args.sarif_output),
         comment=_p(args.comment_output),
         prompt=_p(args.prompt_output),
+        security_pillar=_p(args.security_pillar),
     )
 
 
@@ -648,7 +679,14 @@ def _print_summary(verdict, score, gate, ran, unavailable, coverage, paths, axes
             print(f"  ✗ {reason}")
     written = [
         str(p)
-        for p in (paths.markdown, paths.json_out, paths.sarif, paths.comment, paths.prompt)
+        for p in (
+            paths.markdown,
+            paths.json_out,
+            paths.sarif,
+            paths.comment,
+            paths.prompt,
+            paths.security_pillar,
+        )
         if p is not None
     ]
     if written:
