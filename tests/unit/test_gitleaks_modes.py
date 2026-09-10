@@ -39,9 +39,14 @@ class _Recorder:
         self.payloads = payloads or {}
         self.returncode = returncode
 
+    #: The subcommand always follows the resolved executable, and the
+    #: executable is pinned to exactly one element by `_scanner` below.
+    MODE_INDEX = 1
+
     def __call__(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
         self.calls.append(list(args))
-        mode = args[1]
+        mode = args[self.MODE_INDEX]
+        assert mode in ("dir", "git"), f"argv[{self.MODE_INDEX}] is {mode!r}, not a subcommand"
         payload = self.payloads.get(mode, [])
         report = Path(args[args.index("--report-path") + 1])
         report.write_text(json.dumps(payload), encoding="utf-8")
@@ -50,13 +55,26 @@ class _Recorder:
 
     @property
     def modes(self) -> list[str]:
-        return [call[1] for call in self.calls]
+        return [call[self.MODE_INDEX] for call in self.calls]
 
 
 def _scanner(target: Path, recorder: _Recorder) -> GitleaksScanner:
     scanner = GitleaksScanner()
     scanner.configure(target, Config())
     scanner._exec = recorder
+
+    # Pin the resolved command, do not merely claim availability.
+    #
+    # `configure()` resolves the real binary, so argv here depended on
+    # whether the host had gitleaks installed: one element on a developer
+    # laptop, zero on a CI runner without it, which shifted every later
+    # argument by one and made the subcommand unfindable. The suite passed
+    # locally and failed on all five Python versions in CI.
+    #
+    # This repository has been bitten by exactly this before — a test that
+    # patched `is_available` but not `command` read the real PATH and only
+    # the release workflow, which installed the tool, ever noticed.
+    scanner._resolved_command = ("gitleaks",)
     scanner.is_available = lambda: True
     return scanner
 
@@ -186,7 +204,7 @@ def test_either_pass_failing_fails_the_scanner(tmp_path, failing_mode):
     class _Broken(_Recorder):
         def __call__(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
             self.calls.append(list(args))
-            if args[1] == failing_mode:
+            if args[self.MODE_INDEX] == failing_mode:
                 return type("R", (), {"returncode": 2, "stdout": "", "stderr": "boom"})()
             Path(args[args.index("--report-path") + 1]).write_text("[]", encoding="utf-8")
             return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
