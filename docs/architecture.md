@@ -333,8 +333,15 @@ it is a product decision, not a refactor.
    layer that would itself be a third source of truth.
    `tests/unit/test_contract_sync.py` holds them in step instead.
 5. **Decide the score model** (§5). Conversation before code. **Still open.**
-6. **Calibrate the condition scale** (D5). Still open — the method is owed, and
-   `test_scoring_drift.py` pins the scale's *stability*, not its correctness.
+6. **Calibrate the condition scale** (D5). **Method delivered 2026-09-09,
+   narrowed 2026-09-10.** The harness, the fourteen-repository pinned corpus
+   and the study exist and re-derive exactly ([`calibration/`](../calibration/README.md),
+   [`calibration.md`](calibration.md)). Every *input* question is answered and
+   the corpus median is 4.37 (A−). What remains open is band edges: the
+   distribution is bimodal, and the four repositories at the floor are
+   frameworks graded on constructs they exist to provide. That is a product
+   decision, not a method gap. `test_scoring_drift.py` still pins the scale's
+   *stability* rather than its correctness, and will until the bands are set.
 7. Resume feature work and defect fixing.
 
 Steps 1–4 are done as of 2026-09-09. Most defects traded during recent review

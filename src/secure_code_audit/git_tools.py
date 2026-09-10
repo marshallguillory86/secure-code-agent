@@ -86,6 +86,7 @@ def loc_under(
     include_exts: Iterable[str],
     excludes: Iterable[str],
     test_patterns: Iterable[str] = (),
+    skip: Iterable[Path] = (),
 ) -> tuple[int, int]:
     """Non-blank in-scope lines, split into (primary, test).
 
@@ -94,12 +95,22 @@ def loc_under(
     test tree would understate every repository in proportion to how well it is
     tested — the same numerator/denominator mismatch that `exclude_patterns`
     already caused once, arriving by a different door.
+
+    `skip` names the run's own artifacts — the report, the baseline, the
+    suppressions file. Dropping their *findings* without dropping their
+    *lines* is that same mismatch a third time: an audit that wrote a
+    12,000-line JSON report into the tree scored the next run over a
+    denominator inflated by its own output, and two identical audits of an
+    unchanged repository returned 0.00 and 4.25.
     """
     test_patterns = tuple(test_patterns)
+    skip = {p.resolve() for p in skip}
     primary = 0
     test = 0
     for path in root.rglob("*"):
         if not path.is_file():
+            continue
+        if path.resolve() in skip:
             continue
         if is_excluded(path, root, excludes):
             continue

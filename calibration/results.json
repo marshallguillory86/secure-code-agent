@@ -8,14 +8,14 @@
     "failed": [],
     "reported_overall": {
       "min": 0.0,
-      "p25": 0.1467,
+      "p25": 0.1322,
       "median": 4.3658,
       "p75": 5.0,
       "max": 5.0
     },
     "unclamped_overall": {
-      "min": -11.6912,
-      "p25": 0.1467,
+      "min": -17.8652,
+      "p25": 0.1322,
       "median": 4.3659,
       "p75": 5.0,
       "max": 5.0
@@ -24,8 +24,8 @@
       "min": 0.0,
       "p25": 0.0,
       "median": 1.2684,
-      "p75": 9.7066,
-      "max": 33.3824
+      "p75": 9.7355,
+      "max": 45.7303
     },
     "loc": {
       "min": 2964.0,
@@ -59,10 +59,10 @@
           "test_tree_loc": 92783.0
         },
         "django": {
-          "as-run": 33.3824,
-          "no-deps": 33.3824,
-          "no-low": 26.1844,
-          "test_tree_findings": 968.0,
+          "as-run": 45.7303,
+          "no-deps": 45.7303,
+          "no-low": 38.2991,
+          "test_tree_findings": 975.0,
           "test_tree_loc": 319577.0
         },
         "express": {
@@ -73,16 +73,16 @@
           "test_tree_loc": 13483.0
         },
         "fastapi": {
-          "as-run": 20.3477,
-          "no-deps": 20.3477,
+          "as-run": 17.9927,
+          "no-deps": 17.9927,
           "no-low": 0.0,
-          "test_tree_findings": 4899.0,
+          "test_tree_findings": 4898.0,
           "test_tree_loc": 69283.0
         },
         "flask": {
-          "as-run": 9.7066,
-          "no-deps": 9.7066,
-          "no-low": 7.7523,
+          "as-run": 10.0975,
+          "no-deps": 10.0975,
+          "no-low": 8.1431,
           "test_tree_findings": 1070.0,
           "test_tree_loc": 6077.0
         },
@@ -164,26 +164,24 @@
         "loc_scanned": 145456,
         "subtotals": {
           "secrets": 18.75,
-          "code_vulnerabilities": 402.609,
-          "crypto": 9.0
+          "code_vulnerabilities": 551.531
         },
         "normalized": {
           "secrets": 1.5547,
-          "code_vulnerabilities": 33.3824,
-          "crypto": 0.7462
+          "code_vulnerabilities": 45.7303
         },
-        "worst_normalized": 33.3824,
-        "unclamped_overall": -11.6912,
+        "worst_normalized": 45.7303,
+        "unclamped_overall": -17.8652,
         "reported_overall": 0.0,
         "reported_letter": "F",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 260,
-        "reported_count": 260,
+        "finding_count": 302,
+        "reported_count": 302,
         "per_severity": {
           "critical": 1,
-          "high": 15,
-          "medium": 118,
-          "low": 121,
+          "high": 13,
+          "medium": 167,
+          "low": 116,
           "informational": 5
         },
         "coverage_status": "partial"
@@ -196,23 +194,21 @@
       "measure": {
         "loc_scanned": 8284,
         "subtotals": {
-          "code_vulnerabilities": 27.938,
-          "crypto": 4.5
+          "code_vulnerabilities": 29.062
         },
         "normalized": {
-          "code_vulnerabilities": 9.7066,
-          "crypto": 1.5635
+          "code_vulnerabilities": 10.0975
         },
-        "worst_normalized": 9.7066,
-        "unclamped_overall": 0.1467,
-        "reported_overall": 0.14669595185011897,
+        "worst_normalized": 10.0975,
+        "unclamped_overall": -0.0487,
+        "reported_overall": 0.0,
         "reported_letter": "F",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 20,
-        "reported_count": 20,
+        "finding_count": 19,
+        "reported_count": 19,
         "per_severity": {
           "critical": 0,
-          "high": 4,
+          "high": 3,
           "medium": 3,
           "low": 8,
           "informational": 5
@@ -256,23 +252,21 @@
       "measure": {
         "loc_scanned": 7585,
         "subtotals": {
-          "code_vulnerabilities": 26.812,
-          "crypto": 4.5
+          "code_vulnerabilities": 26.812
         },
         "normalized": {
-          "code_vulnerabilities": 9.7355,
-          "crypto": 1.6339
+          "code_vulnerabilities": 9.7355
         },
         "worst_normalized": 9.7355,
         "unclamped_overall": 0.1322,
         "reported_overall": 0.13223592383663796,
         "reported_letter": "F",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 35,
-        "reported_count": 35,
+        "finding_count": 34,
+        "reported_count": 34,
         "per_severity": {
           "critical": 0,
-          "high": 2,
+          "high": 1,
           "medium": 0,
           "low": 28,
           "informational": 5
@@ -287,23 +281,23 @@
       "measure": {
         "loc_scanned": 35655,
         "subtotals": {
-          "code_vulnerabilities": 121.5
+          "code_vulnerabilities": 107.438
         },
         "normalized": {
-          "code_vulnerabilities": 20.3477
+          "code_vulnerabilities": 17.9927
         },
-        "worst_normalized": 20.3477,
-        "unclamped_overall": -5.1739,
+        "worst_normalized": 17.9927,
+        "unclamped_overall": -3.9963,
         "reported_overall": 0.0,
         "reported_letter": "F",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 167,
-        "reported_count": 167,
+        "finding_count": 136,
+        "reported_count": 136,
         "per_severity": {
           "critical": 0,
           "high": 0,
           "medium": 0,
-          "low": 162,
+          "low": 131,
           "informational": 5
         },
         "coverage_status": "partial"

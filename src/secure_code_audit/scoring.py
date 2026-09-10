@@ -319,6 +319,19 @@ class AxisReport:
 
     #: What this axis is, in report-facing words: "test tree", "dependencies".
     name: str
+    #: Every finding on this axis, **suppressed ones included**. This is the
+    #: axis's membership, and the renderer reads it to tag each finding with
+    #: the axis it came from.
+    #:
+    #: Suppressed findings used to be filtered out here. The counts were right
+    #: and the membership was wrong, so a suppressed test-tree finding matched
+    #: no axis, fell through to the "primary" default, and was published as
+    #: `axis: primary, scored: true`. Suppressing a finding is not supposed to
+    #: move it into the scored set — the tool's own self-audit did exactly
+    #: that after one gitleaks false positive was suppressed.
+    #:
+    #: The counts below still exclude suppressed findings: an operator who
+    #: accepted a finding should not keep reading it in the totals.
     findings: tuple[Finding, ...]
     per_severity_count: dict[Severity, int]
     per_category_count: dict[Category, int]
@@ -329,7 +342,12 @@ class AxisReport:
 
     @property
     def count(self) -> int:
-        return len(self.findings)
+        """Live findings on this axis. Suppressed ones are members, not counts."""
+        return sum(1 for f in self.findings if not f.suppressed)
+
+    @property
+    def suppressed_count(self) -> int:
+        return sum(1 for f in self.findings if f.suppressed)
 
     @property
     def worst_severity(self) -> Severity | None:
@@ -337,7 +355,7 @@ class AxisReport:
 
     def headline(self) -> str:
         scope = f" across {self.loc:,} LOC" if self.loc is not None else ""
-        if not self.findings:
+        if not self.count:
             return f"{self.name}: nothing found{scope}"
         worst = self.worst_severity
         return (
@@ -354,10 +372,15 @@ def summarize_axis(name: str, findings: Iterable[Finding], loc: int | None = Non
     with `test_`, including imported ones, so a public function so named would
     break the suite of every project that imported it.
     """
-    findings = tuple(f for f in findings if not f.suppressed)
+    # Membership keeps everything; the counts keep only what is still live.
+    # Dropping suppressed findings from `findings` broke the renderer's axis
+    # lookup and republished them as scored primary-tree findings.
+    findings = tuple(findings)
     per_severity: dict[Severity, int] = {}
     per_category: dict[Category, int] = {}
     for finding in findings:
+        if finding.suppressed:
+            continue
         per_severity[finding.severity] = per_severity.get(finding.severity, 0) + 1
         per_category[finding.category] = per_category.get(finding.category, 0) + 1
     return AxisReport(

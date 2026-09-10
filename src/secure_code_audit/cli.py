@@ -259,6 +259,8 @@ def _print_preflight(rows: list[dict], unselected: list[str], blocking: list[str
 def _do_audit(args: argparse.Namespace) -> int:
     cfg, target, root = _prepare_audit(args)
     _require_configured_gates(args, cfg)
+    # Resolved before the scan so the run can recognise its own artifacts.
+    paths = _resolve_outputs(args, cfg, root)
 
     # ----- scanners -----
     scan = _run_scanners(args, cfg, target)
@@ -272,7 +274,8 @@ def _do_audit(args: argparse.Namespace) -> int:
     executions.extend(imported_executions)
 
     # ----- scan scope, enforced once -----
-    all_findings = _drop_excluded(all_findings, target, cfg)
+    own_artifacts = _own_artifacts(paths, cfg, root)
+    all_findings = _drop_excluded(all_findings, target, cfg, own_artifacts)
 
     # ----- one weakness, one finding -----
     # Before overrides and suppressions, so an operator writing either one
@@ -336,7 +339,19 @@ def _do_audit(args: argparse.Namespace) -> int:
             return "documentation"
         return "primary"
 
-    all_findings, path_axes = partition_by_path(all_findings, _classify)
+    # `all_findings` keeps meaning *all* of them. Rebinding it to the primary
+    # set here — which an earlier revision did — silently narrowed everything
+    # downstream that still read the name at face value, and two things did:
+    #
+    #   * the report. The self-audit failed its gate with "1 finding(s) in
+    #     categories ['secrets']" while `findings[]` held only the fourteen
+    #     primary ones, so the operator was told the build failed and given
+    #     no way to learn which file. A gate reason nobody can act on is the
+    #     absence-of-evidence failure this tool exists to prevent.
+    #   * the baseline. `baseline.write` recorded only the primary set, so
+    #     every side-axis finding was absent from it and `fail_on_new`
+    #     re-flagged the same test-tree secret as new on every run, forever.
+    primary_findings, path_axes = partition_by_path(all_findings, _classify)
     test_findings = path_axes.get("test tree", [])
     docs_findings = path_axes.get("documentation", [])
     if cfg.loc_for_scoring:
@@ -344,7 +359,13 @@ def _do_audit(args: argparse.Namespace) -> int:
         test_loc = 0
     else:
         loc, test_loc = loc_under(
-            target, cfg.include_extensions, cfg.exclude_patterns, cfg.test_patterns
+            target,
+            cfg.include_extensions,
+            cfg.exclude_patterns,
+            cfg.test_patterns,
+            # Same set the findings were filtered against. Numerator and
+            # denominator have to describe the same repository.
+            own_artifacts,
         )
     # Dependencies come off the code-condition score and onto their own axis.
     # A CVE in a pinned dependency is fixed with a version bump; an injection
@@ -354,12 +375,12 @@ def _do_audit(args: argparse.Namespace) -> int:
     # The split is between *scoring* and *gating*, not between reported and
     # hidden: `gated_findings` keeps the dependency advisories, so a critical
     # runtime CVE still fails a build exactly as before.
-    scored_findings, dependency_findings = split_side_axes(all_findings)
+    scored_findings, dependency_findings = split_side_axes(primary_findings)
     # Dependencies always gate. Path axes gate only on categories the operator
     # named — a secret matters wherever it lives, a test fixture's HIGH code
     # smell does not, and feeding a deliberately-vulnerable fixture tree to
     # `fail_on_severity` would fail every build in the corpus.
-    gated = gate_set(all_findings, (test_findings, docs_findings), cfg.gates)
+    gated = gate_set(primary_findings, (test_findings, docs_findings), cfg.gates)
     measurable = _measurable_categories(executions, scored_findings)
     score = score_findings(scored_findings, loc, measurable)
     axes = (
@@ -388,7 +409,6 @@ def _do_audit(args: argparse.Namespace) -> int:
     verdict = build_verdict(score, cfg.gates, coverage)
 
     # ----- write outputs -----
-    paths = _resolve_outputs(args, cfg, root)
     # The pillar artifact is what maintainability-agent ingests (D3). Built
     # here rather than inside a renderer because it needs the practice level,
     # which is read from configuration and CI rather than from findings.
@@ -568,7 +588,45 @@ def _measurable_categories(
     return measurable
 
 
-def _drop_excluded(findings: list[Finding], target: Path, cfg: config_mod.Config) -> list[Finding]:
+def _own_artifacts(paths: _OutputPaths, cfg: config_mod.Config, root: Path) -> frozenset[Path]:
+    """Files this run is about to write, plus the state it keeps.
+
+    A report written into the audited tree is read back by the next audit.
+    The tool's own self-audit caught this: `secure-code-report.md` is the
+    default Markdown target, it lands in the repository root, and the run
+    after it scored the repository on its own report — 446KB of quoted
+    findings, complete with the code snippets that produced them. gitleaks
+    duly found a "secret" at line 11,529 of it.
+
+    That is not a false positive worth suppressing, it is a file that should
+    never have been in scope. `.gitignore` does not help, because scanners
+    read the filesystem rather than the index.
+
+    Baseline and suppression files are here for the same reason: both are
+    written by this tool, both quote finding text, and neither is source.
+    """
+    candidates = [
+        paths.markdown,
+        paths.json_out,
+        paths.sarif,
+        paths.comment,
+        paths.prompt,
+        paths.security_pillar,
+    ]
+    # An empty configured path resolves to the root itself, which would put
+    # the scan target in this set.
+    for configured in (cfg.outputs.get("baseline_path"), cfg.suppressions_file):
+        if configured:
+            candidates.append(_under_root(root, configured))
+    return frozenset(p.resolve() for p in candidates if p is not None)
+
+
+def _drop_excluded(
+    findings: list[Finding],
+    target: Path,
+    cfg: config_mod.Config,
+    own_artifacts: frozenset[Path] = frozenset(),
+) -> list[Finding]:
     """Enforce `paths.exclude_patterns` on findings, not just on file discovery.
 
     Five of fifteen adapters push the exclusion down to their tool; the rest
@@ -591,7 +649,7 @@ def _drop_excluded(findings: list[Finding], target: Path, cfg: config_mod.Config
     turn a failed scanner back into a silent one — the defect this whole
     project exists to prevent.
     """
-    if not cfg.exclude_patterns:
+    if not cfg.exclude_patterns and not own_artifacts:
         return findings
 
     root = target if target.is_dir() else target.parent
@@ -599,7 +657,12 @@ def _drop_excluded(findings: list[Finding], target: Path, cfg: config_mod.Config
     for finding in findings:
         path = finding.file_path
         is_control = path in (target, root)
-        if not is_control and is_excluded(path, root, cfg.exclude_patterns):
+        if is_control:
+            kept.append(finding)
+            continue
+        if path.resolve() in own_artifacts:
+            continue
+        if is_excluded(path, root, cfg.exclude_patterns):
             continue
         kept.append(finding)
     return kept
