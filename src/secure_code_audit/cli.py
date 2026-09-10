@@ -37,7 +37,8 @@ from secure_code_audit.scoring import (
     active_gates,
     evaluate_gates,
     partition_by_tree,
-    summarize_test_tree,
+    split_side_axes,
+    summarize_axis,
 )
 from secure_code_audit.scoring import score as score_findings
 from secure_code_audit.scoring import verdict as build_verdict
@@ -312,8 +313,20 @@ def _do_audit(args: argparse.Namespace) -> int:
         loc, test_loc = loc_under(
             target, cfg.include_extensions, cfg.exclude_patterns, cfg.test_patterns
         )
-    score = score_findings(all_findings, loc)
-    test_tree = summarize_test_tree(test_findings, test_loc)
+    # Dependencies come off the code-condition score and onto their own axis.
+    # A CVE in a pinned dependency is fixed with a version bump; an injection
+    # flaw is fixed with a rewrite. Averaging them produced the largest
+    # remaining distortion in the corpus — median 15.36 against 7.32.
+    #
+    # The split is between *scoring* and *gating*, not between reported and
+    # hidden: `gated_findings` keeps the dependency advisories, so a critical
+    # runtime CVE still fails a build exactly as before.
+    gated_findings = all_findings
+    scored_findings, dependency_findings = split_side_axes(all_findings)
+    score = score_findings(scored_findings, loc)
+    test_tree = summarize_axis("test tree", test_findings, test_loc)
+    dependencies = summarize_axis("dependencies", dependency_findings)
+    axes = (test_tree, dependencies)
     # Naming an import on the command line asserts that it contributes coverage,
     # so a broken one fails the gate even if no config requires that scanner.
     # Requiring a tool that has nothing to look at would make every
@@ -330,12 +343,13 @@ def _do_audit(args: argparse.Namespace) -> int:
         *(execution.name for execution in imported_executions),
     ]
     coverage = evaluate_coverage(executions, required)
-    gate = evaluate_gates(all_findings, score, cfg.gates, coverage)
+    # Gates see the dependency advisories; the score does not.
+    gate = evaluate_gates(gated_findings, score, cfg.gates, coverage)
     verdict = build_verdict(score, cfg.gates, coverage)
 
     # ----- write outputs -----
     paths = _resolve_outputs(args, cfg, root)
-    _write_outputs(paths, all_findings, score, gate, coverage, ran, unavailable, verdict, test_tree)
+    _write_outputs(paths, all_findings, score, gate, coverage, ran, unavailable, verdict, axes)
     if args.bump_baseline:
         baseline_mod.write(baseline_path, all_findings, baseline)
 
@@ -343,12 +357,12 @@ def _do_audit(args: argparse.Namespace) -> int:
     if args.json:
         sys.stdout.write(
             json.dumps(
-                renderers.to_json(all_findings, score, gate, coverage, verdict, test_tree), indent=2
+                renderers.to_json(all_findings, score, gate, coverage, verdict, axes), indent=2
             )
         )
         sys.stdout.write("\n")
     else:
-        _print_summary(verdict, score, gate, ran, unavailable, coverage, paths, test_tree)
+        _print_summary(verdict, score, gate, ran, unavailable, coverage, paths, axes)
 
     return _exit_code(args, gate, all_findings)
 
@@ -545,14 +559,14 @@ def _ingest_sarif_imports(specs: list[str]) -> tuple[list[Finding], list[Scanner
 
 
 def _write_outputs(
-    paths, findings, score, gate, coverage, ran, unavailable, verdict, test_tree=None
+    paths, findings, score, gate, coverage, ran, unavailable, verdict, axes=()
 ) -> None:
     if paths.markdown is not None:
         renderers.write_markdown(
-            findings, score, gate, paths.markdown, ran, unavailable, coverage, verdict, test_tree
+            findings, score, gate, paths.markdown, ran, unavailable, coverage, verdict, axes
         )
     if paths.json_out is not None:
-        renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict, test_tree)
+        renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict, axes)
     if paths.sarif is not None:
         sarif.write(findings, paths.sarif, coverage)
     if paths.comment is not None:
@@ -611,14 +625,15 @@ def _under_root(root: Path, value: str) -> Path:
     return path.resolve() if path.is_absolute() else (root / path).resolve()
 
 
-def _print_summary(verdict, score, gate, ran, unavailable, coverage, paths, test_tree=None) -> None:
+def _print_summary(verdict, score, gate, ran, unavailable, coverage, paths, axes=()) -> None:
     status = "PASS" if gate.passed else "FAIL"
     print(f"secure-code-agent  ·  score {verdict.headline()}  ·  gate {status}")
     for reason in verdict.reasons:
         print(f"  ! grade withheld: {reason}")
     print(f"  scanned LOC: {score.loc_scanned:,}")
-    if test_tree is not None and (test_tree.count or test_tree.loc):
-        print(f"  {test_tree.headline()}")
+    for axis in axes or ():
+        if axis.count or axis.loc:
+            print(f"  {axis.headline()}")
     print(f"  scanners run: {', '.join(ran) if ran else '(none)'}")
     coverage_line = f"  coverage: {coverage.status.value.upper()}"
     if coverage.unverified:
