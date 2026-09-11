@@ -6,26 +6,47 @@
     "repositories": 14,
     "measured": 14,
     "failed": [],
+    "examined": 10,
+    "unexamined": [
+      "gin",
+      "logrus",
+      "gson",
+      "commons-lang"
+    ],
+    "examined_overall": {
+      "min": 0.0,
+      "p25": 2.4713,
+      "median": 3.3828,
+      "p75": 4.4809,
+      "max": 5.0
+    },
+    "examined_worst_normalized": {
+      "min": 0.0,
+      "p25": 1.1596,
+      "median": 4.6678,
+      "p75": 10.0975,
+      "max": 40.0403
+    },
     "reported_overall": {
       "min": 0.0,
       "p25": 2.5793,
-      "median": 4.4784,
+      "median": 4.3663,
       "p75": 5.0,
       "max": 5.0
     },
     "unclamped_overall": {
-      "min": -12.0352,
+      "min": -15.0201,
       "p25": 0.1322,
-      "median": 4.3659,
+      "median": 4.1654,
       "p75": 5.0,
       "max": 5.0
     },
     "worst_normalized": {
       "min": 0.0,
       "p25": 0.0,
-      "median": 1.2684,
+      "median": 1.6694,
       "p75": 9.7355,
-      "max": 34.0704
+      "max": 40.0403
     },
     "loc": {
       "min": 2964.0,
@@ -35,22 +56,21 @@
       "max": 145456.0
     },
     "letters": {
-      "A": 2,
-      "A+": 5,
-      "A-": 1,
-      "B": 1,
+      "A": 1,
+      "A+": 4,
+      "A-": 3,
       "B+": 1,
-      "B-": 1,
+      "B-": 2,
       "C": 1,
       "F": 2
     },
     "variants": {
       "per_repository": {
         "axios": {
-          "as-run": 0.0,
-          "no-deps": 0.0,
-          "no-low": 0.0,
-          "test_tree_findings": 1.0,
+          "as-run": 1.6302,
+          "no-deps": 1.6302,
+          "no-low": 1.6302,
+          "test_tree_findings": 20.0,
           "test_tree_loc": 28423.0
         },
         "commons-lang": {
@@ -61,9 +81,9 @@
           "test_tree_loc": 92783.0
         },
         "django": {
-          "as-run": 34.0704,
-          "no-deps": 34.0704,
-          "no-low": 26.6391,
+          "as-run": 40.0403,
+          "no-deps": 40.0403,
+          "no-low": 32.609,
           "test_tree_findings": 963.0,
           "test_tree_loc": 319577.0
         },
@@ -71,7 +91,7 @@
           "as-run": 0.0,
           "no-deps": 0.0,
           "no-low": 0.0,
-          "test_tree_findings": 0.0,
+          "test_tree_findings": 90.0,
           "test_tree_loc": 13483.0
         },
         "fastapi": {
@@ -85,7 +105,7 @@
           "as-run": 10.0975,
           "no-deps": 10.0975,
           "no-low": 8.1431,
-          "test_tree_findings": 1070.0,
+          "test_tree_findings": 1071.0,
           "test_tree_loc": 6077.0
         },
         "gin": {
@@ -110,16 +130,16 @@
           "test_tree_loc": 16674.0
         },
         "jekyll": {
-          "as-run": 0.7854,
-          "no-deps": 0.7854,
-          "no-low": 0.7854,
-          "test_tree_findings": 0.0,
+          "as-run": 0.8836,
+          "no-deps": 0.8836,
+          "no-low": 0.8836,
+          "test_tree_findings": 1.0,
           "test_tree_loc": 8900.0
         },
         "lodash": {
-          "as-run": 0.8283,
-          "no-deps": 0.8283,
-          "no-low": 0.8283,
+          "as-run": 1.1596,
+          "no-deps": 1.1596,
+          "no-low": 1.1596,
           "test_tree_findings": 0.0,
           "test_tree_loc": 22198.0
         },
@@ -138,22 +158,22 @@
           "test_tree_loc": 4284.0
         },
         "sinatra": {
-          "as-run": 3.7905,
-          "no-deps": 3.7905,
-          "no-low": 3.7905,
-          "test_tree_findings": 0.0,
+          "as-run": 4.4223,
+          "no-deps": 4.4223,
+          "no-low": 4.4223,
+          "test_tree_findings": 2.0,
           "test_tree_loc": 13759.0
         }
       },
       "median_worst_normalized": {
-        "as-run": 1.2684,
-        "no-deps": 1.2684,
-        "no-low": 0.3927
+        "as-run": 1.6694,
+        "no-deps": 1.6694,
+        "no-low": 1.0216
       },
       "median_grade_at_current_slope": {
-        "as-run": 4.37,
-        "no-deps": 4.37,
-        "no-low": 4.8
+        "as-run": 4.17,
+        "no-deps": 4.17,
+        "no-low": 4.49
       }
     }
   },
@@ -166,28 +186,145 @@
         "loc_scanned": 145456,
         "subtotals": {
           "secrets": 18.75,
-          "code_vulnerabilities": 410.906
+          "code_vulnerabilities": 482.906
         },
         "normalized": {
           "secrets": 1.5547,
-          "code_vulnerabilities": 34.0704
+          "code_vulnerabilities": 40.0403
         },
-        "worst_normalized": 34.0704,
-        "unclamped_overall": -12.0352,
+        "worst_normalized": 40.0403,
+        "unclamped_overall": -15.0201,
         "reported_overall": 0.0,
         "reported_letter": "F",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 252,
-        "reported_count": 1219,
+        "finding_count": 266,
+        "reported_count": 1233,
         "per_severity": {
           "critical": 1,
-          "high": 13,
+          "high": 29,
           "medium": 117,
           "low": 116,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 1268,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 19,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 22,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 25,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "mode=auto"
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 3,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
     },
     {
       "name": "flask",
@@ -206,17 +343,134 @@
         "reported_overall": 0.4392438147030564,
         "reported_letter": "F",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 19,
-        "reported_count": 1097,
+        "finding_count": 17,
+        "reported_count": 1096,
         "per_severity": {
           "critical": 0,
           "high": 3,
           "medium": 3,
           "low": 8,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 1083,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 3,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 12,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 1,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 27,
+            "reason": null,
+            "scope": "mode=auto"
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
     },
     {
       "name": "requests",
@@ -235,17 +489,134 @@
         "reported_overall": 3.9767996483189028,
         "reported_letter": "B+",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 21,
-        "reported_count": 717,
+        "finding_count": 19,
+        "reported_count": 715,
         "per_severity": {
           "critical": 0,
           "high": 0,
           "medium": 0,
           "low": 16,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 708,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 8,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "mode=auto"
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
     },
     {
       "name": "httpx",
@@ -264,17 +635,134 @@
         "reported_overall": 2.579342156531686,
         "reported_letter": "B-",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 34,
-        "reported_count": 1339,
+        "finding_count": 32,
+        "reported_count": 1337,
         "per_severity": {
           "critical": 0,
           "high": 1,
           "medium": 0,
           "low": 28,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 1333,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 1,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 21,
+            "reason": null,
+            "scope": "mode=auto"
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
     },
     {
       "name": "fastapi",
@@ -293,17 +781,134 @@
         "reported_overall": 2.471295372245853,
         "reported_letter": "C",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 136,
-        "reported_count": 5112,
+        "finding_count": 134,
+        "reported_count": 5111,
         "per_severity": {
           "critical": 0,
           "high": 0,
           "medium": 0,
           "low": 131,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 5114,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 50,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 1,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "mode=auto"
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 5,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
     },
     {
       "name": "express",
@@ -318,17 +923,134 @@
         "reported_overall": 5.0,
         "reported_letter": "A+",
         "worst_category": null,
-        "finding_count": 5,
-        "reported_count": 6,
+        "finding_count": 3,
+        "reported_count": 94,
         "per_severity": {
           "critical": 0,
           "high": 0,
           "medium": 0,
           "low": 0,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 90,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
     },
     {
       "name": "axios",
@@ -336,24 +1058,145 @@
       "language": "javascript",
       "measure": {
         "loc_scanned": 26788,
-        "subtotals": {},
-        "normalized": {},
-        "worst_normalized": 0.0,
-        "unclamped_overall": 5.0,
-        "reported_overall": 5.0,
-        "reported_letter": "A+",
-        "worst_category": null,
-        "finding_count": 5,
-        "reported_count": 7,
+        "subtotals": {
+          "code_vulnerabilities": 8.438
+        },
+        "normalized": {
+          "code_vulnerabilities": 1.6302
+        },
+        "worst_normalized": 1.6302,
+        "unclamped_overall": 4.1849,
+        "reported_overall": 4.383053902383257,
+        "reported_letter": "A-",
+        "worst_category": "code_vulnerabilities",
+        "finding_count": 8,
+        "reported_count": 29,
         "per_severity": {
           "critical": 0,
           "high": 0,
-          "medium": 0,
+          "medium": 5,
           "low": 0,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 2,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 24,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
     },
     {
       "name": "lodash",
@@ -362,27 +1205,144 @@
       "measure": {
         "loc_scanned": 25944,
         "subtotals": {
-          "code_vulnerabilities": 4.219
+          "code_vulnerabilities": 5.906
         },
         "normalized": {
-          "code_vulnerabilities": 0.8283
+          "code_vulnerabilities": 1.1596
         },
-        "worst_normalized": 0.8283,
-        "unclamped_overall": 4.5859,
-        "reported_overall": 4.646519045925013,
-        "reported_letter": "A",
+        "worst_normalized": 1.1596,
+        "unclamped_overall": 4.4202,
+        "reported_overall": 4.480867566839776,
+        "reported_letter": "A-",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 7,
-        "reported_count": 8,
+        "finding_count": 6,
+        "reported_count": 7,
         "per_severity": {
           "critical": 0,
           "high": 0,
-          "medium": 2,
+          "medium": 3,
           "low": 0,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 6,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 2,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
     },
     {
       "name": "gin",
@@ -397,17 +1357,134 @@
         "reported_overall": 5.0,
         "reported_letter": "A+",
         "worst_category": null,
-        "finding_count": 5,
-        "reported_count": 10,
+        "finding_count": 3,
+        "reported_count": 8,
         "per_severity": {
           "critical": 0,
           "high": 0,
           "medium": 0,
           "low": 0,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 8,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": false
     },
     {
       "name": "logrus",
@@ -422,17 +1499,134 @@
         "reported_overall": 5.0,
         "reported_letter": "A+",
         "worst_category": null,
-        "finding_count": 5,
-        "reported_count": 6,
+        "finding_count": 3,
+        "reported_count": 4,
         "per_severity": {
           "critical": 0,
           "high": 0,
           "medium": 0,
           "low": 0,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": false
     },
     {
       "name": "sinatra",
@@ -441,27 +1635,144 @@
       "measure": {
         "loc_scanned": 7135,
         "subtotals": {
-          "code_vulnerabilities": 10.125
+          "code_vulnerabilities": 11.812
         },
         "normalized": {
-          "code_vulnerabilities": 3.7905
+          "code_vulnerabilities": 4.4223
         },
-        "worst_normalized": 3.7905,
-        "unclamped_overall": 3.1047,
-        "reported_overall": 3.1047432699288025,
-        "reported_letter": "B",
+        "worst_normalized": 4.4223,
+        "unclamped_overall": 2.7889,
+        "reported_overall": 2.7888671482502696,
+        "reported_letter": "B-",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 7,
-        "reported_count": 9,
+        "finding_count": 6,
+        "reported_count": 10,
         "per_severity": {
           "critical": 0,
           "high": 2,
-          "medium": 0,
+          "medium": 1,
           "low": 0,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 2,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 2,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 3,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
     },
     {
       "name": "jekyll",
@@ -470,27 +1781,146 @@
       "measure": {
         "loc_scanned": 14590,
         "subtotals": {
+          "code_vulnerabilities": 3.375,
           "supply_chain": 3.0
         },
         "normalized": {
+          "code_vulnerabilities": 0.8836,
           "supply_chain": 0.7854
         },
-        "worst_normalized": 0.7854,
-        "unclamped_overall": 4.6073,
+        "worst_normalized": 0.8836,
+        "unclamped_overall": 4.5582,
         "reported_overall": 4.607297547879693,
         "reported_letter": "A",
         "worst_category": "supply_chain",
         "finding_count": 6,
-        "reported_count": 8,
+        "reported_count": 9,
         "per_severity": {
           "critical": 0,
           "high": 1,
-          "medium": 0,
+          "medium": 2,
           "low": 0,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 1,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 2,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 3,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
     },
     {
       "name": "gson",
@@ -505,17 +1935,134 @@
         "reported_overall": 5.0,
         "reported_letter": "A+",
         "worst_category": null,
-        "finding_count": 5,
-        "reported_count": 6,
+        "finding_count": 3,
+        "reported_count": 4,
         "per_severity": {
           "critical": 0,
           "high": 0,
           "medium": 0,
           "low": 0,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": false
     },
     {
       "name": "commons-lang",
@@ -534,17 +2081,134 @@
         "reported_overall": 4.3495148193546465,
         "reported_letter": "A-",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 8,
-        "reported_count": 9,
+        "finding_count": 6,
+        "reported_count": 7,
         "per_severity": {
           "critical": 0,
           "high": 3,
           "medium": 0,
           "low": 0,
-          "informational": 5
+          "informational": 3
         },
         "coverage_status": "partial"
-      }
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.5.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 0,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "\u001b[34m",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 3,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": false
     }
   ]
 }

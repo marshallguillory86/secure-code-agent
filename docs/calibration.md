@@ -192,20 +192,54 @@ repository carrying SQL injection, command injection, `pickle.loads`,
 `yaml.load`, `eval`, MD5 and hardcoded credentials scores 0.00 F today and
 would land near D under per-kLOC.
 
-### Why the corpus cannot settle the slope
+### Corpus coverage was the blocker, and fixing it answered the question
 
-Six of the fourteen score exactly 0.00 normalized — express, axios, gin,
-logrus, gson, commons-lang. They are not clean; they are **unexamined**. Each
-carries five findings and all five are `tool_unavailable` control findings.
-Go, Java and JavaScript have almost nothing in the offline floor, gosec is
-excluded by D12, and njsscan and RuboCop did not resolve in this run.
+Six of the fourteen were scoring near-perfectly because they were
+**unexamined**, not clean. Python repositories produced 712 to 5,107 real
+findings each; everything else produced nought to four. Three orders of
+magnitude, and none of it about those projects being thirty times cleaner
+than Django.
 
-So more than a third of the corpus contributes no signal, and any slope
-chosen to place the median also places those six. The product already knows
-this — it withholds a grade when coverage is incomplete — and the study
-should apply the same rule to itself. **Fixing corpus coverage is a
-precondition for choosing band edges**, and that is the concrete blocker D5
-now has instead of a judgement call.
+**Two causes, and only one was structural.**
+
+`njsscan` and `rubocop` were simply not installed on the machine running the
+study, so JavaScript and Ruby had no scanner that reads them. Installing
+both is all it took:
+
+| repo | before | after |
+| --- | --- | --- |
+| axios | 5.00 A+ | 4.38 A- |
+| lodash | 4.59 A | 4.48 A- |
+| sinatra | 3.10 B | 2.79 B- |
+| express | 5 findings | 90 findings |
+
+Go and Java cannot be fixed that way, and [D12](decisions.md) already says
+why: gosec analyses Go by invoking the target's *own* build tooling and
+fails without the toolchain on the host; PMD covers none of the patterns and
+SpotBugs needs compiled bytecode. `gin`, `logrus`, `gson` and `commons-lang`
+are unreadable by this floor.
+
+**Those four were holding the median up.** Their own median is 5.00 — four
+perfect scores for repositories nobody looked at. The product refuses to
+grade what it did not examine (P7); a study computing percentiles over
+repositories in the same position is doing the thing the product refuses to
+do. `summarize()` now reports the examined set separately and names what it
+excluded.
+
+| set | n | median |
+| --- | ---: | --- |
+| examined | 10 | **3.38** |
+| unexamined | 4 | 5.00 |
+| all fourteen | 14 | 4.37 |
+
+**3.38 is in the B band, and the B band is the target.**
+`maintainability-agent` calibrates so a mature-OSS corpus medians at a B.
+This corpus already does, and the examined spread — 0.00, 0.44, 2.47, 2.58,
+2.79, 3.98, 4.38, 4.48, 4.61, 5.00 — is a distribution rather than the cliff
+it was that morning. **No band edge needs moving to achieve it.**
+
+What remains is one repository rather than the scale: Django still reads
+0.00, for the normalizer reason above.
 
 ## Two candidate adjustments, measured
 

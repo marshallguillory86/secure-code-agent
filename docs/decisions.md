@@ -15,7 +15,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D2 | Unknown configuration keys are rejected, not ignored | 2026-09-08 | Accepted |
 | D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | Accepted — [built](ma-integration.md) |
 | D4 | A failing security audit fails MA's CI | 2026-09-08 | Accepted |
-| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — [study run](calibration.md); inputs answered, band edges owed |
+| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — examined-set median is 3.38 (B), the target; one normalizer defect left |
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
 | D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
 | D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
@@ -205,13 +205,50 @@ formulation broke P3 — `mean(weight) * sqrt(n)` let nine extra LOW findings
 worst: django 15.53 normalized against flask 9.12, inverting to 1.29 and 3.17
 per-kLOC. That is size bias in the normalizer meant to remove it.
 
-It is not changed yet because the slope would have to be recalibrated, and
-**this corpus cannot support that**: six of fourteen repositories score
-exactly 0.00 because they are unexamined rather than clean — five
-`tool_unavailable` findings each, Go/Java/JavaScript against an offline floor
-that barely reads them. The product withholds a grade on incomplete coverage;
-the study must hold itself to the same rule. Fixing corpus coverage is a
-precondition for band edges.
+**Corpus coverage was the blocker, and fixing it largely answered the
+question.** Six of fourteen repositories were scoring near-perfectly because
+they were *unexamined* rather than clean. Two causes, and only one was
+structural:
+
+*Environment.* `njsscan` and `rubocop` were simply not installed, so
+JavaScript and Ruby had no scanner that reads them. Python repositories were
+producing 712 to 5,107 real findings each against nought to four for
+everything else — three orders of magnitude, none of it about those projects
+being cleaner. Installing both moved `axios` 5.00 → 4.38, `lodash`
+4.59 → 4.48 and `sinatra` 3.10 → 2.79.
+
+*Structural, and already decided.* D12 records why Go and Java cannot be
+read at all: gosec analyses Go by invoking the target's own build tooling,
+PMD covers none of the patterns, SpotBugs needs compiled bytecode. Four
+repositories stay unreadable.
+
+Those four were still in the median and holding it up — **their own median is
+5.00**, four perfect scores for repositories nobody looked at. The study now
+applies the product's own rule to itself (P7: score only where enough was
+examined) and reports the distribution over the examined set, naming what it
+left out.
+
+| set | n | median |
+| --- | ---: | --- |
+| examined | 10 | **3.38** |
+| unexamined | 4 | 5.00 |
+| all fourteen | 14 | 4.37 |
+
+**3.38 is in the B band, which is the target.** `maintainability-agent`
+calibrates so a mature-OSS corpus medians at a B, this corpus does so
+already, and the spread across the examined ten runs 0.00, 0.44, 2.47, 2.58,
+2.79, 3.98, 4.38, 4.48, 4.61, 5.00 — a distribution rather than the cliff it
+was this morning. No band edge needs moving to achieve that.
+
+**What remains is one repository, not the scale.** Django still reads 0.00
+under `sqrt(LOC/1000)`, which ranks the largest repository in the corpus
+worst — 15.53 normalized against Flask's 9.12, inverting to 1.29 and 3.17
+per-kLOC. That is size bias in the normalizer meant to remove it, and it is
+now a single identified defect rather than an uncalibrated scale. It is still
+not changed here, because switching to per-kLOC weakens the gate: a synthetic
+1,939-line repository carrying SQL injection, command injection,
+`pickle.loads`, `yaml.load`, `eval`, MD5 and hardcoded credentials scores
+0.00 F today and would land near D.
 
 **Still open — band edges.** The centre is now defensible: 4.37 (A−) against
 MA's 4.0 target. The *distribution* is not — nine repositories at 4.15 or
