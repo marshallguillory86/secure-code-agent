@@ -29,7 +29,11 @@ _SARIF_LEVEL = {
 }
 
 
-def emit(findings: Iterable[Finding], coverage: CoverageReport | None = None) -> dict:
+def emit(
+    findings: Iterable[Finding],
+    coverage: CoverageReport | None = None,
+    axis_of=lambda _f: "primary",
+) -> dict:
     """Build a SARIF 2.1.0 document from canonical findings."""
     findings = list(findings)
 
@@ -41,7 +45,7 @@ def emit(findings: Iterable[Finding], coverage: CoverageReport | None = None) ->
         rid = f.rule_id
         if rid not in rule_meta:
             rule_meta[rid] = _rule(f)
-        results.append(_result(f))
+        results.append(_result(f, axis_of(f)))
 
     run = {
         "tool": {
@@ -114,14 +118,63 @@ def _rule(f: Finding) -> dict:
     return rule
 
 
-def _result(f: Finding) -> dict:
+#: Axes whose findings are reported but are not defects to raise an alert
+#: for. Same set the work order files under §ACCEPT.
+_SIDE_AXES = frozenset({"test tree", "documentation"})
+
+
+def _suppressions(f: Finding, axis: str) -> list[dict] | None:
+    """The SARIF-standard suppression array, or None to raise an alert.
+
+    SARIF is consumed by code-scanning platforms that turn each result into
+    an alert, and `suppressions` is the field they honour. We were writing
+    `properties.suppressed` instead — a field of our own invention that no
+    consumer reads — so two kinds of finding raised alerts they should not:
+
+    * findings the operator had explicitly suppressed in `.scignore.yaml`,
+      with a reason and an expiry, which is as clear a "do not alert me
+      about this" as exists;
+    * and every test-tree and documentation finding, which the product
+      itself reports as "not scored" and the work order files under §ACCEPT
+      with "do not patch these".
+
+    Auditing `maintainability-agent` produced 4,929 SARIF results of which
+    **4,847 were test fixtures**. Uploaded to code scanning that is 4,847
+    alerts for deliberately-vulnerable test data, burying the 82 findings in
+    the shipped source.
+
+    Suppressed, not omitted. The finding stays in the file with its
+    location and justification, so nothing is hidden from a reader — it
+    simply does not become someone's ticket.
+    """
+    if f.suppressed:
+        return [
+            {
+                "kind": "external",
+                "justification": f.suppression_note or "suppressed by operator configuration",
+            }
+        ]
+    if axis in _SIDE_AXES:
+        return [
+            {
+                "kind": "external",
+                "justification": (
+                    f"reported on the {axis} axis: outside the shipped source, "
+                    f"not scored as code condition, and not a patch target"
+                ),
+            }
+        ]
+    return None
+
+
+def _result(f: Finding, axis: str = "primary") -> dict:
     region: dict = {"startLine": max(1, f.line_start)}
     if f.line_end and f.line_end != f.line_start:
         region["endLine"] = f.line_end
     if f.code_snippet:
         region["snippet"] = {"text": f.code_snippet}
 
-    return {
+    result = {
         "ruleId": f.rule_id,
         "level": _SARIF_LEVEL[f.severity],
         "message": {"text": f.message},
@@ -131,6 +184,7 @@ def _result(f: Finding) -> dict:
             "category": f.category.value,
             "is_new": f.is_new,
             "suppressed": f.suppressed,
+            "axis": axis,
         },
         "locations": [
             {
@@ -141,12 +195,19 @@ def _result(f: Finding) -> dict:
             }
         ],
     }
+    suppressions = _suppressions(f, axis)
+    if suppressions:
+        result["suppressions"] = suppressions
+    return result
 
 
 def write(
-    findings: Iterable[Finding], output: Path, coverage: CoverageReport | None = None
+    findings: Iterable[Finding],
+    output: Path,
+    coverage: CoverageReport | None = None,
+    axis_of=lambda _f: "primary",
 ) -> None:
-    output.write_text(json.dumps(emit(findings, coverage), indent=2), encoding="utf-8")
+    output.write_text(json.dumps(emit(findings, coverage, axis_of), indent=2), encoding="utf-8")
 
 
 # ----- ingest -------------------------------------------------------------

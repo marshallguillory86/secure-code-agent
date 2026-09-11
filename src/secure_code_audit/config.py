@@ -75,6 +75,13 @@ DEFAULT_INCLUDE_EXTS: tuple[str, ...] = (
     ".yaml",
     ".yml",
     ".json",
+    # Terraform. checkov is in the floor and reads `.tf`, so its findings
+    # were being scored against a line count that excluded every file it
+    # had read — an IaC repository measured six lines for a Dockerfile and
+    # counted none of its ten lines of Terraform. Numerator and denominator
+    # have to describe the same tree.
+    ".tf",
+    ".tfvars",
     "Dockerfile",
 )
 

@@ -24,7 +24,15 @@ from secure_code_audit.scanners.base import Scanner
 class CheckovScanner(Scanner):
     name = "checkov"
     binary = "checkov"
-    python_module = "checkov"
+    #: **No `python_module` fallback.** checkov ships no `__main__`, so
+    #: `python -m checkov` fails with "No module named checkov.__main__".
+    #: Declaring the fallback meant that with the package installed but the
+    #: console script off PATH, checkov resolved to a command that could
+    #: never run — reported as FAILED rather than the honest UNAVAILABLE.
+    #:
+    #: Caught by the test added alongside the identical semgrep defect,
+    #: running in CI where the full floor is installed. It passed locally
+    #: only because checkov was not installed on this machine.
     default_category = Category.CONFIG_IAC
     install_hint = "pip install 'secure-code-agent[python-scanners]'"
 

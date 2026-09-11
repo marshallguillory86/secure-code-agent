@@ -630,3 +630,19 @@ def owasp_for_cwe(canonical_cwe: str | None) -> str | None:
     if canonical_cwe is None:
         return None
     return _CWE_TO_OWASP.get(canonical_cwe)
+
+
+def categories_for_scanner(scanner: str) -> frozenset[Category]:
+    """Which categories this scanner has mapped rules for.
+
+    Used to work out what a run could have measured. Derived from the map
+    rather than written down a second time: the hand-maintained copy claimed
+    `builtin_rules` covered `secrets` and `config_iac`, which it never has —
+    its rules are Python and shell language primitives — and omitted
+    `supply_chain`, which it does cover. An IaC repository with a
+    `public-read` S3 bucket and an open security group therefore scored
+    `config_iac` 5.0 with no IaC scanner installed.
+    """
+    return frozenset(
+        entry.category for (name, _rule), entry in _MAP.items() if name == scanner.lower()
+    )

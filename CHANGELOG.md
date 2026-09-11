@@ -4,7 +4,100 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
-## 0.6.0 — unreleased
+## 0.7.0 — unreleased
+
+Nine defects, all found by running the tool against repository shapes and
+content the calibration corpus does not contain. Every one survived 526
+tests and a clean self-audit.
+
+### Fixed — targets that are not a tidy repository full of code
+
+- A **mistyped path** reached the scanners and died with a raw
+  `FileNotFoundError` out of `subprocess.py`. The scan root is checked
+  first, and the error names the path.
+- **A single file as the target** crashed twice: every adapter passed it as
+  a subprocess `cwd`, and `find_repo_root` returned the *file* when no git
+  repository sat above it, so the report path became
+  `one.py/secure-code-report.md`. `secure-code-agent one_file.py` is the
+  first thing anyone tries and it was always meant to work.
+- **A single file measured zero lines**, because `rglob` on a file yields
+  nothing. A zero denominator is not normalised at all, so the grade became
+  the raw subtotal — a two-line file containing `eval(input())` scored
+  3.59 (B+) instead of 0.00 (F).
+
+### Fixed — the corroboration merge was hiding findings
+
+Bandit files `B602` (`shell=True`), `B603` (subprocess call) and `B607`
+(partial executable path) all under CWE-78. Keying the merge on the CWE
+collapsed them, so `subprocess.call('ls', shell=True)` reported `B607`
+alone with the `shell=True` buried inside it as a footnote — the more
+serious of the two, missing from the work order.
+
+A shared CWE is no longer sufficient. Two rules from the *same* scanner
+merge only through the hand-checked alias table; different scanners still
+merge on a shared CWE, which is the cross-tool corroboration the function
+exists for.
+
+`test_two_different_weaknesses_at_one_line_stay_two_findings` has asserted
+this since the merge was written and passed throughout, because its
+fixtures carried no CWE. Reading Bandit's CWEs in 0.6.0 gave them one and
+turned a real test into a false assurance.
+
+### Fixed — a category nothing could read was graded 5.0
+
+A `Dockerfile` with `USER root` and `chmod 777`, beside Terraform with a
+`public-read` bucket and a 0.0.0.0/0 ingress rule, scored **config_iac
+5.0** with neither checkov nor hadolint installed.
+
+A hand-written list claimed `builtin_rules` covered `secrets` and
+`config_iac` — it has never had a rule for either — and omitted
+`supply_chain`, which it does cover. The set is derived from the standards
+map now, so it cannot drift from the rules it describes.
+
+### Fixed — Terraform lines were not counted
+
+checkov is in the floor and reads `.tf`, so its findings were scored
+against a denominator that excluded every file it had read. `.tf` and
+`.tfvars` join `DEFAULT_INCLUDE_EXTS`.
+
+### Fixed — SARIF raised thousands of alerts for test fixtures
+
+SARIF is consumed by code-scanning platforms that turn each result into an
+alert, and `suppressions` is the field they honour. We wrote
+`properties.suppressed` instead — a field of our own invention no consumer
+reads. So findings the operator had explicitly suppressed in
+`.scignore.yaml` still became alerts, and so did every test-tree and
+documentation finding.
+
+On a large real repository that was **4,929 results of which 4,847 were
+test fixtures** — 4,847 alerts for deliberately-vulnerable test data,
+burying 82 findings in the shipped source. The same audit now raises 82.
+Suppressed, not omitted: every finding stays in the document with its
+location, axis and justification.
+
+### Fixed — semgrep resolved but did not run
+
+Semgrep deprecated `python -m semgrep` in 1.38.0: it prints a notice, exits
+0, and analyses nothing. The adapter declared that fallback, which fires
+whenever the module is importable but the binary is off PATH — the normal
+state after installing njsscan, which pulls semgrep in as a dependency.
+
+Coverage caught it, so no grade was ever claimed on a scanner that had not
+run, but it reported "semgrep failed" to operators whose situation was
+"semgrep is not on PATH". bandit, njsscan, checkov and pip-audit all still
+run correctly under `python -m` and keep the fallback; a test now asserts
+any declared `python_module` actually exposes a `__main__`.
+
+### Known, measured, not changed
+
+A repository with large checked-in JSON artifacts scores better for having
+them: the same tree measured A- (4.02) with 879k lines of generated reports
+counted and D (1.57) without. `docs/scoring.md` defines LOC as "scanned
+code volume", which those lines are not. The fix is the same open question
+as the `sqrt(LOC)` size bias — what the denominator should measure — and is
+recorded rather than guessed at.
+
+## 0.6.0 — 2026-09-11
 
 ### Work orders are the first-class output
 
