@@ -5,6 +5,35 @@ declares Security a `DELEGATED` pillar naming this tool, and reports it as
 `NotApplicable` so a reader never mistakes silence for safety. This module is
 the other half: the thing that makes that entry unnecessary.
 
+**Changing this document's shape is a two-repository release, in order.**
+
+MA refuses an unknown `schema` or `schema_version` outright and reports no
+delegated pillar rather than a partial one — deliberately, because "the schema
+string is the producer's promise about the shape, and guessing past it is how
+a consumer starts reporting fields that mean something different." That is the
+safe failure and a *silent* one.
+
+So a v2 ships in this sequence and no other:
+
+1. specify the v2 shape and send it to MA;
+2. **MA lands its reader first** and accepts v1 and v2;
+3. only then does this tool emit v2.
+
+Emitting v2 before MA accepts it leaves the pillar unmeasured for the entire
+window between the two releases, with nothing on either side reporting why.
+MA will not pre-accept an unspecified v2, which is correct for the same reason
+this rule exists. Agreed with the MA maintainer 2026-09-11; see D18 and MA's
+D155.
+
+**`producer.version` is load-bearing and is not ours alone.** MA's D155 keys
+trend comparability on it, because a delegated pillar can change its scoring
+model without changing its schema — which is exactly what D16 and D17 did.
+A new MA series opens on *every* release of this tool, including releases that
+change no scoring; that over-breaking is agreed and documented on MA's side.
+It means a wrong version here silently splices two scoring models into one
+trend, so `tests/unit/test_pillar_contract.py` pins the field to
+`__version__` rather than merely to `str`.
+
 **Everything structural here is MA's and is reused deliberately.** The scope
 vocabulary, the two-axis split, the posture matrix and its thresholds all come
 from `_pillars.py`. Two tools reporting "level 3" or "healthy" about the same

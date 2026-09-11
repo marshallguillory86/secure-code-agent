@@ -17,6 +17,13 @@ So this file pins the whole shape. If it fails, the contract changed, and the
 choice is deliberate: **bump `schema_version` rather than reshaping v1.** A
 reshaped v1 makes every MA run silently drop the pillar; a bumped version
 makes MA refuse loudly and tells its maintainer exactly what happened.
+
+**And a bumped version is a two-repository release, in this order:** specify
+the v2 shape, MA lands a reader that accepts v1 and v2, *then* this tool emits
+v2. Shipping v2 first leaves the pillar unmeasured for the whole window
+between the two releases, silently. MA will not pre-accept an unspecified v2
+— guessing past a schema string is the defect its reader exists to avoid.
+Agreed with the MA maintainer 2026-09-11.
 """
 
 from __future__ import annotations
