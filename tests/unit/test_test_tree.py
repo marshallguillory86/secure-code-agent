@@ -184,7 +184,7 @@ def test_loc_splits_so_the_denominator_moves_with_the_numerator(tmp_path):
     (tmp_path / "src" / "app.py").write_text("a = 1\nb = 2\nc = 3\n", encoding="utf-8")
     (tmp_path / "tests" / "test_app.py").write_text("x = 1\ny = 2\n", encoding="utf-8")
 
-    primary, test = loc_under(tmp_path, (".py",), (), config_mod.DEFAULT_TEST_PATTERNS)
+    primary, test, _docs = loc_under(tmp_path, (".py",), (), config_mod.DEFAULT_TEST_PATTERNS)
 
     assert primary == 3
     assert test == 2
@@ -195,7 +195,7 @@ def test_no_test_patterns_means_everything_is_primary(tmp_path):
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_app.py").write_text("x = 1\ny = 2\n", encoding="utf-8")
 
-    assert loc_under(tmp_path, (".py",), (), ()) == (2, 0)
+    assert loc_under(tmp_path, (".py",), (), ()) == (2, 0, 0)
 
 
 # --------------------------------------------------------------------------
@@ -233,3 +233,51 @@ def test_a_documentation_axis_reports_without_a_line_count():
     assert report.loc is None
     assert report.count == 1
     assert "documentation" in report.headline()
+
+
+def test_documentation_loc_leaves_the_primary_denominator(tmp_path):
+    """Documentation findings move to their own axis; its lines must move too.
+
+    They did not. FastAPI carries 7,160 lines of `docs/en/data/` —
+    translator and contributor lists — that were diluting the count its
+    *code* was graded against, while any finding in them was correctly
+    excluded from the numerator. Third occurrence of one mismatch, after
+    the test tree and the run's own artifacts.
+    """
+    (tmp_path / "src").mkdir()
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "src" / "app.py").write_text("a = 1\nb = 2\nc = 3\n", encoding="utf-8")
+    (tmp_path / "docs" / "people.yml").write_text("x: 1\ny: 2\n", encoding="utf-8")
+
+    primary, test, docs = loc_under(
+        tmp_path,
+        (".py", ".yml"),
+        (),
+        config_mod.DEFAULT_TEST_PATTERNS,
+        (),
+        config_mod.DEFAULT_DOCS_PATTERNS,
+    )
+
+    assert (primary, test, docs) == (3, 0, 2)
+
+
+def test_without_docs_patterns_documentation_stays_primary(tmp_path):
+    """Absent configuration must not silently shrink the denominator."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "people.yml").write_text("x: 1\ny: 2\n", encoding="utf-8")
+
+    assert loc_under(tmp_path, (".yml",), (), (), (), ()) == (2, 0, 0)
+
+
+def test_a_lockfile_named_json_is_not_source(tmp_path):
+    """`**/*.lock` catches poetry, Gemfile, Cargo and yarn, and misses every
+    lockfile the JavaScript ecosystem actually ships. `package-lock.json`
+    alone was 9,699 of axios's 17,532 non-code lines."""
+    (tmp_path / "package-lock.json").write_text('{\n"a": 1,\n"b": 2\n}\n', encoding="utf-8")
+    (tmp_path / "app.js").write_text("const a = 1;\n", encoding="utf-8")
+
+    primary, _test, _docs = loc_under(
+        tmp_path, (".js", ".json"), config_mod.DEFAULT_EXCLUDES, (), (), ()
+    )
+
+    assert primary == 1

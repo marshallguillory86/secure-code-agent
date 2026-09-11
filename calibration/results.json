@@ -15,45 +15,45 @@
     ],
     "examined_overall": {
       "min": 0.0,
-      "p25": 2.4713,
-      "median": 3.3828,
+      "p25": 1.0941,
+      "median": 3.3599,
       "p75": 4.4809,
       "max": 5.0
     },
     "examined_worst_normalized": {
       "min": 0.0,
       "p25": 1.1596,
-      "median": 4.6678,
-      "p75": 10.0975,
-      "max": 40.0403
+      "median": 4.7595,
+      "p75": 10.3788,
+      "max": 40.6052
     },
     "reported_overall": {
       "min": 0.0,
       "p25": 2.5793,
-      "median": 4.3663,
+      "median": 4.3114,
       "p75": 5.0,
       "max": 5.0
     },
     "unclamped_overall": {
-      "min": -15.0201,
+      "min": -15.3026,
       "p25": 0.1322,
-      "median": 4.1654,
+      "median": 4.0929,
       "p75": 5.0,
       "max": 5.0
     },
     "worst_normalized": {
       "min": 0.0,
       "p25": 0.0,
-      "median": 1.6694,
+      "median": 1.8143,
       "p75": 9.7355,
-      "max": 40.0403
+      "max": 40.6052
     },
     "loc": {
-      "min": 2964.0,
-      "p25": 7135.0,
-      "median": 11437.0,
-      "p75": 26788.0,
-      "max": 145456.0
+      "min": 2790.0,
+      "p25": 7052.0,
+      "median": 10437.0,
+      "p75": 23764.0,
+      "max": 144473.0
     },
     "letters": {
       "A": 1,
@@ -61,15 +61,15 @@
       "A-": 3,
       "B+": 1,
       "B-": 2,
-      "C": 1,
+      "D": 1,
       "F": 2
     },
     "variants": {
       "per_repository": {
         "axios": {
-          "as-run": 1.6302,
-          "no-deps": 1.6302,
-          "no-low": 1.6302,
+          "as-run": 1.9202,
+          "no-deps": 1.9202,
+          "no-low": 1.9202,
           "test_tree_findings": 20.0,
           "test_tree_loc": 28423.0
         },
@@ -81,9 +81,9 @@
           "test_tree_loc": 92783.0
         },
         "django": {
-          "as-run": 40.0403,
-          "no-deps": 40.0403,
-          "no-low": 32.609,
+          "as-run": 40.6052,
+          "no-deps": 40.6052,
+          "no-low": 32.8367,
           "test_tree_findings": 963.0,
           "test_tree_loc": 319577.0
         },
@@ -95,16 +95,16 @@
           "test_tree_loc": 13483.0
         },
         "fastapi": {
-          "as-run": 17.9927,
-          "no-deps": 17.9927,
+          "as-run": 28.001,
+          "no-deps": 28.001,
           "no-low": 0.0,
-          "test_tree_findings": 4898.0,
+          "test_tree_findings": 4899.0,
           "test_tree_loc": 69283.0
         },
         "flask": {
-          "as-run": 10.0975,
-          "no-deps": 10.0975,
-          "no-low": 8.1431,
+          "as-run": 10.3788,
+          "no-deps": 10.3788,
+          "no-low": 8.37,
           "test_tree_findings": 1071.0,
           "test_tree_loc": 6077.0
         },
@@ -130,9 +130,9 @@
           "test_tree_loc": 16674.0
         },
         "jekyll": {
-          "as-run": 0.8836,
-          "no-deps": 0.8836,
-          "no-low": 0.8836,
+          "as-run": 0.9349,
+          "no-deps": 0.9349,
+          "no-low": 0.9349,
           "test_tree_findings": 1.0,
           "test_tree_loc": 8900.0
         },
@@ -151,29 +151,29 @@
           "test_tree_loc": 4800.0
         },
         "requests": {
-          "as-run": 4.9133,
-          "no-deps": 4.9133,
+          "as-run": 5.0709,
+          "no-deps": 5.0709,
           "no-low": 0.0,
           "test_tree_findings": 696.0,
           "test_tree_loc": 4284.0
         },
         "sinatra": {
-          "as-run": 4.4223,
-          "no-deps": 4.4223,
-          "no-low": 4.4223,
+          "as-run": 4.4482,
+          "no-deps": 4.4482,
+          "no-low": 4.4482,
           "test_tree_findings": 2.0,
           "test_tree_loc": 13759.0
         }
       },
       "median_worst_normalized": {
-        "as-run": 1.6694,
-        "no-deps": 1.6694,
-        "no-low": 1.0216
+        "as-run": 1.8143,
+        "no-deps": 1.8143,
+        "no-low": 1.0473
       },
       "median_grade_at_current_slope": {
-        "as-run": 4.17,
-        "no-deps": 4.17,
-        "no-low": 4.49
+        "as-run": 4.09,
+        "no-deps": 4.09,
+        "no-low": 4.48
       }
     }
   },
@@ -183,27 +183,27 @@
       "commit": "2b30f6255b5ef84afbd827993643d52ef2c0963a",
       "language": "python",
       "measure": {
-        "loc_scanned": 145456,
+        "loc_scanned": 144473,
         "subtotals": {
           "secrets": 18.75,
-          "code_vulnerabilities": 482.906
+          "code_vulnerabilities": 488.062
         },
         "normalized": {
-          "secrets": 1.5547,
-          "code_vulnerabilities": 40.0403
+          "secrets": 1.5599,
+          "code_vulnerabilities": 40.6052
         },
-        "worst_normalized": 40.0403,
-        "unclamped_overall": -15.0201,
+        "worst_normalized": 40.6052,
+        "unclamped_overall": -15.3026,
         "reported_overall": 0.0,
         "reported_letter": "F",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 266,
-        "reported_count": 1233,
+        "finding_count": 271,
+        "reported_count": 1238,
         "per_severity": {
           "critical": 1,
           "high": 29,
-          "medium": 117,
-          "low": 116,
+          "medium": 118,
+          "low": 120,
           "informational": 3
         },
         "coverage_status": "partial"
@@ -231,7 +231,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 19,
             "reason": null,
             "scope": null
@@ -255,7 +255,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 25,
             "reason": null,
             "scope": null
@@ -331,20 +331,20 @@
       "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
       "language": "python",
       "measure": {
-        "loc_scanned": 8284,
+        "loc_scanned": 7841,
         "subtotals": {
           "code_vulnerabilities": 29.062
         },
         "normalized": {
-          "code_vulnerabilities": 10.0975
+          "code_vulnerabilities": 10.3788
         },
-        "worst_normalized": 10.0975,
-        "unclamped_overall": -0.0487,
-        "reported_overall": 0.4392438147030564,
+        "worst_normalized": 10.3788,
+        "unclamped_overall": -0.1894,
+        "reported_overall": 0.3121773401483452,
         "reported_letter": "F",
         "worst_category": "code_vulnerabilities",
         "finding_count": 17,
-        "reported_count": 1096,
+        "reported_count": 1110,
         "per_severity": {
           "critical": 0,
           "high": 3,
@@ -377,7 +377,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 3,
             "reason": null,
             "scope": null
@@ -401,7 +401,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 1,
             "reason": null,
             "scope": null
@@ -477,16 +477,16 @@
       "commit": "dae7ef63b4df6eded86637f251fc4e3a06c3b479",
       "language": "python",
       "measure": {
-        "loc_scanned": 5965,
+        "loc_scanned": 5600,
         "subtotals": {
           "code_vulnerabilities": 12.0
         },
         "normalized": {
-          "code_vulnerabilities": 4.9133
+          "code_vulnerabilities": 5.0709
         },
-        "worst_normalized": 4.9133,
-        "unclamped_overall": 2.5433,
-        "reported_overall": 3.9767996483189028,
+        "worst_normalized": 5.0709,
+        "unclamped_overall": 2.4645,
+        "reported_overall": 3.9439806131300434,
         "reported_letter": "B+",
         "worst_category": "code_vulnerabilities",
         "finding_count": 19,
@@ -523,7 +523,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -547,7 +547,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -636,7 +636,7 @@
         "reported_letter": "B-",
         "worst_category": "code_vulnerabilities",
         "finding_count": 32,
-        "reported_count": 1337,
+        "reported_count": 1348,
         "per_severity": {
           "critical": 0,
           "high": 1,
@@ -669,7 +669,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 1,
             "reason": null,
             "scope": null
@@ -693,7 +693,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -769,25 +769,25 @@
       "commit": "50113da16fec53b66b80d75e80a89296de4fa5a5",
       "language": "python",
       "measure": {
-        "loc_scanned": 35655,
+        "loc_scanned": 23764,
         "subtotals": {
-          "code_vulnerabilities": 107.438
+          "code_vulnerabilities": 136.5
         },
         "normalized": {
-          "code_vulnerabilities": 17.9927
+          "code_vulnerabilities": 28.001
         },
-        "worst_normalized": 17.9927,
-        "unclamped_overall": -3.9963,
-        "reported_overall": 2.471295372245853,
-        "reported_letter": "C",
+        "worst_normalized": 28.001,
+        "unclamped_overall": -9.0005,
+        "reported_overall": 1.0940554005969543,
+        "reported_letter": "D",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 134,
-        "reported_count": 5111,
+        "finding_count": 165,
+        "reported_count": 5143,
         "per_severity": {
           "critical": 0,
           "high": 0,
           "medium": 0,
-          "low": 131,
+          "low": 162,
           "informational": 3
         },
         "coverage_status": "partial"
@@ -815,7 +815,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -839,7 +839,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 1,
             "reason": null,
             "scope": null
@@ -915,7 +915,7 @@
       "commit": "bed501c695a61886399ee622875f3be933c716d8",
       "language": "javascript",
       "measure": {
-        "loc_scanned": 4497,
+        "loc_scanned": 2790,
         "subtotals": {},
         "normalized": {},
         "worst_normalized": 0.0,
@@ -957,7 +957,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -981,7 +981,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 90,
             "reason": null,
             "scope": null
@@ -1057,16 +1057,16 @@
       "commit": "1226e6c53eeb0e9d7159bea83556c2ff117b5f2e",
       "language": "javascript",
       "measure": {
-        "loc_scanned": 26788,
+        "loc_scanned": 19308,
         "subtotals": {
           "code_vulnerabilities": 8.438
         },
         "normalized": {
-          "code_vulnerabilities": 1.6302
+          "code_vulnerabilities": 1.9202
         },
-        "worst_normalized": 1.6302,
-        "unclamped_overall": 4.1849,
-        "reported_overall": 4.383053902383257,
+        "worst_normalized": 1.9202,
+        "unclamped_overall": 4.0399,
+        "reported_overall": 4.273310773579107,
         "reported_letter": "A-",
         "worst_category": "code_vulnerabilities",
         "finding_count": 8,
@@ -1103,7 +1103,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1127,7 +1127,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 24,
             "reason": null,
             "scope": null
@@ -1249,7 +1249,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1273,7 +1273,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 6,
             "reason": null,
             "scope": null
@@ -1391,7 +1391,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1415,7 +1415,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1533,7 +1533,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1557,7 +1557,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1633,16 +1633,16 @@
       "commit": "cb22afd7902b566b6eaba6c4ea89739494a65d12",
       "language": "ruby",
       "measure": {
-        "loc_scanned": 7135,
+        "loc_scanned": 7052,
         "subtotals": {
           "code_vulnerabilities": 11.812
         },
         "normalized": {
-          "code_vulnerabilities": 4.4223
+          "code_vulnerabilities": 4.4482
         },
-        "worst_normalized": 4.4223,
-        "unclamped_overall": 2.7889,
-        "reported_overall": 2.7888671482502696,
+        "worst_normalized": 4.4482,
+        "unclamped_overall": 2.7759,
+        "reported_overall": 2.7758930150120587,
         "reported_letter": "B-",
         "worst_category": "code_vulnerabilities",
         "finding_count": 6,
@@ -1679,7 +1679,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1703,7 +1703,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1779,18 +1779,18 @@
       "commit": "74d751339d3e534aa51d5d7b0640e9bd743509e4",
       "language": "ruby",
       "measure": {
-        "loc_scanned": 14590,
+        "loc_scanned": 13033,
         "subtotals": {
           "code_vulnerabilities": 3.375,
           "supply_chain": 3.0
         },
         "normalized": {
-          "code_vulnerabilities": 0.8836,
-          "supply_chain": 0.7854
+          "code_vulnerabilities": 0.9349,
+          "supply_chain": 0.831
         },
-        "worst_normalized": 0.8836,
-        "unclamped_overall": 4.5582,
-        "reported_overall": 4.607297547879693,
+        "worst_normalized": 0.9349,
+        "unclamped_overall": 4.5326,
+        "reported_overall": 4.584501881578968,
         "reported_letter": "A",
         "worst_category": "supply_chain",
         "finding_count": 6,
@@ -1827,7 +1827,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 1,
             "reason": null,
             "scope": null
@@ -1851,7 +1851,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1927,7 +1927,7 @@
       "commit": "8b4b55051489132190cb8d1c61eb9dc7f5381295",
       "language": "java",
       "measure": {
-        "loc_scanned": 21784,
+        "loc_scanned": 21027,
         "subtotals": {},
         "normalized": {},
         "worst_normalized": 0.0,
@@ -1969,7 +1969,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1993,7 +1993,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -2115,7 +2115,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.5.0",
+            "version": "builtin/0.8.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -2139,7 +2139,7 @@
               "-m",
               "njsscan"
             ],
-            "version": "\u001b[34m",
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
             "finding_count": 0,
             "reason": null,
             "scope": null

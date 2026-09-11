@@ -10,6 +10,7 @@ operator has acknowledged at a point in time. On the next run:
 from __future__ import annotations
 
 import datetime
+import enum
 import json
 import shutil
 import subprocess
@@ -30,6 +31,36 @@ class BaselineEntry:
     first_seen: str  # ISO 8601 UTC
     bumped_by: str  # git user.email when added
     notes: str = ""
+
+
+class State(enum.Enum):
+    """Why the baseline is the shape it is.
+
+    `load` returns an empty mapping for a baseline that is absent, one that
+    is unreadable, and one that is genuinely empty. Downstream those look
+    identical and every finding reads as new — which is correct for the
+    first case, a silent failure for the second, and worth saying out loud
+    in all three once `fail_on_new` gates by default.
+
+    On a first run the honest message is "there is nothing to compare
+    against yet", not "2 new findings since baseline", which claims a
+    baseline exists and that these appeared after it.
+    """
+
+    ABSENT = "absent"
+    UNREADABLE = "unreadable"
+    PRESENT = "present"
+
+
+def state(path: Path) -> State:
+    """Distinguish a missing baseline from a broken one."""
+    if not path.exists():
+        return State.ABSENT
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return State.UNREADABLE
+    return State.PRESENT if isinstance(raw, dict) else State.UNREADABLE
 
 
 def load(path: Path) -> dict[str, BaselineEntry]:

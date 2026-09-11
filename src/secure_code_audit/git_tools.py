@@ -97,14 +97,21 @@ def loc_under(
     excludes: Iterable[str],
     test_patterns: Iterable[str] = (),
     skip: Iterable[Path] = (),
-) -> tuple[int, int]:
-    """Non-blank in-scope lines, split into (primary, test).
+    docs_patterns: Iterable[str] = (),
+) -> tuple[int, int, int]:
+    """Non-blank in-scope lines, split into (primary, test, docs).
 
     The split exists because the score's denominator has to move with its
     numerator. Scoring primary-tree findings over a LOC count that included the
     test tree would understate every repository in proportion to how well it is
     tested — the same numerator/denominator mismatch that `exclude_patterns`
     already caused once, arriving by a different door.
+
+    Documentation is split for the same reason, and was not: its *findings*
+    move to their own axis and out of the score, while its *lines* stayed in
+    the primary denominator. FastAPI carries 7,160 lines of `docs/en/data/`
+    — translator and contributor lists — diluting the count its code is
+    graded against. Third occurrence of one mismatch.
 
     `skip` names the run's own artifacts — the report, the baseline, the
     suppressions file. Dropping their *findings* without dropping their
@@ -114,9 +121,11 @@ def loc_under(
     unchanged repository returned 0.00 and 4.25.
     """
     test_patterns = tuple(test_patterns)
+    docs_patterns = tuple(docs_patterns)
     skip = {p.resolve() for p in skip}
     primary = 0
     test = 0
+    docs = 0
     # `rglob` on a file yields nothing, so a single-file audit reported zero
     # lines — and a zero denominator is not normalised at all, so the grade
     # became the raw subtotal. Auditing one file is supported; it should be
@@ -138,6 +147,8 @@ def loc_under(
         lines = sum(1 for line in text.splitlines() if line.strip())
         if test_patterns and is_test_path(path, root, test_patterns):
             test += lines
+        elif docs_patterns and is_test_path(path, root, docs_patterns):
+            docs += lines
         else:
             primary += lines
-    return primary, test
+    return primary, test, docs

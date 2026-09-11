@@ -26,6 +26,17 @@ DEFAULT_EXCLUDES: tuple[str, ...] = (
     ".mypy_cache/",
     "**/*.min.js",
     "**/*.lock",
+    # Lockfiles that are not named `.lock`. `**/*.lock` catches
+    # `poetry.lock`, `Gemfile.lock`, `Cargo.lock` and `yarn.lock` and misses
+    # every lockfile the JavaScript ecosystem actually ships:
+    # `package-lock.json` alone was 9,699 of axios's 17,532 non-code lines
+    # and 5,845 of lodash's 6,222. A generated dependency manifest is not
+    # source, and counting it inflates the denominator that decides the
+    # grade.
+    "**/package-lock.json",
+    "**/npm-shrinkwrap.json",
+    "**/pnpm-lock.yaml",
+    "**/bun.lockb",
 )
 
 #: Conventional test-tree locations across the languages the floor reads.
@@ -169,7 +180,24 @@ class Config:
     scanners: dict[str, ScannerConfig] = field(default_factory=dict)
     severity_overrides: dict[str, str] = field(default_factory=dict)
     category_overrides: dict[str, str] = field(default_factory=dict)
-    gates: dict[str, Any] = field(default_factory=dict)
+    #: Default policy: **ratchet on regressions**, not on absolute state.
+    #:
+    #: `fail_on_new` is the one gate measured to work. Severity-based
+    #: defaults cannot: `fail_on_severity: ["critical"]` caught none of four
+    #: known-vulnerable control repositories, and `["critical","high"]`
+    #: failed five of ten well-maintained ones while still missing SQL
+    #: injection and `pickle.loads`, which Bandit rates *medium*. See D15.
+    #:
+    #: The ratchet reads no severity at all, so it inherits none of that. A
+    #: false positive is baselined once and never asked about again, which
+    #: is the property a threshold cannot have. Measured across an adoption
+    #: lifecycle: first run fails (everything is new), `--bump-baseline`
+    #: accepts existing debt, an introduced SQL injection fails, reverting
+    #: passes.
+    #:
+    #: An empty `{}` was the previous default and provided no floor at all —
+    #: an absent gate cannot trip, so every audit "passed".
+    gates: dict[str, Any] = field(default_factory=lambda: {"fail_on_new": True})
     outputs: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_OUTPUTS))
     suppressions_file: str = ".scignore.yaml"
     loc_for_scoring: dict[str, Any] | None = None
@@ -343,7 +371,9 @@ def _from_dict(raw: dict[str, Any]) -> Config:
         raise ValueError(f"invalid severity override: {', '.join(invalid)}")
     if invalid := sorted(set(cfg.category_overrides.values()) - _CATEGORIES):
         raise ValueError(f"invalid category override: {', '.join(invalid)}")
-    cfg.gates = _validate_gates(raw.get("gates", {}))
+    # An operator who writes a `gates` block chooses their own policy
+    # entirely; the ratchet default applies only when they write none.
+    cfg.gates = _validate_gates(raw["gates"]) if "gates" in raw else dict(cfg.gates)
 
     outputs = raw.get("outputs", {})
     if not isinstance(outputs, dict):

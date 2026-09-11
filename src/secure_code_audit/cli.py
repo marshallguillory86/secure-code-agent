@@ -338,6 +338,7 @@ def _do_audit(args: argparse.Namespace) -> int:
     # ----- baseline -----
     baseline_path = _under_root(root, args.baseline or cfg.outputs["baseline_path"])
     baseline = baseline_mod.load(baseline_path)
+    baseline_state = baseline_mod.state(baseline_path)
     all_findings = baseline_mod.mark_new(all_findings, baseline)
 
     # ----- scoring -----
@@ -377,8 +378,9 @@ def _do_audit(args: argparse.Namespace) -> int:
     if cfg.loc_for_scoring:
         loc = int(cfg.loc_for_scoring.get("value", 0))
         test_loc = 0
+        docs_loc = 0
     else:
-        loc, test_loc = loc_under(
+        loc, test_loc, docs_loc = loc_under(
             target,
             cfg.include_extensions,
             cfg.exclude_patterns,
@@ -386,6 +388,7 @@ def _do_audit(args: argparse.Namespace) -> int:
             # Same set the findings were filtered against. Numerator and
             # denominator have to describe the same repository.
             own_artifacts,
+            cfg.docs_patterns,
         )
     # Dependencies come off the code-condition score and onto their own axis.
     # A CVE in a pinned dependency is fixed with a version bump; an injection
@@ -405,7 +408,7 @@ def _do_audit(args: argparse.Namespace) -> int:
     score = score_findings(scored_findings, loc, measurable)
     axes = (
         summarize_axis("test tree", test_findings, test_loc),
-        summarize_axis("documentation", docs_findings),
+        summarize_axis("documentation", docs_findings, docs_loc or None),
         summarize_axis("dependencies", dependency_findings),
     )
     # Naming an import on the command line asserts that it contributes coverage,
@@ -425,7 +428,12 @@ def _do_audit(args: argparse.Namespace) -> int:
     ]
     coverage = evaluate_coverage(executions, required)
     # Gates see the dependency advisories; the score does not.
-    gate = evaluate_gates(gated, score, cfg.gates, coverage)
+    # The gate needs to know *why* the baseline is empty to describe a first
+    # run truthfully. Passed in the config dict rather than as a parameter so
+    # the gate signature stays the one every check shares.
+    gate = evaluate_gates(
+        gated, score, {**cfg.gates, "_baseline_state": baseline_state.value}, coverage
+    )
     verdict = build_verdict(score, cfg.gates, coverage)
 
     # ----- write outputs -----
