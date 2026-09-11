@@ -3,88 +3,165 @@
   "config": "/Users/marshallguillory/repos/secure-code-agent/calibration/calibration-config.json",
   "scanner_set": "builtin_rules,bandit,semgrep,njsscan,rubocop,pip_audit,osv_scanner,gitleaks,checkov,trivy",
   "summary": {
-    "repositories": 14,
-    "measured": 14,
+    "maintained": 10,
+    "maintained_overall": {
+      "min": 1.2615,
+      "p25": 2.7148,
+      "median": 3.4059,
+      "p75": 4.7008,
+      "max": 5.0
+    },
+    "maintained_letters": [
+      [
+        "axios",
+        "A"
+      ],
+      [
+        "django",
+        "B-"
+      ],
+      [
+        "express",
+        "A+"
+      ],
+      [
+        "fastapi",
+        "B-"
+      ],
+      [
+        "flask",
+        "D"
+      ],
+      [
+        "httpx",
+        "B-"
+      ],
+      [
+        "jekyll",
+        "A"
+      ],
+      [
+        "lodash",
+        "A"
+      ],
+      [
+        "requests",
+        "B+"
+      ],
+      [
+        "sinatra",
+        "B-"
+      ]
+    ],
+    "vulnerable": 4,
+    "vulnerable_overall": {
+      "min": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 0.0,
+      "max": 0.0
+    },
+    "vulnerable_letters": [
+      [
+        "juice-shop",
+        "F"
+      ],
+      [
+        "nodegoat",
+        "F"
+      ],
+      [
+        "pygoat",
+        "F"
+      ],
+      [
+        "railsgoat",
+        "F"
+      ]
+    ],
+    "separation": 1.2615,
+    "repositories": 19,
+    "measured": 19,
     "failed": [],
-    "examined": 10,
+    "examined": 14,
     "unexamined": [
       "gin",
       "logrus",
       "gson",
-      "commons-lang"
+      "commons-lang",
+      "webgoat"
     ],
     "examined_overall": {
       "min": 0.0,
-      "p25": 1.0941,
-      "median": 3.3599,
-      "p75": 4.4809,
+      "p25": 0.0,
+      "median": 2.8158,
+      "p75": 4.57,
       "max": 5.0
     },
     "examined_worst_normalized": {
       "min": 0.0,
-      "p25": 1.1596,
-      "median": 4.7595,
-      "p75": 10.3788,
-      "max": 40.6052
+      "p25": 0.3308,
+      "median": 1.6802,
+      "p75": 6.5646,
+      "max": 58.0407
     },
     "reported_overall": {
       "min": 0.0,
-      "p25": 2.5793,
-      "median": 4.3114,
-      "p75": 5.0,
+      "p25": 0.0,
+      "median": 2.9721,
+      "p75": 4.8288,
       "max": 5.0
     },
     "unclamped_overall": {
-      "min": -15.3026,
-      "p25": 0.1322,
-      "median": 4.0929,
-      "p75": 5.0,
+      "min": -70.4528,
+      "p25": -3.534,
+      "median": 2.9721,
+      "p75": 4.8288,
       "max": 5.0
     },
     "worst_normalized": {
       "min": 0.0,
-      "p25": 0.0,
-      "median": 1.8143,
-      "p75": 9.7355,
-      "max": 40.6052
+      "p25": 0.1317,
+      "median": 1.5599,
+      "p75": 6.5646,
+      "max": 58.0407
     },
     "loc": {
       "min": 2790.0,
       "p25": 7052.0,
-      "median": 10437.0,
-      "p75": 23764.0,
+      "median": 13033.0,
+      "p75": 29457.0,
       "max": 144473.0
     },
     "letters": {
-      "A": 1,
+      "A": 4,
       "A+": 4,
-      "A-": 3,
       "B+": 1,
-      "B-": 2,
+      "B-": 4,
       "D": 1,
-      "F": 2
+      "F": 5
     },
     "variants": {
       "per_repository": {
         "axios": {
-          "as-run": 1.9202,
-          "no-deps": 1.9202,
-          "no-low": 1.9202,
+          "as-run": 0.3308,
+          "no-deps": 0.3308,
+          "no-low": 0.3308,
           "test_tree_findings": 20.0,
           "test_tree_loc": 28423.0
         },
         "commons-lang": {
-          "as-run": 1.7085,
-          "no-deps": 1.7085,
-          "no-low": 1.7085,
+          "as-run": 0.1317,
+          "no-deps": 0.1317,
+          "no-low": 0.1317,
           "test_tree_findings": 0.0,
           "test_tree_loc": 92783.0
         },
         "django": {
-          "as-run": 40.6052,
-          "no-deps": 40.6052,
-          "no-low": 32.8367,
-          "test_tree_findings": 963.0,
+          "as-run": 1.5599,
+          "no-deps": 1.5599,
+          "no-low": 1.5599,
+          "test_tree_findings": 958.0,
           "test_tree_loc": 319577.0
         },
         "express": {
@@ -95,16 +172,16 @@
           "test_tree_loc": 13483.0
         },
         "fastapi": {
-          "as-run": 28.001,
-          "no-deps": 28.001,
+          "as-run": 1.6025,
+          "no-deps": 1.6025,
           "no-low": 0.0,
           "test_tree_findings": 4899.0,
           "test_tree_loc": 69283.0
         },
         "flask": {
-          "as-run": 10.3788,
-          "no-deps": 10.3788,
-          "no-low": 8.37,
+          "as-run": 2.8758,
+          "no-deps": 2.8758,
+          "no-low": 2.3485,
           "test_tree_findings": 1071.0,
           "test_tree_loc": 6077.0
         },
@@ -123,23 +200,30 @@
           "test_tree_loc": 29087.0
         },
         "httpx": {
-          "as-run": 9.7355,
-          "no-deps": 9.7355,
-          "no-low": 2.1786,
+          "as-run": 1.7579,
+          "no-deps": 1.7579,
+          "no-low": 0.791,
           "test_tree_findings": 1304.0,
           "test_tree_loc": 16674.0
         },
         "jekyll": {
-          "as-run": 0.9349,
-          "no-deps": 0.9349,
-          "no-low": 0.9349,
+          "as-run": 0.2302,
+          "no-deps": 0.2302,
+          "no-low": 0.2302,
           "test_tree_findings": 1.0,
           "test_tree_loc": 8900.0
         },
+        "juice-shop": {
+          "as-run": 8.8497,
+          "no-deps": 8.8497,
+          "no-low": 8.8497,
+          "test_tree_findings": 61.0,
+          "test_tree_loc": 28714.0
+        },
         "lodash": {
-          "as-run": 1.1596,
-          "no-deps": 1.1596,
-          "no-low": 1.1596,
+          "as-run": 0.2038,
+          "no-deps": 0.2038,
+          "no-low": 0.2038,
           "test_tree_findings": 0.0,
           "test_tree_loc": 22198.0
         },
@@ -150,30 +234,58 @@
           "test_tree_findings": 0.0,
           "test_tree_loc": 4800.0
         },
+        "nodegoat": {
+          "as-run": 9.3522,
+          "no-deps": 9.3522,
+          "no-low": 9.3522,
+          "test_tree_findings": 3.0,
+          "test_tree_loc": 936.0
+        },
+        "pygoat": {
+          "as-run": 58.0407,
+          "no-deps": 58.0407,
+          "no-low": 58.0407,
+          "test_tree_findings": 0.0,
+          "test_tree_loc": 0.0
+        },
+        "railsgoat": {
+          "as-run": 6.5646,
+          "no-deps": 6.5646,
+          "no-low": 6.5646,
+          "test_tree_findings": 2.0,
+          "test_tree_loc": 831.0
+        },
         "requests": {
-          "as-run": 5.0709,
-          "no-deps": 5.0709,
+          "as-run": 0.8925,
+          "no-deps": 0.8925,
           "no-low": 0.0,
           "test_tree_findings": 696.0,
           "test_tree_loc": 4284.0
         },
         "sinatra": {
-          "as-run": 4.4482,
-          "no-deps": 4.4482,
-          "no-low": 4.4482,
+          "as-run": 1.8346,
+          "no-deps": 1.8346,
+          "no-low": 1.8346,
           "test_tree_findings": 2.0,
           "test_tree_loc": 13759.0
+        },
+        "webgoat": {
+          "as-run": 11.6459,
+          "no-deps": 11.6459,
+          "no-low": 11.6459,
+          "test_tree_findings": 9.0,
+          "test_tree_loc": 8909.0
         }
       },
       "median_worst_normalized": {
-        "as-run": 1.8143,
-        "no-deps": 1.8143,
-        "no-low": 1.0473
+        "as-run": 1.5599,
+        "no-deps": 1.5599,
+        "no-low": 0.3308
       },
       "median_grade_at_current_slope": {
-        "as-run": 4.09,
-        "no-deps": 4.09,
-        "no-low": 4.48
+        "as-run": 2.97,
+        "no-deps": 2.97,
+        "no-low": 4.57
       }
     }
   },
@@ -182,27 +294,28 @@
       "name": "django",
       "commit": "2b30f6255b5ef84afbd827993643d52ef2c0963a",
       "language": "python",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 144473,
         "subtotals": {
           "secrets": 18.75,
-          "code_vulnerabilities": 488.062
+          "code_vulnerabilities": 210.936
         },
         "normalized": {
           "secrets": 1.5599,
-          "code_vulnerabilities": 40.6052
+          "code_vulnerabilities": 1.46
         },
-        "worst_normalized": 40.6052,
-        "unclamped_overall": -15.3026,
-        "reported_overall": 0.0,
-        "reported_letter": "F",
-        "worst_category": "code_vulnerabilities",
-        "finding_count": 271,
-        "reported_count": 1238,
+        "worst_normalized": 1.5599,
+        "unclamped_overall": 2.9721,
+        "reported_overall": 2.9720778499503475,
+        "reported_letter": "B-",
+        "worst_category": "secrets",
+        "finding_count": 266,
+        "reported_count": 1228,
         "per_severity": {
           "critical": 1,
           "high": 29,
-          "medium": 118,
+          "medium": 113,
           "low": 120,
           "informational": 3
         },
@@ -231,7 +344,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 19,
             "reason": null,
             "scope": null
@@ -330,25 +443,26 @@
       "name": "flask",
       "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
       "language": "python",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 7841,
         "subtotals": {
-          "code_vulnerabilities": 29.062
+          "code_vulnerabilities": 22.549
         },
         "normalized": {
-          "code_vulnerabilities": 10.3788
+          "code_vulnerabilities": 2.8758
         },
-        "worst_normalized": 10.3788,
-        "unclamped_overall": -0.1894,
-        "reported_overall": 0.3121773401483452,
-        "reported_letter": "F",
+        "worst_normalized": 2.8758,
+        "unclamped_overall": 1.2615,
+        "reported_overall": 1.2614884516135039,
+        "reported_letter": "D",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 17,
-        "reported_count": 1110,
+        "finding_count": 15,
+        "reported_count": 1108,
         "per_severity": {
           "critical": 0,
           "high": 3,
-          "medium": 3,
+          "medium": 1,
           "low": 8,
           "informational": 3
         },
@@ -377,7 +491,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 3,
             "reason": null,
             "scope": null
@@ -476,17 +590,18 @@
       "name": "requests",
       "commit": "dae7ef63b4df6eded86637f251fc4e3a06c3b479",
       "language": "python",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 5600,
         "subtotals": {
-          "code_vulnerabilities": 12.0
+          "code_vulnerabilities": 4.998
         },
         "normalized": {
-          "code_vulnerabilities": 5.0709
+          "code_vulnerabilities": 0.8925
         },
-        "worst_normalized": 5.0709,
-        "unclamped_overall": 2.4645,
-        "reported_overall": 3.9439806131300434,
+        "worst_normalized": 0.8925,
+        "unclamped_overall": 3.8398,
+        "reported_overall": 3.839750938744374,
         "reported_letter": "B+",
         "worst_category": "code_vulnerabilities",
         "finding_count": 19,
@@ -523,7 +638,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -622,17 +737,18 @@
       "name": "httpx",
       "commit": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254",
       "language": "python",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 7585,
         "subtotals": {
-          "code_vulnerabilities": 26.812
+          "code_vulnerabilities": 13.333
         },
         "normalized": {
-          "code_vulnerabilities": 9.7355
+          "code_vulnerabilities": 1.7579
         },
-        "worst_normalized": 9.7355,
-        "unclamped_overall": 0.1322,
-        "reported_overall": 2.579342156531686,
+        "worst_normalized": 1.7579,
+        "unclamped_overall": 2.7148,
+        "reported_overall": 2.7147750223286042,
         "reported_letter": "B-",
         "worst_category": "code_vulnerabilities",
         "finding_count": 32,
@@ -669,7 +785,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 1,
             "reason": null,
             "scope": null
@@ -768,18 +884,19 @@
       "name": "fastapi",
       "commit": "50113da16fec53b66b80d75e80a89296de4fa5a5",
       "language": "python",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 23764,
         "subtotals": {
-          "code_vulnerabilities": 136.5
+          "code_vulnerabilities": 38.082
         },
         "normalized": {
-          "code_vulnerabilities": 28.001
+          "code_vulnerabilities": 1.6025
         },
-        "worst_normalized": 28.001,
-        "unclamped_overall": -9.0005,
-        "reported_overall": 1.0940554005969543,
-        "reported_letter": "D",
+        "worst_normalized": 1.6025,
+        "unclamped_overall": 2.9168,
+        "reported_overall": 2.916758323829885,
+        "reported_letter": "B-",
         "worst_category": "code_vulnerabilities",
         "finding_count": 165,
         "reported_count": 5143,
@@ -815,7 +932,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -914,6 +1031,7 @@
       "name": "express",
       "commit": "bed501c695a61886399ee622875f3be933c716d8",
       "language": "javascript",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 2790,
         "subtotals": {},
@@ -957,7 +1075,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1056,18 +1174,19 @@
       "name": "axios",
       "commit": "1226e6c53eeb0e9d7159bea83556c2ff117b5f2e",
       "language": "javascript",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 19308,
         "subtotals": {
-          "code_vulnerabilities": 8.438
+          "code_vulnerabilities": 6.386
         },
         "normalized": {
-          "code_vulnerabilities": 1.9202
+          "code_vulnerabilities": 0.3308
         },
-        "worst_normalized": 1.9202,
-        "unclamped_overall": 4.0399,
-        "reported_overall": 4.273310773579107,
-        "reported_letter": "A-",
+        "worst_normalized": 0.3308,
+        "unclamped_overall": 4.57,
+        "reported_overall": 4.570014882211377,
+        "reported_letter": "A",
         "worst_category": "code_vulnerabilities",
         "finding_count": 8,
         "reported_count": 29,
@@ -1103,7 +1222,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1202,18 +1321,19 @@
       "name": "lodash",
       "commit": "0f79302eaf53618079118dc9663f731e8faa40b7",
       "language": "javascript",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 25944,
         "subtotals": {
-          "code_vulnerabilities": 5.906
+          "code_vulnerabilities": 5.288
         },
         "normalized": {
-          "code_vulnerabilities": 1.1596
+          "code_vulnerabilities": 0.2038
         },
-        "worst_normalized": 1.1596,
-        "unclamped_overall": 4.4202,
-        "reported_overall": 4.480867566839776,
-        "reported_letter": "A-",
+        "worst_normalized": 0.2038,
+        "unclamped_overall": 4.735,
+        "reported_overall": 4.735007829304078,
+        "reported_letter": "A",
         "worst_category": "code_vulnerabilities",
         "finding_count": 6,
         "reported_count": 7,
@@ -1249,7 +1369,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1348,6 +1468,7 @@
       "name": "gin",
       "commit": "dcaa4296d111981ffb31ac3eba90bb63e1eb5ab9",
       "language": "go",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 7146,
         "subtotals": {},
@@ -1391,7 +1512,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1490,6 +1611,7 @@
       "name": "logrus",
       "commit": "6d6a132bc03324d4ceb78e1b927f995d014cda20",
       "language": "go",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 2964,
         "subtotals": {},
@@ -1533,7 +1655,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1632,17 +1754,18 @@
       "name": "sinatra",
       "commit": "cb22afd7902b566b6eaba6c4ea89739494a65d12",
       "language": "ruby",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 7052,
         "subtotals": {
-          "code_vulnerabilities": 11.812
+          "code_vulnerabilities": 12.938
         },
         "normalized": {
-          "code_vulnerabilities": 4.4482
+          "code_vulnerabilities": 1.8346
         },
-        "worst_normalized": 4.4482,
-        "unclamped_overall": 2.7759,
-        "reported_overall": 2.7758930150120587,
+        "worst_normalized": 1.8346,
+        "unclamped_overall": 2.615,
+        "reported_overall": 2.6150382870107767,
         "reported_letter": "B-",
         "worst_category": "code_vulnerabilities",
         "finding_count": 6,
@@ -1679,7 +1802,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1778,27 +1901,28 @@
       "name": "jekyll",
       "commit": "74d751339d3e534aa51d5d7b0640e9bd743509e4",
       "language": "ruby",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 13033,
         "subtotals": {
-          "code_vulnerabilities": 3.375,
+          "code_vulnerabilities": 1.688,
           "supply_chain": 3.0
         },
         "normalized": {
-          "code_vulnerabilities": 0.9349,
-          "supply_chain": 0.831
+          "code_vulnerabilities": 0.1295,
+          "supply_chain": 0.2302
         },
-        "worst_normalized": 0.9349,
-        "unclamped_overall": 4.5326,
-        "reported_overall": 4.584501881578968,
+        "worst_normalized": 0.2302,
+        "unclamped_overall": 4.7008,
+        "reported_overall": 4.70075961022021,
         "reported_letter": "A",
         "worst_category": "supply_chain",
-        "finding_count": 6,
-        "reported_count": 9,
+        "finding_count": 5,
+        "reported_count": 8,
         "per_severity": {
           "critical": 0,
           "high": 1,
-          "medium": 2,
+          "medium": 1,
           "low": 0,
           "informational": 3
         },
@@ -1827,7 +1951,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 1,
             "reason": null,
             "scope": null
@@ -1905,7 +2029,7 @@
               "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
             ],
             "version": "1.28.2",
-            "finding_count": 3,
+            "finding_count": 2,
             "reason": null,
             "scope": null
           },
@@ -1926,6 +2050,7 @@
       "name": "gson",
       "commit": "8b4b55051489132190cb8d1c61eb9dc7f5381295",
       "language": "java",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 21027,
         "subtotals": {},
@@ -1969,7 +2094,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -2068,18 +2193,19 @@
       "name": "commons-lang",
       "commit": "62620f371b9c6ed337854e066d8916e56942d9af",
       "language": "java",
+      "kind": "maintained",
       "measure": {
         "loc_scanned": 97561,
         "subtotals": {
-          "code_vulnerabilities": 16.875
+          "code_vulnerabilities": 12.85
         },
         "normalized": {
-          "code_vulnerabilities": 1.7085
+          "code_vulnerabilities": 0.1317
         },
-        "worst_normalized": 1.7085,
-        "unclamped_overall": 4.1458,
-        "reported_overall": 4.3495148193546465,
-        "reported_letter": "A-",
+        "worst_normalized": 0.1317,
+        "unclamped_overall": 4.8288,
+        "reported_overall": 4.828772847952812,
+        "reported_letter": "A",
         "worst_category": "code_vulnerabilities",
         "finding_count": 6,
         "reported_count": 7,
@@ -2115,7 +2241,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -2165,6 +2291,751 @@
             ],
             "version": "1.163.0",
             "finding_count": 3,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": false
+    },
+    {
+      "name": "pygoat",
+      "commit": "19d17cc8874861142b330636d068bbde54e86b85",
+      "language": "python",
+      "kind": "vulnerable-by-design",
+      "measure": {
+        "loc_scanned": 3856,
+        "subtotals": {
+          "secrets": 113.973,
+          "code_vulnerabilities": 129.372
+        },
+        "normalized": {
+          "secrets": 58.0407,
+          "code_vulnerabilities": 33.5508
+        },
+        "worst_normalized": 58.0407,
+        "unclamped_overall": -70.4528,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "code_vulnerabilities",
+        "finding_count": 92,
+        "reported_count": 271,
+        "per_severity": {
+          "critical": 10,
+          "high": 20,
+          "medium": 15,
+          "low": 44,
+          "informational": 3
+        },
+        "coverage_status": "partial"
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 65,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.9.0",
+            "finding_count": 9,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 62,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
+            "finding_count": 7,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 320,
+            "reason": null,
+            "scope": "mode=auto"
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 2,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
+    },
+    {
+      "name": "nodegoat",
+      "commit": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
+      "language": "javascript",
+      "kind": "vulnerable-by-design",
+      "measure": {
+        "loc_scanned": 29457,
+        "subtotals": {
+          "secrets": 50.758,
+          "code_vulnerabilities": 60.078
+        },
+        "normalized": {
+          "secrets": 9.3522,
+          "code_vulnerabilities": 2.0395
+        },
+        "worst_normalized": 9.3522,
+        "unclamped_overall": -7.1578,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "secrets",
+        "finding_count": 36,
+        "reported_count": 40,
+        "per_severity": {
+          "critical": 3,
+          "high": 10,
+          "medium": 16,
+          "low": 0,
+          "informational": 7
+        },
+        "coverage_status": "partial"
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.9.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 6,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
+            "finding_count": 32,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 3,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
+    },
+    {
+      "name": "railsgoat",
+      "commit": "f5951f13089d85c979de09e7da3c8c0fb982f94a",
+      "language": "ruby",
+      "kind": "vulnerable-by-design",
+      "measure": {
+        "loc_scanned": 8158,
+        "subtotals": {
+          "secrets": 18.75,
+          "code_vulnerabilities": 30.641
+        },
+        "normalized": {
+          "secrets": 6.5646,
+          "code_vulnerabilities": 3.7559
+        },
+        "worst_normalized": 6.5646,
+        "unclamped_overall": -3.534,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "secrets",
+        "finding_count": 18,
+        "reported_count": 21,
+        "per_severity": {
+          "critical": 1,
+          "high": 3,
+          "medium": 11,
+          "low": 0,
+          "informational": 3
+        },
+        "coverage_status": "partial"
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.9.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 2,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
+            "finding_count": 4,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 13,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
+    },
+    {
+      "name": "juice-shop",
+      "commit": "1618a611b173b4bf114028e6e02549950606e29d",
+      "language": "typescript",
+      "kind": "vulnerable-by-design",
+      "measure": {
+        "loc_scanned": 115340,
+        "subtotals": {
+          "secrets": 95.042,
+          "code_vulnerabilities": 21.101
+        },
+        "normalized": {
+          "secrets": 8.8497,
+          "code_vulnerabilities": 0.1829
+        },
+        "worst_normalized": 8.8497,
+        "unclamped_overall": -6.5045,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "secrets",
+        "finding_count": 17,
+        "reported_count": 79,
+        "per_severity": {
+          "critical": 7,
+          "high": 3,
+          "medium": 4,
+          "low": 0,
+          "informational": 3
+        },
+        "coverage_status": "partial"
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.9.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 138,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 7,
+            "reason": null,
+            "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
+          },
+          {
+            "name": "checkov",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve checkov from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "osv_scanner",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve osv_scanner from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          },
+          {
+            "name": "rubocop",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
+            ],
+            "version": "1.28.2",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "trivy",
+            "outcome": "unavailable",
+            "command": [],
+            "version": null,
+            "finding_count": 0,
+            "reason": "Could not resolve trivy from its configured command, PATH, or supported Python module fallback; scan skipped.",
+            "scope": null
+          }
+        ]
+      },
+      "examined": true
+    },
+    {
+      "name": "webgoat",
+      "commit": "685a4b9df91fb456fc74628343d01615cd29a66a",
+      "language": "java",
+      "kind": "vulnerable-by-design",
+      "measure": {
+        "loc_scanned": 63226,
+        "subtotals": {
+          "secrets": 92.602,
+          "code_vulnerabilities": 70.359
+        },
+        "normalized": {
+          "secrets": 11.6459,
+          "code_vulnerabilities": 1.1128
+        },
+        "worst_normalized": 11.6459,
+        "unclamped_overall": -10.1397,
+        "reported_overall": 0.0,
+        "reported_letter": "F",
+        "worst_category": "secrets",
+        "finding_count": 74,
+        "reported_count": 91,
+        "per_severity": {
+          "critical": 7,
+          "high": 4,
+          "medium": 60,
+          "low": 0,
+          "informational": 3
+        },
+        "coverage_status": "partial"
+      },
+      "coverage": {
+        "status": "partial",
+        "required": [],
+        "unverified": [],
+        "failures": [],
+        "scanners": [
+          {
+            "name": "bandit",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "bandit"
+            ],
+            "version": "__main__.py 1.9.4",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "builtin_rules",
+            "outcome": "completed",
+            "command": [],
+            "version": "builtin/0.9.0",
+            "finding_count": 0,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "gitleaks",
+            "outcome": "completed",
+            "command": [
+              "/opt/homebrew/bin/gitleaks"
+            ],
+            "version": "gitleaks version 8.30.1",
+            "finding_count": 46,
+            "reason": null,
+            "scope": "working tree and git history"
+          },
+          {
+            "name": "njsscan",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "njsscan"
+            ],
+            "version": "njsscan: v1.0.0 | Ajin Abraham | opensecurity.in",
+            "finding_count": 19,
+            "reason": null,
+            "scope": null
+          },
+          {
+            "name": "pip_audit",
+            "outcome": "not_applicable",
+            "command": [
+              "/Users/marshallguillory/repos/secure-code-agent/.venv/bin/python",
+              "-m",
+              "pip_audit"
+            ],
+            "version": "pip-audit 2.10.1",
+            "finding_count": 0,
+            "reason": "No supported Python dependency input found; pip-audit skipped.",
+            "scope": null
+          },
+          {
+            "name": "semgrep",
+            "outcome": "completed",
+            "command": [
+              "/Users/marshallguillory/.local/bin/semgrep"
+            ],
+            "version": "1.163.0",
+            "finding_count": 45,
             "reason": null,
             "scope": "offline profile sca-offline@1.2.0 (e861a891559f)"
           },

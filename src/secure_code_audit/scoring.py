@@ -3,8 +3,8 @@
 Implements the model documented in docs/scoring.md:
   · finding_score = severity × confidence × category × top25_bonus
   · category_subtotal = Σ finding_score per category
-  · category_normalized = subtotal / sqrt(LOC / 1000)
-  · category_grade = clamp(5.0 - (normalized × 0.5), 0, 5)
+  · category_normalized = subtotal / (LOC / 1000)
+  · category_grade = clamp(5.0 - (normalized × 1.5), 0, 5)
   · overall = min(category_grades)
 """
 
@@ -47,6 +47,43 @@ CATEGORY_WEIGHT: dict[Category, float] = {
 }
 
 CWE_TOP25_BONUS = 1.25
+
+#: Which scoring model produced a number, for consumers that keep a trend.
+#:
+#: `maintainability-agent` stores this tool's `condition` in its scan history
+#: and has to know when two readings are comparable. A delegated pillar can
+#: change its scoring model **without changing its schema** — same shape, same
+#: fields, a different number for the same repository — which is exactly what
+#: D16 and D17 did. MA previously keyed on our release version, which is
+#: correct but far too broad: it opened a new series on every release,
+#: including ones that changed no scoring, and a signal that fires constantly
+#: teaches people to ignore it.
+#:
+#: **Bump this when a repository's condition could differ for a reason that is
+#: not the repository.** Concretely: the normalizer, the grade slope, any
+#: weight table, the letter bands, the rank discount, `COUNT_LIKE_CATEGORIES`,
+#: the scanner floor, or the built-in rule profile (D10).
+#:
+#: **Do not bump for** documentation, adapters, CLI flags, output formats,
+#: performance, or a parser fix that does not change which findings are
+#: produced.
+#:
+#: A new *rule* does bump it. That was the arguable case and it resolves
+#: against intuition: a repository containing `yaml.unsafe_load` scores lower
+#: the day that rule ships, with no change to the repository. Adding findings
+#: *is* rescoring, because the score is a function of the finding set, and a
+#: user must not read "we can see more now" as "your code got worse".
+#:
+#: **1 is reserved and is never emitted.** It denotes every release before
+#: this field existed, and those releases do not share one model — the
+#: corroboration merge, the rank discount and D16 all moved the numbers. A v1
+#: document simply omits the field and MA keys those on the release version,
+#: which fragments them correctly. Nothing may back-fill a 1.
+#:
+#: `tests/integration/test_scoring_drift.py` holds this honest: it digests the
+#: weights, the bands and the output of the real `score()` over a fixed
+#: matrix, so changing a constant *or* a formula without bumping this fails.
+SCORING_MODEL = 2
 
 
 # --- letter-grade boundaries (mirrors maintainability-agent) ---------------
@@ -173,7 +210,7 @@ def category_subtotal(findings: Iterable[Finding], category: Category) -> float:
 
     A straight sum measures how many times a pattern matched, and that
     tracks codebase size times how talkative the scanner is — not how much
-    risk is in the code. `sqrt(LOC)` was meant to cancel the size half.
+    risk is in the code. The normalizer was meant to cancel the size half.
     Nothing cancelled the other half, and the corpus said so plainly: the
     worst-first ordering read Python → JavaScript → Go/Ruby → Java, which is
     the order of Bandit's verbosity, and Django, FastAPI, httpx and Flask all
@@ -216,15 +253,111 @@ def category_subtotal(findings: Iterable[Finding], category: Category) -> float:
     )
 
 
-def normalize(subtotal: float, loc_scanned: int) -> float:
-    """sqrt(LOC/1000) dampener — see docs/scoring.md for the rationale."""
+#: Categories where a finding is a count rather than a rate.
+#:
+#: One committed credential is one committed credential regardless of how
+#: much code surrounds it. Everything else here — injection sinks, weak
+#: crypto calls, unsafe deserialization — genuinely does scale with how much
+#: code there is, and comparing two repositories on those means comparing
+#: rates. See `normalize` for the measurement that settled which is which.
+COUNT_LIKE_CATEGORIES: frozenset[str] = frozenset({"secrets"})
+
+
+def _category_name(category: Category | str) -> str:
+    return category.value if isinstance(category, Category) else str(category)
+
+
+def normalize(subtotal: float, loc_scanned: int, category: Category | str | None = None) -> float:
+    """Weighted findings per thousand lines of scanned code — a density.
+
+    This was `sqrt(LOC/1000)` and that under-corrected for size, so the
+    ranking followed how *big* a repository is rather than how much is wrong
+    with it. Measured across the examined corpus:
+
+        repo      LOC        weighted findings/kLOC   sqrt-normalized
+        django    144,473    1.51                     18.18  <- ranked worst
+        flask       7,841    3.35                      9.38
+        fastapi    23,764    1.60                      7.81
+
+    Flask carries **2.2x Django's finding density** and normalised at half
+    the value. Django sat fifth by density and first by penalty. Spearman
+    correlation of grade against size was -0.37 while correlation of density
+    against size was +0.12: the number was tracking the wrong variable.
+
+    Straight density fixes the ordering: re-measured over the same corpus
+    after the change, Spearman(LOC, grade) is +0.02, and the worst-ranked
+    repository is the densest one rather than the largest one. The slope
+    moves with it — see `category_grade` — because the two only make sense
+    together.
+
+    **`secrets` is not a density, and D17 is why.** Adding
+    vulnerable-by-design anchors to the corpus exposed the failure directly:
+    OWASP Juice Shop carries four hardcoded API keys and three private keys
+    and graded **B+**, because 115,340 lines of surrounding code divided
+    seven committed credentials down to nothing. Meanwhile Flask, with no
+    secrets at all, graded F. A committed private key is one committed
+    private key whether the repository is a thousand lines or a million; it
+    is a count, not a rate, and dividing it by size is how a training
+    application built to be insecure outscored a well-run library.
+
+    So `secrets` normalizes by `sqrt(LOC/1000)` instead. Not by nothing: a
+    larger codebase genuinely does carry more configuration surface, and an
+    absolute count made Django fail on two low-confidence hits. Measured over
+    the fourteen examined repositories, against whether a repository is
+    maintained or written to be vulnerable:
+
+        variant                       AUC    separation   Spearman(LOC, grade)
+        linear everywhere (D16)       0.80      -3.76            +0.14
+        sqrt everywhere (pre-D16)     0.91      -0.58            -0.32
+        linear; secrets absolute      0.90      +0.00            -0.24
+        linear; secrets sqrt          1.00      +0.65            -0.01   <-
+
+    AUC is the probability that a maintained repository outscores a
+    vulnerable-by-design one. Negative separation means the populations
+    overlap and *no* band table can tell them apart — which is what blocked
+    D5's band edges for as long as the corpus had no bad end in it.
+    """
     if loc_scanned <= 0:
         return subtotal
-    return subtotal / math.sqrt(max(loc_scanned, 1) / 1000)
+    per_kloc = max(loc_scanned, 1) / 1000
+    if category is not None and _category_name(category) in COUNT_LIKE_CATEGORIES:
+        return subtotal / math.sqrt(per_kloc)
+    return subtotal / per_kloc
+
+
+#: Grade points lost per normalized weighted finding.
+#:
+#: The slope only rescales — it cannot reorder anything — so it is chosen
+#: against two things the ordering does not fix: where the median of
+#: well-maintained code lands, and how much of the corpus clamps at 0.0 and
+#: loses its tail.
+#:
+#: 1.3 is the largest slope that keeps the maintained-corpus median inside the
+#: B band [3.00, 3.50) *and* keeps the two populations from touching. Measured
+#: across the range, holding the D17 normalizer fixed:
+#:
+#:     slope   median (maintained)   AUC   separation   clamped at 0
+#:      1.2          3.53 (B+)       1.00     +0.98          4
+#:      1.3          3.41 (B)        1.00     +0.65          4   <- adopted
+#:      1.4          3.28 (B)        1.00     +0.31          4
+#:      1.5          3.16 (B)        0.95     +0.00          5
+#:
+#: At 1.5 a maintained repository joins the four vulnerable-by-design ones at
+#: the clamp, the populations touch, and AUC falls. 1.3 has the widest margin
+#: of the slopes that land the median in B.
+#:
+#: The cost, stated: a large repository with a handful of serious findings
+#: still scores better than a small noisy one. A 135,841-line control carrying
+#: SQL injection, `shell=True`, `pickle.loads`, MD5 and `eval` grades in the
+#: A band. What protects that repository is the default `fail_on_new` gate,
+#: which fails it outright, and the work order, which puts all seven findings
+#: in §FIX. A grade is for comparing and for trend; it was never the thing
+#: that catches a vulnerability. See D16 and D17.
+GRADE_SLOPE = 1.3
 
 
 def category_grade(normalized: float) -> float:
-    return max(0.0, min(5.0, 5.0 - (normalized * 0.5)))
+    return max(0.0, min(5.0, 5.0 - (normalized * GRADE_SLOPE)))
 
 
 # --- overall score ---------------------------------------------------------
@@ -520,7 +653,7 @@ def score(
             per_category[cat] = None
             continue
         subtotal = category_subtotal(findings, cat)
-        per_category[cat] = category_grade(normalize(subtotal, loc_scanned))
+        per_category[cat] = category_grade(normalize(subtotal, loc_scanned, cat))
 
     for f in findings:
         if not f.suppressed:

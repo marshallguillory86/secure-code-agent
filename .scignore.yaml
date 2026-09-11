@@ -21,3 +21,9 @@
     - "*/tests/unit/test_test_tree.py"
   reason: "False positive on source text, not a credential. The generic-api-key heuristic fires on an enum member name followed by an argument in a test that builds a synthetic finding of that category; the redacted match is the expression itself. No credential is present. Renaming the enum to dodge a regex would be the wrong fix. Note the reason above is deliberately paraphrased: quoting the offending expression verbatim here made this file trip the same rule, which the self-audit demonstrated."
   expires: "2027-09-10"
+
+- rule_id: gitleaks.curl-auth-user
+  paths:
+    - "*/tests/unit/test_credential_reference.py"
+  reason: "False positive on a test fixture, and now only in git history. This is the test file for the triage rule that recognises credential *references* -- its fixtures are shell and GitHub Actions variable names, which is the pattern the rule under test exists to recognise as safe. No credential is or was present: the variable spellings are names, and the one credential-shaped string is an invented fake that never authenticated anything. The fixtures are now assembled from parts at runtime so this source carries no matching literal, and a test asserts that; these hits are the earlier committed revision, which gitleaks reads because it scans history as well as the working tree. Not rewriting a pushed branch to hide a false positive. The reason above is deliberately paraphrased -- quoting the expression verbatim is what created the finding in the first place."
+  expires: "2027-09-11"

@@ -15,7 +15,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D2 | Unknown configuration keys are rejected, not ignored | 2026-09-08 | Accepted |
 | D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | Accepted — [built](ma-integration.md) |
 | D4 | A failing security audit fails MA's CI | 2026-09-08 | Accepted |
-| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — examined-set median is 3.38 (B), the target; one normalizer defect left |
+| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | **Closed** by D16 and D17 |
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
 | D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
 | D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
@@ -26,6 +26,10 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D13 | Adapters state their outcome; nothing infers it from a finding's name | 2026-09-09 | Accepted |
 | D14 | Parsers are tested against real captured output, and the gap is declared | 2026-09-09 | Accepted |
 | D15 | A scanner's severity is not a measure of consequence, and nothing may rank on it | 2026-09-11 | Accepted |
+| D16 | The grade is a density, and the gate is what catches a vulnerability | 2026-09-11 | Accepted — amended by D17 |
+| D17 | Calibrated against both populations; `secrets` is a count, and three bands are unmeasurable | 2026-09-11 | Accepted — closes D5 |
+| D18 | Our output is never our input; a variable reference is not a credential | 2026-09-11 | Accepted |
+| D19 | `scoring_model`: the instrument says when it changed, and a digest holds it honest | 2026-09-11 | Accepted — schema v2 |
 
 ---
 
@@ -157,7 +161,12 @@ repository *size*, scoring Django, pytest, black, tornado, httpx, lodash,
 svelte and fastapi all at 0.0/F while a 53-file toy scored 4.6/A. The fix was
 rates, normalized per dimension, calibrated so the corpus median earns a B.
 
-**State: open, and narrowed to one question.** See
+**State: CLOSED — 2026-09-11, by D16 (the normalizer) and D17 (the corpus,
+the `secrets` exception, and what the bands can and cannot mean).** The
+history below is kept because the route matters: each narrowing was wrong in a
+way the next measurement caught, and the register is the record of that.
+
+**State (historical): open, and narrowed to one question.** See
 [`calibration.md`](calibration.md) for the study and
 [`calibration/`](../calibration/README.md) for the harness and pinned corpus.
 
@@ -201,7 +210,7 @@ F to B-, fastapi F to C, requests B- to B+, and none scored lower. The first
 formulation broke P3 — `mean(weight) * sqrt(n)` let nine extra LOW findings
 *improve* a grade — and is pinned against by a monotonicity test.
 
-**Still open, and now concrete.** Django and Flask remain at F because of
+**Open at the time, and now concrete** — closed by D16. Django and Flask remained at F because of
 `sqrt(LOC/1000)`, under which the largest repository in the corpus ranks
 worst: django 15.53 normalized against flask 9.12, inverting to 1.29 and 3.17
 per-kLOC. That is size bias in the normalizer meant to remove it.
@@ -251,7 +260,9 @@ not changed here, because switching to per-kLOC weakens the gate: a synthetic
 `pickle.loads`, `yaml.load`, `eval`, MD5 and hardcoded credentials scores
 0.00 F today and would land near D.
 
-**Still open — band edges.** The centre is now defensible: 4.37 (A−) against
+**Open at the time — band edges** — closed by D17, which found the blocker
+was that this corpus had no bad end to place D and F against. The centre was
+already defensible: 4.37 (A−) against
 MA's 4.0 target. The *distribution* is not — nine repositories at 4.15 or
 better, four at 0.15 or worse, almost nothing between. That cliff comes from
 clamping a linear slope at zero, not from the inputs.
@@ -702,8 +713,12 @@ count, and more findings never improve the score. A failure there means the
 model changed and should be declared, not that something is broken.
 
 **This is not D5.** Pinning an uncalibrated number does not calibrate it.
-These prove the scale is *stable*; nobody has yet established that A+
-corresponds to anything real. D5 remains open.
+These prove the scale is *stable*. What establishes it is *correct* is D17,
+which scores the scale against a corpus carrying both well-maintained code and
+applications written to be vulnerable. Both are needed, and neither
+substitutes for the other: D17 could pass while the scale silently drifted
+between releases, and these pins could pass on a scale that ordered the two
+populations at random.
 
 ## D15 — A scanner's severity is not a measure of consequence
 
@@ -785,3 +800,390 @@ at 6/10 corpus trips, but it is the one input that is not the scanner's own
 opinion. Anything future that needs to rank danger should start there, and
 must be measured against both the corpus and known-vulnerable controls
 before it ships.
+
+---
+
+## D16 — The grade is a density, and the gate is what catches a vulnerability
+
+**Status:** Accepted · 2026-09-11 · supersedes the normalizer half of D5
+
+**Context.** D5 recorded that `sqrt(LOC/1000)` was "an invented normalizer
+with no corpus behind it", and the calibration study then showed what that
+cost. Under it the ranking followed how *big* a repository is rather than how
+much is wrong with it:
+
+| repo | kLOC | weighted findings / kLOC | `sqrt` normalized |
+| --- | ---: | ---: | ---: |
+| django | 144.5 | 1.51 | **18.18** ← ranked worst |
+| flask | 7.8 | **3.35** | 9.38 |
+| fastapi | 23.8 | 1.60 | 7.81 |
+
+Flask carried 2.2× Django's finding density and normalized at half the value.
+Django sat fifth by density and first by penalty. Over the ten examined
+repositories, Spearman correlation of grade against size was **−0.37**, while
+correlation of density against size was **+0.12** — the number was tracking
+size, which is the one thing the dampener exists to remove.
+
+**Decision.** Divide by `LOC/1000` rather than `sqrt(LOC/1000)` — a straight
+density, weighted findings per thousand lines of scanned code — and move the
+grade slope from 0.5 to 1.5 with it. The two only mean anything together.
+
+**Why 1.5.** It is the slope that holds D5's calibration target across the
+examined corpus. Four normalizers were measured on the same pinned run:
+
+```
+  sqrt,   slope 0.5    median 3.36 (B)   F=2   spread 5.00
+  linear, slope 0.5    median 4.40 (A-)  F=0   spread 1.67
+  linear, slope 1.2    median 3.56 (B+)  F=1   spread 4.02
+  linear, slope 1.5    median 3.20 (B)   F=1   spread 5.00   <- adopted
+```
+
+Linear at 0.5 compresses everything into A− and cannot discriminate. 1.5 keeps
+the median in the B band and the full 0-to-5 spread, and fixes the ordering:
+Spearman(LOC, grade) moves **−0.37 → +0.02**, and the worst-ranked repository
+becomes the densest one rather than the largest one.
+
+**The cost, stated rather than discovered later.** A large repository with a
+handful of serious findings scores *better* than it did. Measured on a control
+built for this — 135,841 lines of benign Python plus one module carrying SQL
+injection, `shell=True`, `pickle.loads`, MD5 and `eval`, seven scored findings
+in all:
+
+```
+old model (sqrt, slope 0.5)    3.86  B+
+new model (linear, slope 1.5)  4.71  A
+```
+
+A single HIGH finding in a 100,000-line repository now grades 4.91 — A+. That
+is arithmetically correct for a density and useless as an alarm. Note that the
+old model called the same control B+, so this is a worsening of a number that
+was never safe rather than the loss of one that was.
+
+It is accepted because **the grade was never what catches a vulnerability**,
+and pretending otherwise is what made it dangerous. On that same control, all
+three of the things that do catch it fire — this is the actual output, not a
+description of intent:
+
+- the **work order** puts all seven in §FIX, `B602` first, each with file and
+  line;
+- the report header reads ``**Worst category:** `code_vulnerabilities` ``;
+- the run exits `gate FAIL` on the default `fail_on_new` (D15).
+
+A grade compresses a repository to one number so it can be compared against
+another repository and against itself last week. D15 already established that
+no severity-derived threshold can rank consequence; this records the
+corresponding limit on the score. `docs/scoring.md` now says so in the worked
+example, where the repository with a live SQL injection grades A−.
+
+**Consequences.**
+
+- Every grade the tool has ever emitted moves. Nothing in the wild consumes
+  them yet, so no migration is provided and `history.jsonl` is left alone.
+- `tests/integration/test_scoring_drift.py` passed unchanged through this,
+  because every assertion in it was relational — `< 5.0`, `<= one`, "sorted
+  descending" — and a relational assertion detects inversion, not drift. The
+  model was re-tuned end to end and the drift test said nothing. Pinned
+  values were added; that file's own docstring had promised them.
+- `calibration/calibrate.py` carried its own `sqrt` divisor, its own `0.5`
+  slope, and a flat per-category sum that predated rank-discount saturation.
+  Its subtotal for Django read 488.06 against the product's 218.5. The
+  divisor and slope are imported now and the saturation is pinned by
+  `tests/unit/test_calibration_harness.py`.
+- The study's headline line reported the median over all fourteen corpus
+  repositories, six of which no scanner can read. That reported 4.58 where
+  the examined set sat at 3.20 — P7 broken inside the study that exists to
+  check the scale. It now reports the examined median and names the
+  exclusion.
+
+**Still open at the time — closed by D17.** The letter bands were still
+borrowed from `maintainability-agent` without their own study. D17 gives them
+one, and the answer is partly negative: two edges are measured and three bands
+hold no observation at all.
+
+---
+
+## D17 — Calibrated against both populations; `secrets` is a count, and three bands are unmeasurable
+
+**Status:** Accepted · 2026-09-11 · amends D16 · **closes D5**
+
+**Context.** D16 fixed size bias and I checked it against the only corpus
+there was — fourteen well-maintained OSS projects. `corpus.json` had stated
+the flaw in that from its first version: *"these are all well-maintained OSS
+projects with their own security processes. The distribution measured here is
+cleaner than the population this tool will actually be pointed at."*
+
+A scale with no bad end cannot be calibrated. There is nothing to place D and
+F against, and D5's band question had been open for that reason since
+2026-09-08.
+
+**Decision, part one: the corpus gets a bad end.** Five applications written
+to be vulnerable are pinned alongside the maintained half and tagged
+`kind: vulnerable-by-design` — OWASP PyGoat, NodeGoat, railsgoat, WebGoat and
+Juice Shop. They are cloned and read; none is ever executed. WebGoat is
+included precisely because it stays **unexamined**: D12 records that no
+offline SAST in the floor reads Java, and a deliberately-vulnerable Java
+application reporting a clean score is the sharpest demonstration available of
+why coverage is reported beside the grade and never folded into it.
+
+Two measures come with them. **AUC** is the probability that a maintained
+repository outscores a vulnerable-by-design one — 1.00 is perfect ordering,
+0.50 is a coin toss. **Separation** is the worst maintained grade minus the
+best vulnerable one; negative means the populations overlap and *no* band
+table can tell them apart.
+
+**What the anchors immediately showed: D16 had made it worse.**
+
+```
+                        AUC    separation
+sqrt everywhere         0.91      -0.58
+linear everywhere (D16) 0.80      -3.76
+```
+
+Juice Shop carries four hardcoded API keys and three private keys and graded
+**B+**, while Flask — which has no secrets at all — graded **F**. I had
+recommended the density change without this evidence, because the evidence did
+not exist. It does now.
+
+**Decision, part two: `secrets` is a count, not a rate.** Seven committed
+credentials divided by 115,340 lines is how a training application built to be
+insecure outscored a well-run library. A committed private key is one
+committed private key whether the repository is a thousand lines or a million.
+`secrets` normalizes by `sqrt(LOC/1000)`; every other category keeps the
+straight density D16 established. Damped, not exempted — an absolute count
+failed Django on two low-confidence hits:
+
+```
+variant                     AUC    separation   Spearman(LOC, grade)
+linear everywhere (D16)     0.80      -3.76            +0.14
+sqrt everywhere (pre-D16)   0.91      -0.58            -0.32
+linear; secrets absolute    0.90      +0.00            -0.24
+linear; secrets sqrt        1.00      +0.65            -0.01   <- adopted
+```
+
+The slope moves 1.5 → 1.3 with it. Slope cannot reorder anything, so it is
+chosen on where the median lands and how much of the corpus clamps at 0.0 and
+loses its tail. 1.3 is the largest slope keeping the maintained median inside
+the B band while the populations stay apart.
+
+**A mapping defect found by the same run.** Flask's F was partly doubles.
+Bandit's `B102` (`exec`) was mapped to **CWE-78** — *OS* command injection,
+the shell weakness `B602` covers — and `B307` (`eval`) had no curated entry so
+it inherited the same wrong CWE from Bandit itself. Corroboration merges
+across scanners on a shared CWE, so `B102` and this project's own
+`sca.python.eval` never merged and one `exec(compile(...))` line scored twice.
+Both are now CWE-95, matching the convention semgrep, RuboCop and the built-in
+rules already used. `is_top25` follows the documented ChildOf relationship to
+CWE-94 so that describing the weakness accurately is not what removes its
+Top-25 weight.
+
+**The result, measured on the pinned corpus.**
+
+| | value |
+| --- | ---: |
+| AUC (maintained above vulnerable) | **1.00** |
+| separation | **+1.26** |
+| maintained median | **3.41 (B)** — D5's target |
+| vulnerable median | **0.00 (F)** |
+| Spearman(LOC, grade) | **−0.05** |
+
+All four examined vulnerable-by-design applications grade F. The maintained
+half spans D to A+.
+
+**Decision, part three: three bands cannot be calibrated, and saying so is the
+closure.** Testing every edge against the distribution rather than assuming:
+
+- The **D/F edge at 1.00 falls inside the population gap** (0.00 → 1.26). This
+  is the one edge that carries a decision, and it is measured.
+- The **centre is measured**: well-maintained code medians at 3.41, in B.
+- **A−, B and C contain no observation at all.** Nine bands cannot be
+  supported by ten maintained repositories, and no larger corpus fixes it,
+  because at that end of the scale the difference between two repositories is
+  five findings versus eight in twenty thousand lines. No ground truth says
+  one of those deserves A and the other A+.
+
+So the band edges above D/F are **presentational granularity, not measured
+thresholds**, and this register now says so. A B+ is not meaningfully better
+than an A−. Reading the letter as though it resolves that finely is the
+failure mode, and it is the same one D15 and D16 describe from other angles:
+the score is second class. The work order is the product.
+
+**Consequences.**
+
+- `calibrate.py` reports the two populations apart, with AUC and separation,
+  and refuses to print a pooled median — which would describe neither.
+- The corpus is 19 repositories; a run is roughly six minutes.
+- Cloning deliberately-vulnerable applications is now part of re-running the
+  study. They are training material, they are never executed, and
+  `calibration/.corpus/` is gitignored and excluded from the self-audit.
+- **D5 is closed.**
+
+---
+
+## D18 — Our output is never our input; a variable reference is not a credential
+
+**Status:** Accepted · 2026-09-11 · two precision defects reported from two repositories on one day
+
+### Part one — stored analysis output is not source
+
+`cli._own_artifacts` removes the paths the current run is about to write. That
+already fixed the obvious case: an audit had scored the report it produced —
+446KB of quoted findings, in which gitleaks duly found a "secret" at line
+11,529.
+
+It cannot see a **copy** kept somewhere else, and two independent reports of
+that arrived on the same day:
+
+- this repository scanned `calibration/.corpus`: fourteen cloned third-party
+  projects, 556,808 LOC, 550 findings, all about code that is not ours;
+- `maintainability-agent` scanned `tools/validation/reports/`: 957,219 LOC of
+  stored audit output *about other repositories*, 4,929 findings, which
+  **diluted five genuine criticals to an A−**.
+
+A stored report is the worst possible input. It quotes findings verbatim —
+snippets, redacted secrets and all — so it manufactures findings about
+findings, and it inflates the LOC denominator that decides the grade at the
+same time. Both halves of the error push in the same direction.
+
+**Decision.** Every default output filename is excluded by default, anywhere
+in the tree, plus the `.secure-code/` and `.maintainability/` state
+directories. The patterns are *derived from* `DEFAULT_OUTPUTS` rather than
+written out, so adding an output cannot leave a file this tool writes readable
+by the next run; `tests/unit/test_output_is_never_input.py` enforces that
+structurally, per the standing rule that an identified bug class ships a check
+that blocks its recurrence.
+
+**The deliberate limit.** `vendor/`, `third_party/` and their kin are **not**
+excluded. Vendored code is deployed code, and hiding it by default would
+suppress real vulnerabilities in precisely the place nobody is reading.
+Stored analysis output is not code at all; that distinction is the whole
+basis of this decision, and widening it to "things that are not really ours"
+would give away the thing the tool is for.
+
+An operator with reports under a path we cannot guess still has to configure
+it — which is what MA did.
+
+### Part two — a variable reference is not a credential
+
+`gitleaks.curl-auth-user` fires CRITICAL on `curl -sS -u "$SONAR_TOKEN:"` in a
+GitHub Actions workflow. No credential is present: `$SONAR_TOKEN` is how you
+write *not* putting one there, and it is the recommended idiom. Five
+occurrences on one repository. Reproduced here from a clean fixture, where
+this machine's own pre-commit hook blocked the commit — a third independent
+confirmation.
+
+**This became more expensive the same day.** D17 made `secrets` count-like, so
+one false critical now costs roughly two grade points on a 100,000-line
+repository where it previously cost two tenths. Raising a category's weight
+raises the cost of being wrong in it; this is the matching precision work, and
+it should be read as part of D17 rather than separately.
+
+**Decision.** A `secrets` finding whose source line holds a variable reference
+and no literal credential is demoted to **§REVIEW**, with the reason stated in
+the work order.
+
+It reads the file, because gitleaks runs with `--redact` and the variable name
+is exactly what got redacted — the message reads `curl -sS -u REDACTED`, so
+the distinction is not recoverable from the finding alone. `verify._is_silenced`
+already reads source back for a different question.
+
+**Conservative in both directions, deliberately.**
+
+- **REVIEW, never ACCEPT.** The finding stays in the work order, stays in the
+  report, and still escalates through `fail_on_category: [secrets]` from any
+  axis. Demotion reorders it; it does not silence it.
+- **A reference plus a literal is still a leak.** `curl -u "$USER:hunter2Passw0rd"`
+  is untouched. Half a line done correctly must not launder the other half.
+- **Unreadable means unchanged.** A missing file, a line past the end, a
+  directory, or a finding out of git history whose line the working tree no
+  longer has — every one of those leaves the finding in §FIX. Absence of
+  evidence is not evidence of a reference.
+
+**Known miss, stated.** The literal test is the same dull shape
+`_looks_like_a_credential` uses — twelve or more characters with a digit and
+an uppercase letter — so an all-lowercase hex token such as `a3f9c2b1d4e5` is
+not caught, and a line carrying both it and a variable reference would be
+demoted to REVIEW. The error falls in the safe direction and the finding
+remains visible.
+
+**One note on how it was nearly shipped broken.** The first literal test was
+`[A-Za-z0-9+/_-]{12,}`, which matches `//sonarcloud` inside
+`https://sonarcloud.io/api` — `/` and `+` are base64 alphabet and every URL is
+full of them. Every `curl` line carries a URL, so the demotion would never
+have fired on the one case it was written for. The parametrized test caught it
+on the first run.
+
+---
+
+## D19 — `scoring_model`: the instrument says when it changed
+
+**Status:** Accepted · 2026-09-11 · schema v2 · agreed with the `maintainability-agent` maintainer
+
+**Context.** D16 and D17 changed what a `condition` number means without
+changing the shape of the document carrying it. MA stores that number in its
+scan history, and nothing in the document let it tell the two models apart —
+same schema, same fields, a different number for the same repository. MA's
+D155 closed it by keying trend comparability on our **release version**.
+
+That works and is far too broad. It opens a new series on *every* release of
+this tool, including ones that change no scoring at all, and a signal that
+fires constantly teaches people to ignore it. Documenting the noise in a
+changelog is documenting a defect rather than closing it.
+
+**Decision.** A top-level `scoring_model` integer, and `schema_version` 2.
+
+- **Top-level, not inside `producer`.** `producer` says *who*; this says *what
+  model*. A consumer keying on it should not reach through an identity block.
+- **An integer, not a version string.** The only question is "same or
+  different". An integer cannot be padded, compared as text, or read as
+  ordering that means more than it does.
+- **v2 is v1 plus one field.** Every v1 key keeps its name, type and meaning.
+
+**Where the line falls.** Bump when a repository's condition could differ for
+a reason that is not the repository: the normalizer, the slope, any weight
+table, the letter bands, the rank discount, `COUNT_LIKE_CATEGORIES`, the
+scanner floor, or the built-in rule profile (D10). Do not bump for
+documentation, adapters, CLI flags, output formats, performance, or a parser
+fix that does not change which findings are produced.
+
+**A new rule bumps it, and that was the arguable case.** MA proposed exempting
+rules that "only add findings without rescoring existing ones". That resolves
+the other way by MA's own criterion: a repository containing
+`yaml.unsafe_load` scores lower the day that rule ships, with no change to the
+repository. Adding findings *is* rescoring, because the score is a function of
+the finding set, and a user must not read "we can see more now" as "your code
+got worse". D10 already gives the rule profile an id, a version and a digest,
+so this half is identifiable rather than hand-waved.
+
+**1 is reserved and is never emitted.** It denotes every release before the
+field existed, and those releases do not share one model — the corroboration
+merge, the rank discount and D16 all moved the numbers. A v1 document omits
+the field and MA keys it on the release version, which fragments those
+correctly. Nothing may back-fill a 1.
+
+**A hand-maintained integer is a defect waiting to happen, so it is
+enforced.** This project has already shipped exactly that: `pyproject.toml`
+said 0.4.0 while `__version__` said 0.3.0, and the release verified the half
+that was right. Here the failure is the invisible kind — every field still
+validates while MA splices two models into one line.
+
+`test_scoring_drift.py` therefore digests the weight tables, the bonus, the
+slope, the letter bands, the count-like categories **and the output of the
+real `score()` over a fixed matrix**, and pins that digest to `SCORING_MODEL`.
+Constants are digested for a legible failure; the outputs are digested because
+a formula can change with no constant moving — `normalize()` did exactly that
+today. Both mutations were tested against the check before it was trusted:
+changing `GRADE_SLOPE` and changing the normalizer's exponent each fail it.
+
+Adding a digest row is how a model change is declared. Editing an existing row
+is redefining what that number meant, which is a lie a reviewer can see.
+
+**Rollout, and why there is no deadlock.** MA's reader accepts v1 and v2 and
+keys on `scoring_model` when present, the producer version when absent. So
+MA's reader lands first and nothing breaks while this tool still emits v1;
+this tool then ships v2 whenever it is ready. Neither release blocks the
+other — which is better than the strict ordering D18 recorded, and D18's rule
+still governs any future bump where a consumer cannot fall back.
+
+The v1→v2 transition itself breaks the series once, because the key changes
+shape. That break is honest: it is the boundary where the instrument's
+self-description changed, and it happens once.

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Measure the score distribution over a pinned corpus. The method D5 owes.
 
-`docs/decisions.md` D5 has read "Open — method needed" since 2026-09-08. The
+`docs/decisions.md` D5 read "Open — method needed" from 2026-09-08 until D16
+and D17 closed it on 2026-09-11. The
 letter bands were borrowed from `maintainability-agent` without its calibration
-study, and the `sqrt(LOC/1000)` dampener is an invented normalizer with no
-corpus behind it. Nobody has established that A+ means anything.
+study, and the dampener was an invented normalizer with no corpus behind it.
+Nobody had established that A+ meant anything. D16 settled the normalizer from
+this corpus; the bands themselves are still borrowed.
 
 This is the harness, not the answer. It audits every repository in
 `corpus.json` at its pinned commit with a fixed scanner set, and reports the
@@ -52,8 +54,10 @@ from secure_code_audit.scoring import (  # noqa: E402
     CATEGORY_WEIGHT,
     CONFIDENCE_WEIGHT,
     CWE_TOP25_BONUS,
+    GRADE_SLOPE,
     SEVERITY_WEIGHT,
     letter_grade,
+    normalize,
 )
 
 #: Scanners the study runs. Fixed deliberately: a distribution measured with a
@@ -146,6 +150,35 @@ def _finding_score(finding: dict) -> float:
     return base
 
 
+def _subtotals(findings: list[dict]) -> dict[str, float]:
+    """`scoring.category_subtotal` for every category at once, over JSON.
+
+    **This must stay in step with the product, and twice it has not been.**
+    The harness used to sum each category flat, which was correct until the
+    product started saturating repeats of one rule at `weight / sqrt(k)`;
+    after that the study's subtotal for Django read 488.06 against the
+    product's 218.5 and nothing complained. It also carried its own
+    `sqrt(LOC/1000)` divisor and its own `0.5` slope, both of which the
+    product has since changed.
+
+    The divisor and the slope are now imported rather than copied. The rank
+    discount cannot be imported — `category_subtotal` takes `Finding`
+    objects and a saved report holds dicts — so it is reimplemented here and
+    `tests/unit/test_calibration_harness.py` pins the two against each other.
+    """
+    by_rule: dict[tuple[str, str], list[float]] = {}
+    for finding in findings:
+        key = (finding["category"], finding["rule_id"])
+        by_rule.setdefault(key, []).append(_finding_score(finding))
+
+    subtotals: dict[str, float] = {c.value: 0.0 for c in Category}
+    for (category, _rule), scores in by_rule.items():
+        subtotals[category] += sum(
+            score / math.sqrt(rank) for rank, score in enumerate(sorted(scores, reverse=True), 1)
+        )
+    return subtotals
+
+
 def scored_findings(payload: dict) -> list[dict]:
     """Only what the score actually counted.
 
@@ -160,15 +193,12 @@ def scored_findings(payload: dict) -> list[dict]:
 def measure(payload: dict) -> dict:
     """Per-category subtotals and *unclamped* normalized values."""
     loc = int(payload["score"]["loc_scanned"])
-    subtotals: dict[str, float] = {c.value: 0.0 for c in Category}
-    for finding in scored_findings(payload):
-        subtotals[finding["category"]] += _finding_score(finding)
+    subtotals = _subtotals(scored_findings(payload))
 
-    divisor = math.sqrt(max(loc, 1) / 1000) if loc > 0 else 1.0
-    normalized = {name: value / divisor for name, value in subtotals.items()}
+    normalized = {name: normalize(value, loc, name) for name, value in subtotals.items()}
     # The product clamps this to [0, 5]; the study keeps the raw value so the
     # tail survives. `unclamped_overall` can go negative, and that is the point.
-    unclamped = {name: 5.0 - (value * 0.5) for name, value in normalized.items()}
+    unclamped = {name: 5.0 - (value * GRADE_SLOPE) for name, value in normalized.items()}
     worst = min(unclamped.values()) if unclamped else 5.0
 
     return {
@@ -204,13 +234,10 @@ VARIANTS: dict[str, object] = {
 
 
 def worst_normalized(findings: list[dict], loc: int) -> float:
-    subtotals: dict[str, float] = {}
-    for finding in findings:
-        subtotals[finding["category"]] = subtotals.get(finding["category"], 0.0) + _finding_score(
-            finding
-        )
-    divisor = math.sqrt(max(loc, 1) / 1000)
-    return max((value / divisor for value in subtotals.values()), default=0.0)
+    return max(
+        (normalize(value, loc, name) for name, value in _subtotals(findings).items()),
+        default=0.0,
+    )
 
 
 def variants(reports: Path) -> dict:
@@ -247,7 +274,7 @@ def variants(reports: Path) -> dict:
         "per_repository": rows,
         "median_worst_normalized": medians,
         "median_grade_at_current_slope": {
-            name: round(max(0.0, 5.0 - value * 0.5), 2) for name, value in medians.items()
+            name: round(max(0.0, 5.0 - value * GRADE_SLOPE), 2) for name, value in medians.items()
         },
     }
 
@@ -314,10 +341,53 @@ def examined(row: dict) -> bool:
 
 
 def summarize(rows: list[dict]) -> dict:
+    """Three distributions, because one of them cannot answer the question.
+
+    `examined_overall` is every repository a scanner could read, and it is
+    what the *centre* of the scale is calibrated against. It cannot set the
+    band edges, because the maintained half has no bad end — the corpus
+    comment said so from the first version: "the distribution measured here
+    is cleaner than the population this tool will actually be pointed at."
+
+    So the two populations are reported apart. `maintained_overall` is where
+    well-run OSS lands; `vulnerable_overall` is where applications written to
+    be vulnerable land. A band table is defensible exactly to the extent that
+    those two do not overlap, and D17 records the separation measured here.
+    """
     ok = [r for r in rows if "error" not in r]
     seen = [r for r in ok if r.get("examined")]
     unexamined = [r["name"] for r in ok if not r.get("examined")]
+
+    def by_kind(kind: str) -> list[dict]:
+        return [r for r in seen if (r.get("kind") or "maintained") == kind]
+
+    maintained = by_kind("maintained")
+    vulnerable = by_kind("vulnerable-by-design")
+
+    def grades(subset: list[dict]) -> list[float]:
+        return [r["measure"]["reported_overall"] for r in subset]
+
     return {
+        # The two populations, kept apart. Pooling them would produce a
+        # median describing neither.
+        "maintained": len(maintained),
+        "maintained_overall": percentiles(grades(maintained)) if maintained else None,
+        "maintained_letters": sorted(
+            (r["name"], r["measure"]["reported_letter"]) for r in maintained
+        ),
+        "vulnerable": len(vulnerable),
+        "vulnerable_overall": percentiles(grades(vulnerable)) if vulnerable else None,
+        "vulnerable_letters": sorted(
+            (r["name"], r["measure"]["reported_letter"]) for r in vulnerable
+        ),
+        # The gap between the worst maintained repository and the best
+        # vulnerable-by-design one. Negative means the populations overlap
+        # and no band edge between them can separate them.
+        "separation": (
+            round(min(grades(maintained)) - max(grades(vulnerable)), 4)
+            if maintained and vulnerable
+            else None
+        ),
         "repositories": len(rows),
         "measured": len(ok),
         "failed": [r["name"] for r in rows if "error" in r],
@@ -372,6 +442,7 @@ def main() -> int:
         print(f"[{index}/{len(entries)}] {name} … ", end="", flush=True)
         started = time.time()
         row: dict = {"name": name, "commit": entry["commit"], "language": entry["language"]}
+        row["kind"] = entry.get("kind", "maintained")
         try:
             target = fetch(entry, work)
             payload = audit(target, reports / f"{name}.json", Path(args.config))
@@ -409,12 +480,50 @@ def main() -> int:
 
     print("\n--- distribution ---")
     print(json.dumps(summary, indent=2))
-    median = summary["unclamped_overall"].get("median")
-    if median is not None:
+    # The *examined* median, not the median over all 14. Six repositories in
+    # this corpus have no scanner that can read their language, so they report
+    # zero findings and grade A+ — and including them pulled the headline
+    # median to 4.09 (A-) while the repositories anything actually looked at
+    # sat at 3.20 (B). Reporting the first as "the distribution" is P7 broken
+    # in the study that exists to check the scale.
+    # The *maintained* median, not the pooled one. Once the corpus grew a
+    # vulnerable-by-design half, a median over both described neither
+    # population — it just moved with however many training applications
+    # happened to be in the list.
+    maintained = summary.get("maintained_overall") or {}
+    vulnerable = summary.get("vulnerable_overall") or {}
+    median = maintained.get("median")
+    if median is None:
         print(
-            f"\nMedian unclamped overall {median} → letter "
-            f"{letter_grade(max(0.0, min(5.0, median)))}. "
-            f"A calibrated scale would put this in the B band [3.00, 3.50)."
+            "\nNo maintained repository in this corpus was examined by a scanner "
+            "that reads its language, so there is no distribution to calibrate from."
+        )
+        return 0
+
+    print(
+        f"\nMaintained median: {median} → {letter_grade(max(0.0, min(5.0, median)))} "
+        f"across {summary['maintained']} repositories. "
+        f"The calibration target (D5) is the B band [3.00, 3.50)."
+    )
+    if vulnerable:
+        print(
+            f"Vulnerable-by-design median: {vulnerable.get('median')} → "
+            f"{letter_grade(max(0.0, min(5.0, vulnerable.get('median', 0.0))))} "
+            f"across {summary['vulnerable']} repositories."
+        )
+    separation = summary.get("separation")
+    if separation is not None:
+        verdict = (
+            "the populations do not overlap, so a band edge can separate them"
+            if separation > 0
+            else "THE POPULATIONS OVERLAP — no band table can separate them"
+        )
+        print(f"Separation: {separation:+.2f} — {verdict}.")
+    unexamined = summary["measured"] - summary["examined"]
+    if unexamined:
+        print(
+            f"{unexamined} of {summary['measured']} repositories were not examined "
+            f"and are excluded from every figure above."
         )
     return 0
 
