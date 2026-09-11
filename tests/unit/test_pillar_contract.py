@@ -164,6 +164,49 @@ def test_the_document_is_json_round_trippable(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
+# producer.version is load-bearing
+# ---------------------------------------------------------------------------
+
+
+def test_producer_version_is_the_real_package_version():
+    """Not decoration — MA breaks a trend series on it.
+
+    MA's D155 made `delegated_producers` ("security:secure-code-agent 0.9.0")
+    a comparability field, because a delegated pillar can change its scoring
+    model without changing its schema: same shape, same fields, same
+    `schema_version`, different number for the same repository. MA would
+    otherwise draw one continuous line straight through our D16/D17.
+
+    **This exact field has shipped wrong.** `pyproject.toml` said 0.4.0 while
+    `__version__` said 0.3.0, so the released v0.4.0 wheel stamped 0.3.0 into
+    every artifact including `security-pillar.json`. Under the new gate that
+    is worse than cosmetic: a pillar under-reporting its version makes MA
+    splice two scoring models into one series and call it a trend.
+
+    `test_contract_sync` already holds `pyproject` and `__version__`
+    together. This holds the *document* to the same value, which is the half
+    that reaches MA.
+    """
+    from secure_code_audit import __version__
+
+    assert _document()["producer"]["version"] == __version__
+
+
+def test_producer_tool_is_the_name_ma_keys_on():
+    assert _document()["producer"]["tool"] == "secure-code-agent"
+
+
+def test_producer_version_is_never_empty():
+    """MA treats a document with no version as "same tool, version unknown"
+    and still lets it contribute its producer. An empty string is not that —
+    it is a version claim of nothing, and it would compare equal to the next
+    empty one across a real model change."""
+    version = _document()["producer"]["version"]
+
+    assert version and version.strip() == version
+
+
+# ---------------------------------------------------------------------------
 # The invariant MA cross-checks
 # ---------------------------------------------------------------------------
 
