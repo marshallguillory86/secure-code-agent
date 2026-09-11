@@ -28,6 +28,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D15 | A scanner's severity is not a measure of consequence, and nothing may rank on it | 2026-09-11 | Accepted |
 | D16 | The grade is a density, and the gate is what catches a vulnerability | 2026-09-11 | Accepted — amended by D17 |
 | D17 | Calibrated against both populations; `secrets` is a count, and three bands are unmeasurable | 2026-09-11 | Accepted — closes D5 |
+| D18 | Our output is never our input; a variable reference is not a credential | 2026-09-11 | Accepted |
 
 ---
 
@@ -1014,3 +1015,98 @@ the score is second class. The work order is the product.
   study. They are training material, they are never executed, and
   `calibration/.corpus/` is gitignored and excluded from the self-audit.
 - **D5 is closed.**
+
+---
+
+## D18 — Our output is never our input; a variable reference is not a credential
+
+**Status:** Accepted · 2026-09-11 · two precision defects reported from two repositories on one day
+
+### Part one — stored analysis output is not source
+
+`cli._own_artifacts` removes the paths the current run is about to write. That
+already fixed the obvious case: an audit had scored the report it produced —
+446KB of quoted findings, in which gitleaks duly found a "secret" at line
+11,529.
+
+It cannot see a **copy** kept somewhere else, and two independent reports of
+that arrived on the same day:
+
+- this repository scanned `calibration/.corpus`: fourteen cloned third-party
+  projects, 556,808 LOC, 550 findings, all about code that is not ours;
+- `maintainability-agent` scanned `tools/validation/reports/`: 957,219 LOC of
+  stored audit output *about other repositories*, 4,929 findings, which
+  **diluted five genuine criticals to an A−**.
+
+A stored report is the worst possible input. It quotes findings verbatim —
+snippets, redacted secrets and all — so it manufactures findings about
+findings, and it inflates the LOC denominator that decides the grade at the
+same time. Both halves of the error push in the same direction.
+
+**Decision.** Every default output filename is excluded by default, anywhere
+in the tree, plus the `.secure-code/` and `.maintainability/` state
+directories. The patterns are *derived from* `DEFAULT_OUTPUTS` rather than
+written out, so adding an output cannot leave a file this tool writes readable
+by the next run; `tests/unit/test_output_is_never_input.py` enforces that
+structurally, per the standing rule that an identified bug class ships a check
+that blocks its recurrence.
+
+**The deliberate limit.** `vendor/`, `third_party/` and their kin are **not**
+excluded. Vendored code is deployed code, and hiding it by default would
+suppress real vulnerabilities in precisely the place nobody is reading.
+Stored analysis output is not code at all; that distinction is the whole
+basis of this decision, and widening it to "things that are not really ours"
+would give away the thing the tool is for.
+
+An operator with reports under a path we cannot guess still has to configure
+it — which is what MA did.
+
+### Part two — a variable reference is not a credential
+
+`gitleaks.curl-auth-user` fires CRITICAL on `curl -sS -u "$SONAR_TOKEN:"` in a
+GitHub Actions workflow. No credential is present: `$SONAR_TOKEN` is how you
+write *not* putting one there, and it is the recommended idiom. Five
+occurrences on one repository. Reproduced here from a clean fixture, where
+this machine's own pre-commit hook blocked the commit — a third independent
+confirmation.
+
+**This became more expensive the same day.** D17 made `secrets` count-like, so
+one false critical now costs roughly two grade points on a 100,000-line
+repository where it previously cost two tenths. Raising a category's weight
+raises the cost of being wrong in it; this is the matching precision work, and
+it should be read as part of D17 rather than separately.
+
+**Decision.** A `secrets` finding whose source line holds a variable reference
+and no literal credential is demoted to **§REVIEW**, with the reason stated in
+the work order.
+
+It reads the file, because gitleaks runs with `--redact` and the variable name
+is exactly what got redacted — the message reads `curl -sS -u REDACTED`, so
+the distinction is not recoverable from the finding alone. `verify._is_silenced`
+already reads source back for a different question.
+
+**Conservative in both directions, deliberately.**
+
+- **REVIEW, never ACCEPT.** The finding stays in the work order, stays in the
+  report, and still escalates through `fail_on_category: [secrets]` from any
+  axis. Demotion reorders it; it does not silence it.
+- **A reference plus a literal is still a leak.** `curl -u "$USER:hunter2Passw0rd"`
+  is untouched. Half a line done correctly must not launder the other half.
+- **Unreadable means unchanged.** A missing file, a line past the end, a
+  directory, or a finding out of git history whose line the working tree no
+  longer has — every one of those leaves the finding in §FIX. Absence of
+  evidence is not evidence of a reference.
+
+**Known miss, stated.** The literal test is the same dull shape
+`_looks_like_a_credential` uses — twelve or more characters with a digit and
+an uppercase letter — so an all-lowercase hex token such as `a3f9c2b1d4e5` is
+not caught, and a line carrying both it and a variable reference would be
+demoted to REVIEW. The error falls in the safe direction and the finding
+remains visible.
+
+**One note on how it was nearly shipped broken.** The first literal test was
+`[A-Za-z0-9+/_-]{12,}`, which matches `//sonarcloud` inside
+`https://sonarcloud.io/api` — `/` and `+` are base64 alphabet and every URL is
+full of them. Every `curl` line carries a URL, so the demotion would never
+have fired on the one case it was written for. The parametrized test caught it
+on the first run.
