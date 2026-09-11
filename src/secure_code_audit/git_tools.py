@@ -58,9 +58,25 @@ def _matches(rel: str, name: str, pat: str) -> bool:
     `router/context_test.go` and never `context_test.go`. Gin keeps its tests
     beside the code they test, so three of its four "production" secrets were
     test fixtures at the repository root, and that alone held it at F.
+
+    **The `**/` strip has to happen on the directory branch too.** It did not,
+    and so `**/__pycache__/` matched *nothing*: the branch searched for a
+    literal `/**/__pycache__/` inside the path, and no real path contains
+    `/**/`. A bare `__pycache__/` already matches at any depth, so the two
+    spellings differed by everything — one worked and the one this
+    repository's own config used was inert. `.pyc` files were scanned as
+    source the whole time, and CI caught it only because a compiled test
+    fixture tripped a secrets rule.
+
+    An inert exclude pattern is the worst kind of configuration defect: it
+    reads as intent, it never errors, and the only symptom is findings the
+    operator believed they had excluded.
     """
     if pat.endswith("/"):
-        return rel.startswith(pat) or f"/{pat}" in f"/{rel}/"
+        bare = pat[3:] if pat.startswith("**/") else pat
+        if not bare:  # a lone `**/` would otherwise exclude the entire tree
+            return False
+        return rel.startswith(bare) or f"/{bare}" in f"/{rel}/"
     bare = pat[3:] if pat.startswith("**/") else pat
     return fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(rel, bare) or fnmatch.fnmatch(name, bare)
 
