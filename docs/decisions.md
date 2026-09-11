@@ -29,6 +29,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D16 | The grade is a density, and the gate is what catches a vulnerability | 2026-09-11 | Accepted — amended by D17 |
 | D17 | Calibrated against both populations; `secrets` is a count, and three bands are unmeasurable | 2026-09-11 | Accepted — closes D5 |
 | D18 | Our output is never our input; a variable reference is not a credential | 2026-09-11 | Accepted |
+| D19 | `scoring_model`: the instrument says when it changed, and a digest holds it honest | 2026-09-11 | Accepted — schema v2 |
 
 ---
 
@@ -1110,3 +1111,79 @@ remains visible.
 full of them. Every `curl` line carries a URL, so the demotion would never
 have fired on the one case it was written for. The parametrized test caught it
 on the first run.
+
+---
+
+## D19 — `scoring_model`: the instrument says when it changed
+
+**Status:** Accepted · 2026-09-11 · schema v2 · agreed with the `maintainability-agent` maintainer
+
+**Context.** D16 and D17 changed what a `condition` number means without
+changing the shape of the document carrying it. MA stores that number in its
+scan history, and nothing in the document let it tell the two models apart —
+same schema, same fields, a different number for the same repository. MA's
+D155 closed it by keying trend comparability on our **release version**.
+
+That works and is far too broad. It opens a new series on *every* release of
+this tool, including ones that change no scoring at all, and a signal that
+fires constantly teaches people to ignore it. Documenting the noise in a
+changelog is documenting a defect rather than closing it.
+
+**Decision.** A top-level `scoring_model` integer, and `schema_version` 2.
+
+- **Top-level, not inside `producer`.** `producer` says *who*; this says *what
+  model*. A consumer keying on it should not reach through an identity block.
+- **An integer, not a version string.** The only question is "same or
+  different". An integer cannot be padded, compared as text, or read as
+  ordering that means more than it does.
+- **v2 is v1 plus one field.** Every v1 key keeps its name, type and meaning.
+
+**Where the line falls.** Bump when a repository's condition could differ for
+a reason that is not the repository: the normalizer, the slope, any weight
+table, the letter bands, the rank discount, `COUNT_LIKE_CATEGORIES`, the
+scanner floor, or the built-in rule profile (D10). Do not bump for
+documentation, adapters, CLI flags, output formats, performance, or a parser
+fix that does not change which findings are produced.
+
+**A new rule bumps it, and that was the arguable case.** MA proposed exempting
+rules that "only add findings without rescoring existing ones". That resolves
+the other way by MA's own criterion: a repository containing
+`yaml.unsafe_load` scores lower the day that rule ships, with no change to the
+repository. Adding findings *is* rescoring, because the score is a function of
+the finding set, and a user must not read "we can see more now" as "your code
+got worse". D10 already gives the rule profile an id, a version and a digest,
+so this half is identifiable rather than hand-waved.
+
+**1 is reserved and is never emitted.** It denotes every release before the
+field existed, and those releases do not share one model — the corroboration
+merge, the rank discount and D16 all moved the numbers. A v1 document omits
+the field and MA keys it on the release version, which fragments those
+correctly. Nothing may back-fill a 1.
+
+**A hand-maintained integer is a defect waiting to happen, so it is
+enforced.** This project has already shipped exactly that: `pyproject.toml`
+said 0.4.0 while `__version__` said 0.3.0, and the release verified the half
+that was right. Here the failure is the invisible kind — every field still
+validates while MA splices two models into one line.
+
+`test_scoring_drift.py` therefore digests the weight tables, the bonus, the
+slope, the letter bands, the count-like categories **and the output of the
+real `score()` over a fixed matrix**, and pins that digest to `SCORING_MODEL`.
+Constants are digested for a legible failure; the outputs are digested because
+a formula can change with no constant moving — `normalize()` did exactly that
+today. Both mutations were tested against the check before it was trusted:
+changing `GRADE_SLOPE` and changing the normalizer's exponent each fail it.
+
+Adding a digest row is how a model change is declared. Editing an existing row
+is redefining what that number meant, which is a lie a reviewer can see.
+
+**Rollout, and why there is no deadlock.** MA's reader accepts v1 and v2 and
+keys on `scoring_model` when present, the producer version when absent. So
+MA's reader lands first and nothing breaks while this tool still emits v1;
+this tool then ships v2 whenever it is ready. Neither release blocks the
+other — which is better than the strict ordering D18 recorded, and D18's rule
+still governs any future bump where a consumer cannot fall back.
+
+The v1→v2 transition itself breaks the series once, because the key changes
+shape. That break is honest: it is the boundary where the instrument's
+self-description changed, and it happens once.

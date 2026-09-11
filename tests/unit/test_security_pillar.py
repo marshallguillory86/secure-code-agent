@@ -176,7 +176,9 @@ def test_the_document_carries_both_axes_and_never_their_mean():
     document = pillar_mod.to_dict(built)
 
     assert document["schema"] == "secure-code-agent/security-pillar"
-    assert document["schema_version"] == 1
+    # v2 = v1 plus `scoring_model`; see tests/unit/test_pillar_contract.py,
+    # which pins the whole shape and the release ordering a bump requires.
+    assert document["schema_version"] == 2
     assert document["pillar"] == "security"
     assert document["scope"] == "owned"
     assert document["practice"]["level"] == 4

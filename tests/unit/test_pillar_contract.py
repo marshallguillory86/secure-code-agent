@@ -51,6 +51,7 @@ from secure_code_audit.scoring import score, summarize_axis, verdict
 TOP_LEVEL: dict[str, tuple[type, ...]] = {
     "schema": (str,),
     "schema_version": (int,),
+    "scoring_model": (int,),
     "producer": (dict,),
     "generated": (str,),
     "pillar": (str,),
@@ -118,10 +119,36 @@ def test_the_schema_name_is_what_ma_matches_on():
     assert _document()["schema"] == "secure-code-agent/security-pillar"
 
 
-def test_the_schema_version_is_1():
-    """MA refuses any other value. Changing this is a coordinated release,
-    not an edit."""
-    assert _document()["schema_version"] == 1
+def test_the_schema_version_is_2():
+    """MA refuses an unrecognised value. Changing this is a coordinated
+    release, not an edit — see the module docstring for the order."""
+    assert _document()["schema_version"] == 2
+
+
+def test_v2_is_v1_plus_scoring_model():
+    """The whole shape change, stated as one assertion.
+
+    MA's reader accepts v1 and v2 and keys its trend on `scoring_model` when
+    present, falling back to the producer version when absent. That only
+    works if v2 really is v1 with one field added — if anything else moved,
+    a reader written against that promise reports fields that mean something
+    different.
+    """
+    v1_keys = set(TOP_LEVEL) - {"scoring_model"}
+
+    assert set(_document()) - v1_keys == {"scoring_model"}
+
+
+def test_scoring_model_is_the_declared_one():
+    from secure_code_audit.scoring import SCORING_MODEL
+
+    assert _document()["scoring_model"] == SCORING_MODEL
+
+
+def test_scoring_model_is_never_the_reserved_value():
+    """1 denotes every release before the field existed, and those do not
+    share one scoring model. Emitting it would assert they did."""
+    assert _document()["scoring_model"] >= 2
 
 
 # ---------------------------------------------------------------------------

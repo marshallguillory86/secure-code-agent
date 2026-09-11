@@ -13,26 +13,32 @@ string is the producer's promise about the shape, and guessing past it is how
 a consumer starts reporting fields that mean something different." That is the
 safe failure and a *silent* one.
 
-So a v2 ships in this sequence and no other:
+So a schema bump ships in this sequence and no other:
 
-1. specify the v2 shape and send it to MA;
-2. **MA lands its reader first** and accepts v1 and v2;
-3. only then does this tool emit v2.
+1. specify the new shape and send it to MA;
+2. **MA lands its reader first**, accepting the old version and the new;
+3. only then does this tool emit the new version.
 
-Emitting v2 before MA accepts it leaves the pillar unmeasured for the entire
-window between the two releases, with nothing on either side reporting why.
-MA will not pre-accept an unspecified v2, which is correct for the same reason
-this rule exists. Agreed with the MA maintainer 2026-09-11; see D18 and MA's
+Emitting first leaves the pillar unmeasured for the entire window between the
+two releases, with nothing on either side reporting why. MA will not
+pre-accept an unspecified shape, which is correct for the same reason this
+rule exists. Agreed with the MA maintainer 2026-09-11; see D18, D19 and MA's
 D155.
 
-**`producer.version` is load-bearing and is not ours alone.** MA's D155 keys
-trend comparability on it, because a delegated pillar can change its scoring
-model without changing its schema — which is exactly what D16 and D17 did.
-A new MA series opens on *every* release of this tool, including releases that
-change no scoring; that over-breaking is agreed and documented on MA's side.
-It means a wrong version here silently splices two scoring models into one
-trend, so `tests/unit/test_pillar_contract.py` pins the field to
-`__version__` rather than merely to `str`.
+**v2 is live and was cut this way.** It is v1 plus one field, `scoring_model`
+— every v1 key keeps its name, type and meaning. MA's reader accepts v1 and
+v2 and keys its trend on `scoring_model` when present, falling back to the
+producer version when absent, so its reader could land before this tool
+emitted anything and no document was ever refused.
+
+**`scoring_model` is load-bearing and is not ours alone.** MA keys trend
+comparability on it, because a delegated pillar can change its scoring model
+without changing its schema — which is exactly what D16 and D17 did. A wrong
+value here silently splices two scoring models into one trend and presents it
+as knowledge, so `tests/integration/test_scoring_drift.py` digests the weights,
+the bands and the real `score()` output and fails when the model moves without
+the integer. `producer.version` remains pinned to `__version__` for the same
+reason, since it is still the key for any v1 document.
 
 **Everything structural here is MA's and is reused deliberately.** The scope
 vocabulary, the two-axis split, the posture matrix and its thresholds all come
@@ -70,7 +76,7 @@ from typing import Any
 from secure_code_audit import __version__
 from secure_code_audit.practice import PracticeLevel
 from secure_code_audit.scanner_status import CoverageReport, CoverageStatus
-from secure_code_audit.scoring import AxisReport, ScoreReport, Verdict
+from secure_code_audit.scoring import SCORING_MODEL, AxisReport, ScoreReport, Verdict
 
 #: MA's matrix thresholds, imported by value because the two tools must agree
 #: on where the cells fall. `_pillars.py` holds the originals.
@@ -180,8 +186,24 @@ def to_dict(pillar: SecurityPillar) -> dict[str, Any]:
     """The document MA reads. Both axes present, their mean absent."""
     return {
         "schema": "secure-code-agent/security-pillar",
-        "schema_version": 1,
+        # v2 = v1 plus `scoring_model`. Nothing else moved: every v1 key keeps
+        # its name, its type and its meaning.
+        "schema_version": 2,
         "producer": {"tool": "secure-code-agent", "version": __version__},
+        # Which scoring model produced `condition`, for a consumer keeping a
+        # trend. Deliberately top-level rather than inside `producer`:
+        # `producer` says *who*, this says *what model*, and a consumer keying
+        # on it should not have to reach through an identity block.
+        #
+        # An integer, not a version string, because the only question is "same
+        # or different" — an integer cannot be padded, or compared as text, or
+        # read as ordering that means more than it does.
+        #
+        # MA keyed this on our release version before, which is correct and far
+        # too broad: a new series opened on every release, including ones that
+        # changed no scoring, and a signal that fires constantly teaches people
+        # to ignore it.
+        "scoring_model": SCORING_MODEL,
         "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "pillar": "security",
         "scope": SCOPE,

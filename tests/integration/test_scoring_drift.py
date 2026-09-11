@@ -43,7 +43,7 @@ from secure_code_audit.scanner_status import (
     ScannerOutcome,
     evaluate_coverage,
 )
-from secure_code_audit.scoring import letter_grade, score
+from secure_code_audit.scoring import SCORING_MODEL, letter_grade, score
 
 
 def _finding(
@@ -317,3 +317,91 @@ def test_secrets_are_damped_relative_to_everything_else():
     ).overall
 
     assert secret < sink
+
+
+# --------------------------------------------------------------------------
+# The declared scoring model must match the actual one
+# --------------------------------------------------------------------------
+#
+# `SCORING_MODEL` is a hand-maintained integer, and a number a human must
+# remember to bump will eventually not get bumped. This project has already
+# shipped that exact defect once: `pyproject.toml` said 0.4.0 while
+# `__version__` said 0.3.0, and the release verified the half that was right.
+#
+# The failure here is the bad kind. If the model changes and the integer does
+# not, `maintainability-agent` splices two scoring models into one series and
+# presents it as a trend — invisibly, because every field still validates.
+#
+# So the integer is pinned to a digest of the model itself: the weight tables,
+# the bonus, the slope, the letter bands, the count-like categories, and the
+# output of the real `score()` over a fixed matrix. Constants are digested for
+# a legible failure; the outputs are digested because a formula can change
+# with no constant moving — `normalize()` did exactly that.
+
+
+def _model_digest() -> str:
+    import hashlib
+
+    from secure_code_audit.scoring import (
+        CATEGORY_WEIGHT,
+        CONFIDENCE_WEIGHT,
+        COUNT_LIKE_CATEGORIES,
+        CWE_TOP25_BONUS,
+        GRADE_SLOPE,
+        SEVERITY_WEIGHT,
+    )
+
+    parts: list[str] = [
+        f"severity={sorted((k.value, v) for k, v in SEVERITY_WEIGHT.items())}",
+        f"confidence={sorted((k.value, v) for k, v in CONFIDENCE_WEIGHT.items())}",
+        f"category={sorted((k.value, v) for k, v in CATEGORY_WEIGHT.items())}",
+        f"top25_bonus={CWE_TOP25_BONUS}",
+        f"slope={GRADE_SLOPE}",
+        f"count_like={sorted(COUNT_LIKE_CATEGORIES)}",
+        f"bands={[letter_grade(v / 100) for v in range(0, 501)]}",
+    ]
+    # The formula, exercised rather than described.
+    for category in sorted(Category, key=lambda c: c.value):
+        for severity in sorted(Severity, key=lambda s: s.value):
+            for loc in (1_000, 10_000, 100_000, 1_000_000):
+                findings = [
+                    _finding(severity=severity, category=category, line=n) for n in range(1, 4)
+                ]
+                value = score(findings, loc_scanned=loc).overall
+                parts.append(f"{category.value}/{severity.value}/{loc}={value:.6f}")
+
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+#: digest → the `SCORING_MODEL` that produced it.
+#:
+#: Adding a row is how a model change is declared. Editing an existing row is
+#: redefining what that model number meant, which is a lie a reviewer can see.
+_MODEL_DIGESTS: dict[int, str] = {
+    2: "2488327bbd1ace3e",  # D16 + D17: density normalizer, secrets count-like, slope 1.3
+}
+
+
+def test_the_declared_scoring_model_matches_the_actual_model():
+    """If this fails, the scoring model changed.
+
+    Bump `SCORING_MODEL`, add a row to `_MODEL_DIGESTS` for the new number,
+    and leave the old rows alone. Then tell the `maintainability-agent`
+    maintainer, because MA opens a new trend series at that boundary and its
+    CI pins this tool by exact version.
+    """
+    assert SCORING_MODEL in _MODEL_DIGESTS, (
+        f"SCORING_MODEL is {SCORING_MODEL} with no recorded digest; add one"
+    )
+    assert _model_digest() == _MODEL_DIGESTS[SCORING_MODEL], (
+        "the scoring model changed but SCORING_MODEL did not. A consumer "
+        "keeping a trend will splice the old and new models into one line "
+        "and call it knowledge. Bump SCORING_MODEL and add a digest row."
+    )
+
+
+def test_the_reserved_model_number_is_never_emitted():
+    """1 denotes "before this field existed", and those releases do not share
+    one model. Back-filling a 1 would assert they did."""
+    assert SCORING_MODEL >= 2
+    assert 1 not in _MODEL_DIGESTS

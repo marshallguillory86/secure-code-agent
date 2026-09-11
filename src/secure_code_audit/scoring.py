@@ -48,6 +48,43 @@ CATEGORY_WEIGHT: dict[Category, float] = {
 
 CWE_TOP25_BONUS = 1.25
 
+#: Which scoring model produced a number, for consumers that keep a trend.
+#:
+#: `maintainability-agent` stores this tool's `condition` in its scan history
+#: and has to know when two readings are comparable. A delegated pillar can
+#: change its scoring model **without changing its schema** — same shape, same
+#: fields, a different number for the same repository — which is exactly what
+#: D16 and D17 did. MA previously keyed on our release version, which is
+#: correct but far too broad: it opened a new series on every release,
+#: including ones that changed no scoring, and a signal that fires constantly
+#: teaches people to ignore it.
+#:
+#: **Bump this when a repository's condition could differ for a reason that is
+#: not the repository.** Concretely: the normalizer, the grade slope, any
+#: weight table, the letter bands, the rank discount, `COUNT_LIKE_CATEGORIES`,
+#: the scanner floor, or the built-in rule profile (D10).
+#:
+#: **Do not bump for** documentation, adapters, CLI flags, output formats,
+#: performance, or a parser fix that does not change which findings are
+#: produced.
+#:
+#: A new *rule* does bump it. That was the arguable case and it resolves
+#: against intuition: a repository containing `yaml.unsafe_load` scores lower
+#: the day that rule ships, with no change to the repository. Adding findings
+#: *is* rescoring, because the score is a function of the finding set, and a
+#: user must not read "we can see more now" as "your code got worse".
+#:
+#: **1 is reserved and is never emitted.** It denotes every release before
+#: this field existed, and those releases do not share one model — the
+#: corroboration merge, the rank discount and D16 all moved the numbers. A v1
+#: document simply omits the field and MA keys those on the release version,
+#: which fragments them correctly. Nothing may back-fill a 1.
+#:
+#: `tests/integration/test_scoring_drift.py` holds this honest: it digests the
+#: weights, the bands and the output of the real `score()` over a fixed
+#: matrix, so changing a constant *or* a formula without bumping this fails.
+SCORING_MODEL = 2
+
 
 # --- letter-grade boundaries (mirrors maintainability-agent) ---------------
 
