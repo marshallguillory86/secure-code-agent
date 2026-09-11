@@ -80,7 +80,7 @@ will review.
 """
 
 
-def generate(findings: Iterable[Finding]) -> str:
+def generate(findings: Iterable[Finding], root: Path | None = None) -> str:
     """Build the full remediation prompt. Operators write the output to a
     file and hand it to their agent (Claude Code, Codex, Cursor, Copilot)."""
     actionable = [f for f in findings if not f.suppressed and f.severity != Severity.INFORMATIONAL]
@@ -114,13 +114,13 @@ def generate(findings: Iterable[Finding]) -> str:
         key=lambda f: (-f.severity.rank, f.file_path.as_posix(), f.line_start),
     )
     for n, f in enumerate(sorted_findings, start=1):
-        parts.append(_finding_block(n, f))
+        parts.append(_finding_block(n, f, root))
 
     parts.append(_footer())
     return "\n".join(parts)
 
 
-def _finding_block(n: int, f: Finding) -> str:
+def _finding_block(n: int, f: Finding, root: Path | None = None) -> str:
     lines: list[str] = []
     lines.append(f"### Finding {n}: `{f.rule_id}` — {f.short_desc or f.message[:120]}")
     lines.append("")
@@ -138,7 +138,7 @@ def _finding_block(n: int, f: Finding) -> str:
     lines.append(f"- **Category:** `{f.category.value}`")
     lines.append("")
     lines.append(
-        f"**Location:** `{f.file_path.as_posix()}:{f.line_start}"
+        f"**Location:** `{_display_path(f.file_path, root)}:{f.line_start}"
         + (f"-{f.line_end}" if f.line_end and f.line_end != f.line_start else "")
         + "`"
     )
@@ -164,5 +164,24 @@ def _footer() -> str:
     )
 
 
-def write(findings: Iterable[Finding], path: Path) -> None:
-    path.write_text(generate(findings), encoding="utf-8")
+def _display_path(path: Path, root: Path | None) -> str:
+    """Repository-relative, because a work order gets pasted somewhere else.
+
+    Finding paths are absolute by design — every consumer that asks "where
+    is this?" needs them anchored to the audited tree. But an absolute path
+    is the wrong thing to hand a person or an agent: it names one machine's
+    checkout, and `/private/tmp/.../scratchpad/wo/src/app.py:13` is not a
+    location anyone can act on.
+    """
+    if root is None or not path.is_absolute():
+        return path.as_posix()
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        # Outside the tree — an imported SARIF from another machine. Leave
+        # it absolute rather than inventing a relative path that is wrong.
+        return path.as_posix()
+
+
+def write(findings: Iterable[Finding], path: Path, root: Path | None = None) -> None:
+    path.write_text(generate(findings, root), encoding="utf-8")

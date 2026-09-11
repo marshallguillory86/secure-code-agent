@@ -424,6 +424,7 @@ def _do_audit(args: argparse.Namespace) -> int:
         verdict,
         axes,
         security_pillar,
+        root,
     )
     if args.bump_baseline:
         baseline_mod.write(baseline_path, all_findings, baseline)
@@ -717,7 +718,17 @@ def _ingest_sarif_imports(specs: list[str]) -> tuple[list[Finding], list[Scanner
 
 
 def _write_outputs(
-    paths, findings, score, gate, coverage, ran, unavailable, verdict, axes=(), pillar=None
+    paths,
+    findings,
+    score,
+    gate,
+    coverage,
+    ran,
+    unavailable,
+    verdict,
+    axes=(),
+    pillar=None,
+    root: Path | None = None,
 ) -> None:
     if paths.markdown is not None:
         renderers.write_markdown(
@@ -730,7 +741,7 @@ def _write_outputs(
     if paths.comment is not None:
         renderers.write_pr_comment(findings, score, gate, paths.comment, coverage, verdict)
     if paths.prompt is not None:
-        remediation.write(findings, paths.prompt)
+        remediation.write(findings, paths.prompt, root)
     # The artifact maintainability-agent ingests (D3). Written last because it
     # is the only output that carries both axes plus the practice level.
     if paths.security_pillar is not None and pillar is not None:
@@ -765,22 +776,47 @@ class _OutputPaths:
 
 
 def _resolve_outputs(args: argparse.Namespace, cfg: config_mod.Config, root: Path) -> _OutputPaths:
-    """CLI flags override config defaults. A flag value of None means
-    'don't emit this format' — by default we emit Markdown only, and
-    other outputs are opt-in via CLI flag or explicit config."""
+    """CLI flags override config, which overrides the built-in defaults.
 
-    def _p(flag_value) -> Path | None:
+    **The remediation prompt is written by default, alongside the report.**
+    It is the output that changes the code; the report is the output that
+    describes it. Only the report used to be written, and the prompt was
+    reachable solely by passing `--prompt-output` — so the artifact that
+    fixes things was off unless you knew to ask, and the artifact that
+    grades things was always on. That is backwards.
+
+    `outputs.prompt_path` was already declared in `DEFAULT_OUTPUTS` and this
+    resolver never read it, so configuring it did nothing either. Four of
+    the six keys were dead the same way. Every key is honoured now; an
+    operator who wants a format off sets it to `null`.
+
+    SARIF, JSON and the PR comment stay off unless asked, because they are
+    for other systems to consume rather than for the person at the terminal,
+    and writing five files into every audited tree by default is its own
+    kind of rude.
+    """
+
+    #: Written on every run without being asked for.
+    always = {"markdown_path", "prompt_path"}
+    #: What the operator actually wrote, as opposed to what they inherited.
+    declared = (cfg.raw.get("outputs") or {}) if isinstance(cfg.raw, dict) else {}
+
+    def _p(flag_value, key: str) -> Path | None:
         if flag_value is not None:
             return (root / flag_value).resolve()
+        if key in always or key in declared:
+            configured = cfg.outputs.get(key)
+            if configured:
+                return (root / configured).resolve()
         return None
 
     return _OutputPaths(
-        markdown=_p(args.output or cfg.outputs.get("markdown_path")),
-        json_out=_p(args.json_output),
-        sarif=_p(args.sarif_output),
-        comment=_p(args.comment_output),
-        prompt=_p(args.prompt_output),
-        security_pillar=_p(args.security_pillar),
+        markdown=_p(args.output, "markdown_path"),
+        json_out=_p(args.json_output, "json_path"),
+        sarif=_p(args.sarif_output, "sarif_path"),
+        comment=_p(args.comment_output, "comment_path"),
+        prompt=_p(args.prompt_output, "prompt_path"),
+        security_pillar=_p(args.security_pillar, "security_pillar_path"),
     )
 
 
