@@ -210,18 +210,31 @@ RULE_ALIASES: dict[str, dict[str, str]] = {
 def _merge_key(finding: Finding) -> tuple:
     """What makes two reports the same report.
 
-    The CWE is the discriminator wherever one is mapped: two checks at one
-    line with different CWEs are two weaknesses and both are kept. Where no
-    CWE is mapped — most of Bandit — the alias table is the only safe signal,
-    so the rule id stands in and nothing merges unless it is listed there.
+    **The alias table outranks the CWE.** Two rules declared aliases of each
+    other are the same check, whatever CWEs upstream files them under, and
+    upstream does not always agree with itself: Bandit files `mark_safe` as
+    CWE-79 under B308 and CWE-80 under B703 — cross-site scripting and
+    "improper neutralization of script-related tags", two names for one
+    check firing on one expression.
+
+    That ordering was the other way round and it silently undid this whole
+    function. The alias table worked only while Bandit's CWEs were being
+    discarded; the moment they were read, every aliased pair acquired two
+    different CWEs and stopped merging. Django went back to counting
+    `mark_safe` twice — 56 B703 and 51 B308 over 50 shared lines — and the
+    corpus caught it, not the unit tests, which pin behaviour for rules that
+    have no CWE.
+
+    Otherwise the CWE is the discriminator: two checks at one line with
+    different CWEs are two weaknesses and both are kept. With no CWE and no
+    alias entry we do not know they are the same, so nothing merges.
     """
     alias = RULE_ALIASES.get(finding.scanner, {})
-    rule = alias.get(finding.rule_id, finding.rule_id)
-    return (
-        finding.file_path.as_posix(),
-        finding.line_start,
-        finding.canonical_cwe or f"{finding.scanner}:{rule}",
-    )
+    if finding.rule_id in alias or finding.rule_id in set(alias.values()):
+        discriminator = f"{finding.scanner}:{alias.get(finding.rule_id, finding.rule_id)}"
+    else:
+        discriminator = finding.canonical_cwe or f"{finding.scanner}:{finding.rule_id}"
+    return (finding.file_path.as_posix(), finding.line_start, discriminator)
 
 
 def merge_corroborating(findings: Iterable[Finding]) -> list[Finding]:

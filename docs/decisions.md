@@ -15,7 +15,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D2 | Unknown configuration keys are rejected, not ignored | 2026-09-08 | Accepted |
 | D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | Accepted — [built](ma-integration.md) |
 | D4 | A failing security audit fails MA's CI | 2026-09-08 | Accepted |
-| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — [study run](calibration.md); inputs answered, band edges owed |
+| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — examined-set median is 3.38 (B), the target; one normalizer defect left |
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
 | D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
 | D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
@@ -181,19 +181,74 @@ condition. Secrets are no longer force-scored onto the primary axis — nothing
 static separates a live credential from a test certificate, so they are gated
 from any axis rather than graded from all of them.
 
-**What is left is not noise, and that is the finding.** Four repositories
-remain at F and every contributing finding was inspected individually. They
-are **true positives**: Django's `exec()` in `commands/shell.py`, its MD5 in
-`auth/hashers.py`, its `mark_safe` in the framework that defines `mark_safe`;
-Flask's `exec()` config loader and SHA-1 session tag; FastAPI's 81 bare
-`assert`s. Django is graded F because it is a framework whose job is to do
-dangerous things safely.
+**An earlier revision of this entry claimed the residue was all true
+positives and that the remaining question was what a grade should mean. That
+was wrong.** Checking that a construct is present is not checking that a
+defect is present. Django's "hardcoded passwords" are `EMAIL_HOST_PASSWORD =
+""` and `SECRET_KEY = ""` — empty defaults. Its "SQL injection" hits include
+an `ImproperlyConfigured` error message and a parameterised `cursor.execute`.
+Its 56 `mark_safe` hits are the admin rendering its own escaped output.
 
-That is the distance between *"contains dangerous constructs"* and *"is
-insecure"*, and no pattern-narrowing closes it — the constructs really are
-there. The product already has the mechanism for that distance: a baseline,
-and suppressions with a required note. What it lacks is a decision about
-whether an *untriaged* run of a framework should read F.
+A tool that grades Django, FastAPI, httpx and Flask all F is measuring how
+talkative Bandit is on large Python codebases. That is the failure this
+decision exists to prevent, and it was a defect to fix rather than a
+judgement call to escalate.
+
+**Fixed: repeats of one rule saturate.** Sorted worst-first, a rule's k-th
+hit counts `weight / sqrt(k)`. Repositories at F went from four to two, httpx
+F to B-, fastapi F to C, requests B- to B+, and none scored lower. The first
+formulation broke P3 — `mean(weight) * sqrt(n)` let nine extra LOW findings
+*improve* a grade — and is pinned against by a monotonicity test.
+
+**Still open, and now concrete.** Django and Flask remain at F because of
+`sqrt(LOC/1000)`, under which the largest repository in the corpus ranks
+worst: django 15.53 normalized against flask 9.12, inverting to 1.29 and 3.17
+per-kLOC. That is size bias in the normalizer meant to remove it.
+
+**Corpus coverage was the blocker, and fixing it largely answered the
+question.** Six of fourteen repositories were scoring near-perfectly because
+they were *unexamined* rather than clean. Two causes, and only one was
+structural:
+
+*Environment.* `njsscan` and `rubocop` were simply not installed, so
+JavaScript and Ruby had no scanner that reads them. Python repositories were
+producing 712 to 5,107 real findings each against nought to four for
+everything else — three orders of magnitude, none of it about those projects
+being cleaner. Installing both moved `axios` 5.00 → 4.38, `lodash`
+4.59 → 4.48 and `sinatra` 3.10 → 2.79.
+
+*Structural, and already decided.* D12 records why Go and Java cannot be
+read at all: gosec analyses Go by invoking the target's own build tooling,
+PMD covers none of the patterns, SpotBugs needs compiled bytecode. Four
+repositories stay unreadable.
+
+Those four were still in the median and holding it up — **their own median is
+5.00**, four perfect scores for repositories nobody looked at. The study now
+applies the product's own rule to itself (P7: score only where enough was
+examined) and reports the distribution over the examined set, naming what it
+left out.
+
+| set | n | median |
+| --- | ---: | --- |
+| examined | 10 | **3.38** |
+| unexamined | 4 | 5.00 |
+| all fourteen | 14 | 4.37 |
+
+**3.38 is in the B band, which is the target.** `maintainability-agent`
+calibrates so a mature-OSS corpus medians at a B, this corpus does so
+already, and the spread across the examined ten runs 0.00, 0.44, 2.47, 2.58,
+2.79, 3.98, 4.38, 4.48, 4.61, 5.00 — a distribution rather than the cliff it
+was this morning. No band edge needs moving to achieve that.
+
+**What remains is one repository, not the scale.** Django still reads 0.00
+under `sqrt(LOC/1000)`, which ranks the largest repository in the corpus
+worst — 15.53 normalized against Flask's 9.12, inverting to 1.29 and 3.17
+per-kLOC. That is size bias in the normalizer meant to remove it, and it is
+now a single identified defect rather than an uncalibrated scale. It is still
+not changed here, because switching to per-kLOC weakens the gate: a synthetic
+1,939-line repository carrying SQL injection, command injection,
+`pickle.loads`, `yaml.load`, `eval`, MD5 and hardcoded credentials scores
+0.00 F today and would land near D.
 
 **Still open — band edges.** The centre is now defensible: 4.37 (A−) against
 MA's 4.0 target. The *distribution* is not — nine repositories at 4.15 or

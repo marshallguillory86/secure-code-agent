@@ -34,7 +34,7 @@ the tool correctly refused. Hence this README.
 **`calibrate.py`** — audits each repository through the real CLI and
 recomputes per-category subtotals from the findings.
 
-## Four choices that move the result
+## Five choices that move the result
 
 Stated here so they can be argued with, rather than discovered in the numbers.
 
@@ -57,11 +57,52 @@ Stated here so they can be argued with, rather than discovered in the numbers.
    first-run output, which is the worst case by construction. It is also why
    four frameworks sit at F on true positives they would ordinarily accept —
    see [`docs/calibration.md`](../docs/calibration.md).
-4. **Scorecard and gosec are not in the scanner set.** Scorecard is
+4. **The distribution is computed over repositories a language scanner
+   actually read.** The rest are measured, listed, and kept out — see
+   "Unexamined is not clean" below.
+5. **Scorecard and gosec are not in the scanner set.** Scorecard is
    repository-cadence and needs a GitHub token; gosec needs each project's own
    Go toolchain ([D12](../docs/decisions.md)). Including a tool that runs for
    some repositories and not others would put the difference into the
    distribution.
+
+## Unexamined is not clean
+
+**`njsscan` and `rubocop` must be installed for a valid run.** Without them
+JavaScript and Ruby have no scanner that reads them, and the study cannot
+tell a clean repository from an unread one.
+
+```
+pip install njsscan
+gem install rubocop          # 1.28.2 is enough
+```
+
+The difference is not subtle. Before they were installed, Python
+repositories produced 712 to 5,107 real findings each while JavaScript, Ruby,
+Go and Java produced nought to four — three orders of magnitude, and none of
+it about those projects being cleaner. Installing the two moved `axios`
+5.00 → 4.38, `lodash` 4.59 → 4.48 and `sinatra` 3.10 → 2.79.
+
+**Go and Java cannot be fixed this way, and that is [D12](../docs/decisions.md).**
+gosec analyses Go by invoking the target's own build tooling and fails
+without the Go toolchain on the host; PMD covers none of the patterns and
+SpotBugs needs compiled bytecode. Four repositories — `gin`, `logrus`,
+`gson`, `commons-lang` — are therefore unreadable by this floor.
+
+They were still in the median, and they were holding it up. Their own median
+is **5.00**: four perfect scores for repositories nobody looked at.
+
+| set | n | median |
+| --- | ---: | --- |
+| examined | 10 | **3.38** |
+| unexamined | 4 | 5.00 |
+| all fourteen | 14 | 4.37 |
+
+The product refuses to grade what it did not examine (P7). A study that
+computes percentiles over repositories in the same position is doing the
+thing the product refuses to do, so `summarize()` reports
+`examined_overall` alongside the whole-corpus figures and names the
+repositories it left out. **Band edges come from the examined set.**
 
 ## Why subtotals are recomputed rather than read
 

@@ -114,21 +114,132 @@ Four repositories remain at F. Every contributing finding was inspected.
 
 They floor at `normalized = 10`.
 
-**None of these are false positives.** Django's `exec()` calls are in
-`commands/shell.py`, its MD5 in `auth/hashers.py` and the SQLite `MD5()` SQL
-function, its `mark_safe` in the framework that *defines* `mark_safe`. Flask's
-`exec()` loads config from a Python file; its SHA-1 tags sessions. FastAPI's 81
-bare `assert`s are bare `assert`s.
+**An earlier version of this section called these true positives. That was
+wrong, and it is the error that kept the floor in place for a day.**
 
-Django is graded F because **it is a framework whose job is to do dangerous
-things safely**. That is the distance between *"contains dangerous
-constructs"* and *"is insecure"*, and no amount of pattern-narrowing closes
-it — the constructs really are there.
+Checking that a construct is present is not checking that a defect is
+present, and the two were conflated. Inspecting the actual matches:
+
+- Django's `B105 hardcoded password` hits are `EMAIL_HOST_PASSWORD = ""` and
+  `SECRET_KEY = ""` — **empty strings**, the framework's own defaults.
+- Django's `B608 SQL injection` hits include
+  `raise ImproperlyConfigured('Cannot determine PostGIS version for …')`, an
+  error message containing no SQL, and
+  `cursor.execute("SELECT %s, %s, %s FROM %s …")`, which is parameterised.
+- Django's 56 `mark_safe` hits are the admin rendering its own escaped
+  output, in the framework that *defines* `mark_safe`.
+
+Some are genuine — Flask's `exec()` config loader, Django's `exec()` in
+`commands/shell.py`, the MD5 in `auth/hashers.py`. Most are not. Reporting
+them all as real defects and then reasoning about what F "means" was
+answering the wrong question: a tool that grades Django, FastAPI, httpx and
+Flask all F is measuring how talkative Bandit is on large Python codebases,
+which is the exact failure D5 was raised to prevent.
 
 The product already has the mechanism for that distance: a baseline, and
 suppressions with a required note. What it does not have is a decision about
 whether an *untriaged* run of a framework should read F. That is a product
 decision, not an arithmetic one.
+
+## What the correction bought, and what is still wrong
+
+Repeats of one rule now saturate: sorted worst-first, the k-th hit of a rule
+counts `weight / sqrt(k)`. One rule firing 56 times is one fact observed 56
+times, not 56 independent defects. Distinct rules still add in full.
+
+| repo | before | after |
+| --- | --- | --- |
+| httpx | 0.13 **F** | 2.58 B- |
+| fastapi | 0.00 **F** | 2.47 C |
+| requests | 2.54 B- | 3.98 B+ |
+| flask | 0.00 **F** | 0.44 **F** |
+| django | 0.00 **F** | 0.00 **F** |
+
+Repositories at F: four, then two. No repository scored lower. Median 4.48.
+
+**The first attempt at this broke P3 and the tests caught it.** Scoring a rule
+as `mean(weight) * sqrt(n)` is also saturating, and under it one CRITICAL plus
+nine LOW hits of one rule scored 6.88 against 15.0 for the CRITICAL alone —
+deleting nine real findings would have *raised* the grade. The rank discount
+cannot do that: the worst hit always lands at k=1 at full weight.
+
+**A regression was found the same way.** Reading Bandit's CWEs silently
+disabled the `mark_safe` de-duplication, because Bandit files B308 as CWE-79
+and B703 as CWE-80 and the merge key preferred the CWE over the alias table.
+Django went back to counting `mark_safe` twice. Every unit test passed
+throughout — they all used rules with no CWE — and the corpus caught it.
+
+### What is still wrong: the normalizer
+
+Django and Flask remain at F, and the cause is now isolated. Under
+`sqrt(LOC/1000)`, **the largest repository in the corpus ranks worst**:
+
+| | kLOC | sqrt-normalized | per-kLOC |
+| --- | ---: | ---: | ---: |
+| django | 145.5 | 15.53 (**F**) | 1.29 (A-) |
+| flask | 8.3 | 9.12 (**F**) | 3.17 (B) |
+| fastapi | 35.7 | 5.06 (C) | 0.85 (A) |
+
+That is size bias — the precise thing the dampener exists to remove, and
+which D5 already records as "an invented normalizer with no corpus behind
+it". One HIGH finding costs a full grade point in an 8k-line repository and a
+quarter of that in Django.
+
+**It is not changed here, for three reasons.** It moves every grade the tool
+has ever emitted. The slope would need recalibrating and this corpus cannot
+support that (below). And it weakens the gate: a synthetic 1,939-line
+repository carrying SQL injection, command injection, `pickle.loads`,
+`yaml.load`, `eval`, MD5 and hardcoded credentials scores 0.00 F today and
+would land near D under per-kLOC.
+
+### Corpus coverage was the blocker, and fixing it answered the question
+
+Six of the fourteen were scoring near-perfectly because they were
+**unexamined**, not clean. Python repositories produced 712 to 5,107 real
+findings each; everything else produced nought to four. Three orders of
+magnitude, and none of it about those projects being thirty times cleaner
+than Django.
+
+**Two causes, and only one was structural.**
+
+`njsscan` and `rubocop` were simply not installed on the machine running the
+study, so JavaScript and Ruby had no scanner that reads them. Installing
+both is all it took:
+
+| repo | before | after |
+| --- | --- | --- |
+| axios | 5.00 A+ | 4.38 A- |
+| lodash | 4.59 A | 4.48 A- |
+| sinatra | 3.10 B | 2.79 B- |
+| express | 5 findings | 90 findings |
+
+Go and Java cannot be fixed that way, and [D12](decisions.md) already says
+why: gosec analyses Go by invoking the target's *own* build tooling and
+fails without the toolchain on the host; PMD covers none of the patterns and
+SpotBugs needs compiled bytecode. `gin`, `logrus`, `gson` and `commons-lang`
+are unreadable by this floor.
+
+**Those four were holding the median up.** Their own median is 5.00 — four
+perfect scores for repositories nobody looked at. The product refuses to
+grade what it did not examine (P7); a study computing percentiles over
+repositories in the same position is doing the thing the product refuses to
+do. `summarize()` now reports the examined set separately and names what it
+excluded.
+
+| set | n | median |
+| --- | ---: | --- |
+| examined | 10 | **3.38** |
+| unexamined | 4 | 5.00 |
+| all fourteen | 14 | 4.37 |
+
+**3.38 is in the B band, and the B band is the target.**
+`maintainability-agent` calibrates so a mature-OSS corpus medians at a B.
+This corpus already does, and the examined spread — 0.00, 0.44, 2.47, 2.58,
+2.79, 3.98, 4.38, 4.48, 4.61, 5.00 — is a distribution rather than the cliff
+it was that morning. **No band edge needs moving to achieve it.**
+
+What remains is one repository rather than the scale: Django still reads
+0.00, for the normalizer reason above.
 
 ## Two candidate adjustments, measured
 

@@ -73,11 +73,78 @@ This is a constrained task, not a refactor.
 10. Keep the patch small. If you find yourself rewriting a function
     rather than patching it, stop and report the structural issue.
 
-## §FINDINGS
+## §FIX — patch these
 ...
 ```
 
-Hand the prompt to Claude Code, Codex, Cursor, Copilot, or any agent. The agent now has explicit boundaries. The full template + rationale lives in [`docs/remediation.md`](docs/remediation.md).
+Hand the work order to Claude Code, Codex, Cursor, Copilot, or any agent. The agent now has explicit boundaries. The full template + rationale lives in [`docs/remediation.md`](docs/remediation.md).
+
+**It is written on every run**, alongside the report — no flag required. The
+report describes your code; the work order changes it. Set
+`outputs.prompt_path` to `null` if you do not want one.
+
+### Findings are tiered, because not all of them deserve equal attention
+
+A flat list gives a `shell=True` command injection and a
+`PASSWORD_FIELD = "password"` name-match the same billing, so an agent
+working top to bottom spends its care on noise.
+
+| tier | what it means | what the agent does |
+| --- | --- | --- |
+| **§FIX** | the scanner is confident and the rule has not been measured producing noise | patch it |
+| **§REVIEW** | a rule measured producing non-defects, or a scanner reporting low confidence — the reason is stated per finding | confirm it is real first; a justified suppression is a *successful* outcome here |
+| **§ACCEPT** | test tree and documentation | propose a suppression, do not patch |
+
+A noisy rule is demoted, never dropped. Bandit's `B105` produced **zero**
+useful hits out of 22 across the calibration corpus — empty defaults, field
+names, `django-insecure-` — and still caught a planted hardcoded credential,
+so the *value* is judged as well as the rule.
+
+## Proving the work order actually helped
+
+A work order nobody checks is a suggestion. After the agent has worked:
+
+```bash
+secure-code-agent . --verify-against secure-code-report.json
+```
+
+This re-audits and reports what was **fixed**, what is **still open**, what
+was **silenced rather than repaired**, and what this work **introduced**. It
+exits nonzero unless the run passes, because a verification step that always
+passes verifies nothing.
+
+```
+work order verification  ·  not proven: 0 fixed, 2 silenced rather than fixed, 1 still open
+  SILENCED   B602    app.py:4
+  SILENCED   B324    app.py:7
+  ! 2 finding(s) disappeared without the code being repaired — a suppression
+    entry now covers them, or the reported line gained an inline marker such
+    as `# nosec`.
+```
+
+That last case is the one worth having. **Lint disable** is in the
+anti-pattern table above, hard constraint 6 forbids it, and forbidding is
+not detecting — Bandit honours `# nosec` itself, so a silenced finding
+simply stops arriving and reads as fixed. Verification reads the source back
+and calls it what it is.
+
+Findings in the test tree and documentation are **reported but not
+required**: §ACCEPT tells the agent not to patch them, so demanding them
+back would make any repository with fixtures impossible to verify.
+
+## Trend, which is what a score is actually for
+
+A single B− tells you little. A B− that was an A− three runs ago tells you
+something happened. Every run appends one line to
+`.secure-code/history.jsonl` and prints the movement:
+
+```
+trend: 3.90 (B+) — up 3.86 from 0.04 (F), 3 scored runs
+```
+
+A run whose coverage was too thin to grade records `null` and is skipped
+rather than plotted as a collapse to zero — the same rule the rest of the
+tool follows: absence of evidence is not a bad grade.
 
 ## Standards anchored, not invented
 
@@ -399,6 +466,7 @@ Full design philosophy in [`docs/design.md`](docs/design.md).
 - [`docs/standards.md`](docs/standards.md)        — NIST SSDF / OWASP / CWE / Scorecard / SARIF citations
 - [`docs/scoring.md`](docs/scoring.md)            — Weighting model + worked examples
 - [`docs/scanners.md`](docs/scanners.md)          — Per-scanner integrations + caveats
+- [`docs/work-orders.md`](docs/work-orders.md)    — **The first-class output**: audit → work order → fix → verify → trend
 - [`docs/remediation.md`](docs/remediation.md)    — The prompt template + failure-mode rationale
 - [`docs/threat-model.md`](docs/threat-model.md)  — What we defend against (and what we don't)
 
