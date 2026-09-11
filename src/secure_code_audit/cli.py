@@ -804,7 +804,7 @@ def _write_outputs(
     if paths.json_out is not None:
         renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict, axes)
     if paths.sarif is not None:
-        sarif.write(findings, paths.sarif, coverage)
+        sarif.write(findings, paths.sarif, coverage, lambda f: renderers.axis_of(f, axes))
     if paths.comment is not None:
         renderers.write_pr_comment(findings, score, gate, paths.comment, coverage, verdict)
     if paths.prompt is not None:
