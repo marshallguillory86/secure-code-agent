@@ -270,12 +270,67 @@ def percentiles(values: list[float]) -> dict[str, float]:
     }
 
 
+#: A scanner that actually reads each language. Without one of these having
+#: completed, a repository of that language was not examined — it was
+#: glanced at by gitleaks and a twenty-rule offline Semgrep profile.
+LANGUAGE_SCANNERS: dict[str, tuple[str, ...]] = {
+    "python": ("bandit",),
+    "javascript": ("njsscan",),
+    "typescript": ("njsscan",),
+    "ruby": ("rubocop",),
+    "go": ("gosec",),
+    "java": (),  # D12: PMD covers none of it, SpotBugs needs compiled bytecode.
+}
+
+
+def examined(row: dict) -> bool:
+    """Did a scanner that reads this repository's language actually run?
+
+    The product refuses to grade what it did not examine (P7). A study that
+    computes a median over repositories in the same position is doing the
+    thing the product refuses to do, and the numbers say why: Python
+    repositories in this corpus produce 712 to 5,107 real findings each,
+    while Go, Java and — before njsscan and RuboCop were installed —
+    JavaScript and Ruby produce nought to four. Three orders of magnitude.
+    That gap is the floor's language coverage, not those projects being
+    thirty times cleaner than Django.
+
+    Including them drags any percentile toward "clean" and makes band edges
+    chosen from it meaningless. So they are measured, reported, and kept out
+    of the distribution, exactly as the product keeps an ungraded run out of
+    a trend.
+    """
+    language = (row.get("language") or "").lower()
+    required = LANGUAGE_SCANNERS.get(language)
+    if not required:
+        # No scanner in the floor reads this language at all (D12: Java).
+        return False
+    completed = {
+        s["name"]
+        for s in (row.get("coverage") or {}).get("scanners", [])
+        if s.get("outcome") == "completed"
+    }
+    return any(name in completed for name in required)
+
+
 def summarize(rows: list[dict]) -> dict:
     ok = [r for r in rows if "error" not in r]
+    seen = [r for r in ok if r.get("examined")]
+    unexamined = [r["name"] for r in ok if not r.get("examined")]
     return {
         "repositories": len(rows),
         "measured": len(ok),
         "failed": [r["name"] for r in rows if "error" in r],
+        # The band-edge distribution, over repositories a language scanner
+        # actually read. This is the one to calibrate from.
+        "examined": len(seen),
+        "unexamined": unexamined,
+        "examined_overall": percentiles([r["measure"]["reported_overall"] for r in seen])
+        if seen
+        else None,
+        "examined_worst_normalized": percentiles([r["measure"]["worst_normalized"] for r in seen])
+        if seen
+        else None,
         "reported_overall": percentiles([r["measure"]["reported_overall"] for r in ok]),
         "unclamped_overall": percentiles([r["measure"]["unclamped_overall"] for r in ok]),
         "worst_normalized": percentiles([r["measure"]["worst_normalized"] for r in ok]),
@@ -321,11 +376,14 @@ def main() -> int:
             target = fetch(entry, work)
             payload = audit(target, reports / f"{name}.json", Path(args.config))
             row["measure"] = measure(payload)
+            row["coverage"] = payload.get("coverage") or {}
+            row["examined"] = examined(row)
             print(
                 f"{row['measure']['reported_overall']:.2f} "
                 f"({row['measure']['reported_letter']})  "
                 f"loc={row['measure']['loc_scanned']:,}  "
                 f"findings={row['measure']['finding_count']}  "
+                f"{'' if row['examined'] else 'UNEXAMINED  '}"
                 f"{time.time() - started:.0f}s"
             )
         except Exception as exc:  # noqa: BLE001 — a study run must not die on one repo

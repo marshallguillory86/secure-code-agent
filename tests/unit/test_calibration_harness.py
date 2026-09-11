@@ -165,3 +165,97 @@ def test_a_stale_report_cannot_stand_in_for_a_failed_audit(tmp_path):
         harness.audit(tmp_path / "absent-target", report, tmp_path / "absent-config.json")
 
     assert not report.exists(), "the stale report survived a failed audit"
+
+
+# ---------------------------------------------------------------------------
+# Unexamined is not clean
+# ---------------------------------------------------------------------------
+
+
+def _row(language: str, completed: list[str], overall: float = 5.0) -> dict:
+    return {
+        "name": "r",
+        "language": language,
+        "coverage": {"scanners": [{"name": n, "outcome": "completed"} for n in completed]},
+        "measure": {
+            "reported_overall": overall,
+            "reported_letter": "A+",
+            "worst_normalized": 0.0,
+            "unclamped_overall": overall,
+            "loc_scanned": 1000,
+        },
+    }
+
+
+def test_a_language_with_its_scanner_is_examined():
+    harness = _harness()
+
+    assert harness.examined(_row("python", ["bandit", "gitleaks"])) is True
+    assert harness.examined(_row("javascript", ["njsscan"])) is True
+    assert harness.examined(_row("ruby", ["rubocop"])) is True
+
+
+def test_a_language_without_its_scanner_is_not_examined():
+    """gitleaks and a twenty-rule offline Semgrep profile are not coverage.
+
+    Before njsscan and RuboCop were installed, Python repositories in this
+    corpus produced 712 to 5,107 real findings each and everything else
+    produced nought to four. That gap is the floor's language coverage, not
+    those projects being thirty times cleaner.
+    """
+    harness = _harness()
+
+    assert harness.examined(_row("javascript", ["gitleaks", "semgrep"])) is False
+    assert harness.examined(_row("ruby", ["gitleaks", "semgrep"])) is False
+
+
+def test_go_without_the_toolchain_is_not_examined():
+    """D12: gosec analyses Go by invoking the target's own build tooling."""
+    harness = _harness()
+
+    assert harness.examined(_row("go", ["gitleaks", "semgrep", "bandit"])) is False
+    assert harness.examined(_row("go", ["gosec"])) is True
+
+
+def test_java_is_never_examined_by_this_floor():
+    """D12: PMD covers none of the patterns, SpotBugs needs bytecode. There
+    is no scanner to install that would change this."""
+    harness = _harness()
+
+    assert harness.examined(_row("java", ["gitleaks", "semgrep", "bandit"])) is False
+
+
+def test_the_distribution_excludes_what_was_not_examined():
+    """The four unexamined repositories had a median of 5.00 — four perfect
+    scores for repositories nobody looked at — and they were holding the
+    corpus median up from 3.38 to 4.37."""
+    harness = _harness()
+    rows = [
+        _row("python", ["bandit"], overall=1.0),
+        _row("python", ["bandit"], overall=3.0),
+        _row("java", [], overall=5.0),
+        _row("go", [], overall=5.0),
+    ]
+    for r in rows:
+        r["examined"] = harness.examined(r)
+
+    summary = harness.summarize(rows)
+
+    assert summary["examined"] == 2
+    assert sorted(summary["unexamined"]) == ["r", "r"]
+    assert summary["examined_overall"]["median"] == 2.0
+    # The whole-corpus figure is still reported, just not the one to calibrate from.
+    assert summary["reported_overall"]["median"] == 4.0
+
+
+def test_an_all_unexamined_corpus_reports_no_distribution_rather_than_zero():
+    """Saying nothing is correct. Inventing a median over an unread corpus
+    is the failure this gate exists to prevent."""
+    harness = _harness()
+    rows = [_row("java", [], overall=5.0)]
+    rows[0]["examined"] = harness.examined(rows[0])
+
+    summary = harness.summarize(rows)
+
+    assert summary["examined"] == 0
+    assert summary["examined_overall"] is None

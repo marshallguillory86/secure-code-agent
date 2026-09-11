@@ -169,7 +169,51 @@ def finding_score(f: Finding) -> float:
 
 
 def category_subtotal(findings: Iterable[Finding], category: Category) -> float:
-    return sum(finding_score(f) for f in findings if f.category == category and not f.suppressed)
+    """Sum a category's findings, saturating each rule's repeats.
+
+    A straight sum measures how many times a pattern matched, and that
+    tracks codebase size times how talkative the scanner is — not how much
+    risk is in the code. `sqrt(LOC)` was meant to cancel the size half.
+    Nothing cancelled the other half, and the corpus said so plainly: the
+    worst-first ordering read Python → JavaScript → Go/Ruby → Java, which is
+    the order of Bandit's verbosity, and Django, FastAPI, httpx and Flask all
+    graded F.
+
+    Inspecting what held them there settled it. Django's `B105 hardcoded
+    password` hits were `EMAIL_HOST_PASSWORD = ""` and `SECRET_KEY = ""` —
+    empty defaults. Its `B608 SQL injection` hits included
+    `raise ImproperlyConfigured('Cannot determine PostGIS version for …')`,
+    an error message, and `cursor.execute("SELECT %s, … FROM %s")`, which is
+    parameterised. Its 56 `mark_safe` hits are the framework implementing
+    its own escaping. Each one is a real pattern match and almost none is a
+    defect, so summing them graded Django on how much Django there is.
+
+    So repeats of one rule saturate. One rule firing n times is one fact
+    about the codebase observed n times, not n independent defects. Distinct
+    rules still add in full, because they are independent evidence.
+
+    The saturation is a **rank discount**: sort a rule's hits worst-first and
+    give the k-th one `weight / sqrt(k)`. The total grows as roughly
+    `2 * sqrt(n)` — saturating — while every additional finding still adds
+    something.
+
+    That last property is P3, and the obvious formulation breaks it. Scoring
+    a rule as `mean(weight) * sqrt(n)` is also saturating, and under it one
+    CRITICAL plus nine LOW hits of one rule scored 6.88 against 15.0 for the
+    CRITICAL alone: nine extra findings *improved* the grade, so withholding
+    evidence would have raised it. A rank discount cannot do that — the
+    worst hit always lands at k=1 with its full weight, and every later one
+    adds a non-negative amount.
+    """
+    by_rule: dict[str, list[float]] = {}
+    for finding in findings:
+        if finding.category is not category or finding.suppressed:
+            continue
+        by_rule.setdefault(finding.rule_id, []).append(finding_score(finding))
+    return sum(
+        sum(score / math.sqrt(rank) for rank, score in enumerate(sorted(scores, reverse=True), 1))
+        for scores in by_rule.values()
+    )
 
 
 def normalize(subtotal: float, loc_scanned: int) -> float:

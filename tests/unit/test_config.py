@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from secure_code_audit import config
 from secure_code_audit.config import load
 
 
@@ -43,3 +44,53 @@ def test_omitted_missing_default_config_uses_defaults(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     assert load().gates == {}
+
+
+# ---------------------------------------------------------------------------
+# Turning an output off
+# ---------------------------------------------------------------------------
+
+
+def _cfg(tmp_path, body: dict):
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(body), encoding="utf-8")
+    return config.load(path)
+
+
+def test_null_disables_an_output(tmp_path):
+    """The report and the work order are written on every run, so there has
+    to be a way to say no.
+
+    Without this the docstring promised a capability the loader rejected:
+    `outputs.prompt_path must be a non-empty string`. The only way to
+    silence the work order was to stop using the tool.
+    """
+    cfg = _cfg(tmp_path, {"version": 1, "outputs": {"prompt_path": None}})
+
+    assert cfg.outputs["prompt_path"] is None
+
+
+def test_every_output_can_be_disabled_independently(tmp_path):
+    from secure_code_audit.config import DEFAULT_OUTPUTS
+
+    for key in DEFAULT_OUTPUTS:
+        cfg = _cfg(tmp_path, {"version": 1, "outputs": {key: None}})
+        assert cfg.outputs[key] is None, key
+        others = [k for k in DEFAULT_OUTPUTS if k != key]
+        assert all(cfg.outputs[k] is not None for k in others), (
+            f"disabling {key} disabled something else too"
+        )
+
+
+def test_an_empty_string_is_still_a_mistake(tmp_path):
+    """`null` is an intention. `""` is a typo, and writing a report to the
+    current directory because of one is worse than refusing."""
+    with pytest.raises(ValueError, match="non-empty string"):
+        _cfg(tmp_path, {"version": 1, "outputs": {"prompt_path": ""}})
+
+
+def test_the_error_says_how_to_disable_it(tmp_path):
+    """An operator who hits this should not have to read the source to find
+    out that null is allowed."""
+    with pytest.raises(ValueError, match="null to disable"):
+        _cfg(tmp_path, {"version": 1, "outputs": {"markdown_path": ""}})

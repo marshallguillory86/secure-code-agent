@@ -65,7 +65,7 @@ def to_json(
         # both double-counted — and the calibration harness did exactly that,
         # reporting a median over dependency findings the product does not
         # score.
-        "findings": [_finding_to_dict(f, _axis_of(f, axes)) for f in findings],
+        "findings": [_finding_to_dict(f, axis_of(f, axes)) for f in findings],
     }
 
 
@@ -73,7 +73,7 @@ def _axis_key_of(finding: Finding) -> tuple:
     return (finding.fingerprint, str(finding.file_path), finding.line_start, finding.rule_id)
 
 
-def _axis_of(finding: Finding, axes: Iterable[AxisReport]) -> str:
+def axis_of(finding: Finding, axes: Iterable[AxisReport]) -> str:
     """Which axis a finding was reported on. "primary" means it was scored."""
     key = _axis_key_of(finding)
     for axis in axes or ():

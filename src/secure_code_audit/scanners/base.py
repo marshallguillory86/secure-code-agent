@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,9 @@ from secure_code_audit.config import Config, is_within, scanner_cfg, target_exec
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanner_status import ScannerOutcome, ScanResult
 from secure_code_audit.standards import StandardsEntry, is_top25, lookup, owasp_for_cwe
+
+#: CSI escape sequences. Tools colourise `--version` and we store the result.
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 class Scanner(ABC):
@@ -110,8 +114,18 @@ class Scanner(ABC):
         # that was otherwise claiming the scanner had run fine.
         if r.returncode != 0:
             return None
-        out = (r.stdout or r.stderr or "").strip().splitlines()
-        return out[0] if out else None
+        # Strip ANSI colour before picking a line, and skip lines that were
+        # nothing but colour. njsscan opens its version output with a bare
+        # `\x1b[34m` on its own line and puts the version on the next one, so
+        # taking the first line recorded the scanner version as `[34m` — in
+        # the coverage block, in every report, and in a calibration study
+        # whose whole claim is that it re-derives from pinned inputs.
+        raw = r.stdout or r.stderr or ""
+        for line in _ANSI.sub("", raw).splitlines():
+            cleaned = line.strip()
+            if cleaned:
+                return cleaned
+        return None
 
     # ----- main entrypoint ------------------------------------------------
 

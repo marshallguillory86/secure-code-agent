@@ -4,7 +4,138 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
-## 0.5.0 — unreleased
+## 0.6.0 — unreleased
+
+### Work orders are the first-class output
+
+The remediation prompt is now **written on every run**, alongside the report.
+`_resolve_outputs` read config for the report and nothing at all for the
+prompt, so the artifact that grades your code was always written and the
+artifact that fixes it needed `--prompt-output`. `prompt_path` had been
+declared in `DEFAULT_OUTPUTS` the whole time and the resolver never read it;
+four of six keys were dead the same way. Set any `outputs.*_path` to `null`
+to disable one — which the loader used to reject despite the docstring
+promising it.
+
+Findings are **tiered**: `§FIX` (patch it), `§REVIEW` (confirm first, reason
+stated per finding), `§ACCEPT` (test tree and documentation — propose a
+suppression, do not patch). A flat list gave a `shell=True` command
+injection and a `PASSWORD_FIELD = "password"` name-match identical billing.
+
+A noisy rule is demoted, never dropped. Bandit's `B105` produced zero useful
+hits out of 22 across the calibration corpus and still caught a planted
+hardcoded credential, so the matched *value* is judged as well as the rule.
+
+Work-order paths are repository-relative. `§ACCEPT` is summarised by rule
+with a drafted suppression, and `§FIX`/`§REVIEW` cap at 40 blocks and say
+what they left out — auditing this repository produced a 541KB,
+15,390-line work order before that, now 4.8KB and 111 lines.
+
+### New — `--verify-against`, proving the work order helped
+
+```bash
+secure-code-agent . --verify-against secure-code-report.json
+```
+
+Re-audits and reports what was fixed, what is still open, what was
+**silenced rather than repaired**, and what this work introduced. Exits
+nonzero unless the run passes.
+
+Silencing is the case worth having. **Lint disable** has been in the
+README's anti-pattern table since the first commit and hard constraint 6
+forbids it; forbidding is not detecting. Bandit honours `# nosec` itself, so
+a silenced finding stops arriving and reads as repaired. The source is now
+read back around the reported line.
+
+Test-tree and documentation findings are reported but never required, since
+`§ACCEPT` tells the agent not to patch them.
+
+### New — scan history and trend
+
+Every run appends one line to `.secure-code/history.jsonl` and prints the
+movement: `3.90 (B+) — up 3.86 from 0.04 (F), 3 scored runs`. Append-only; a
+malformed line costs one run rather than the history. A run too thinly
+covered to grade records `null` and is skipped rather than plotted as a
+collapse to zero.
+
+### Changed — repeats of one rule saturate
+
+**This moves scores.** Sorted worst-first, a rule's k-th hit now counts
+`weight / sqrt(k)`. One rule firing 56 times is one fact observed 56 times,
+not 56 independent defects; distinct rules still add in full.
+
+Grading Django, FastAPI, httpx and Flask all F was measuring how talkative
+Bandit is on large Python codebases. Django's "hardcoded passwords" are
+`EMAIL_HOST_PASSWORD = ""` and `SECRET_KEY = ""`; its "SQL injection" hits
+include an `ImproperlyConfigured` error message and a parameterised
+`cursor.execute`. Corpus effect: httpx 0.13 F → 2.58 B−, fastapi 0.00 F →
+2.47 C, requests 2.54 → 3.98 B+. No repository scored lower.
+
+### Fixed — 86% of findings carried no CWE
+
+Bandit publishes a CWE for every plugin and gosec for every rule, and both
+were discarded — gosec went as far as formatting its CWE into the message
+text and never setting `canonical_cwe`, so scoring, the Top-25 multiplier
+and the SARIF taxonomy all saw nothing. Corpus CWE coverage 14% → **100%**;
+OWASP is derived from the CWE where the curated map is silent, reaching 62%,
+and stays null where the standard has no category rather than being invented.
+
+### Fixed — `exclude_patterns` never applied to gitleaks findings
+
+gitleaks reports repository-relative paths and every other scanner reports
+absolute ones. Every consumer that asked "where is this?" resolved a
+relative path against the *process working directory*, so the answer came
+back "not excluded" — silently, and fail-open. Four `tests/certs/*.key`
+files held `requests` at F and six documentation examples held `flask`
+there. Paths are now anchored at the one constructor every adapter passes
+through.
+
+Separately, `**/` did not match at depth zero, so `**/*_test.go` never
+matched a root-level `context_test.go`.
+
+### Fixed — gitleaks could not see the working tree
+
+`detect --source` scans commits only, so a plaintext key sitting
+uncommitted produced "no leaks found". Both `gitleaks dir` and `gitleaks
+git` now run; the overlap merges.
+
+### Fixed — the tool audited its own output
+
+`secure-code-report.md` lands in the audited tree and the next run scanned
+it, finding a "secret" at line 11,529 of its own report. Two identical
+audits of an unchanged repository returned 0.00 and 4.25. The run now drops
+the paths it is about to write — and their lines — from both its findings
+and its LOC denominator.
+
+### Fixed — other
+
+- `B308`/`B703` are the same Bandit check under two ids and were counted
+  twice; `merge_corroborating` collapses them and records the second
+  sighting rather than discarding it.
+- `sca.offline.ruby.code-injection` matched `class_eval(&block)`, Ruby's
+  *safe* form. Offline profile bumped to `sca-offline@1.2.0`, and the
+  ruleset digest is now pinned to the profile version.
+- A suppressed finding was republished as `axis: primary, scored: true`.
+- A finding that tripped the gate could be absent from the report, and
+  side-axis findings could never be baselined.
+- Scanner versions were recorded as ANSI escape sequences when a tool
+  colourised `--version` (njsscan read as `[34m`).
+
+### Calibration — the study was measuring the wrong population
+
+Six of fourteen corpus repositories scored near-perfectly because nobody had
+looked at them: Python produced 712–5,107 real findings each, everything
+else 0–4. `njsscan` and `rubocop` were not installed; Go and Java cannot be
+read by this floor at all (D12). The four unreadable repositories had their
+own median of **5.00** and were holding the corpus median up.
+
+The study now reports the distribution over repositories a language scanner
+actually read — **examined median 3.38, in the B band, which is the
+target** — and names what it excluded. No band edge needed moving.
+
+`njsscan` and `rubocop` are required for a valid calibration run.
+
+## 0.5.0 — 2026-09-10
 
 ### Fixed — 0.4.0 reports itself as 0.3.0
 

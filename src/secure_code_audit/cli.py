@@ -24,9 +24,17 @@ from secure_code_audit import (
 )
 from secure_code_audit import baseline as baseline_mod
 from secure_code_audit import config as config_mod
+from secure_code_audit import history as history_mod
 from secure_code_audit import pillar as pillar_mod
 from secure_code_audit import practice as practice_mod
-from secure_code_audit.findings import Category, Finding, Severity, merge_corroborating
+from secure_code_audit import verify as verify_mod
+from secure_code_audit.findings import (
+    Category,
+    Confidence,
+    Finding,
+    Severity,
+    merge_corroborating,
+)
 from secure_code_audit.git_tools import find_repo_root, is_excluded, is_test_path, loc_under
 from secure_code_audit.scanner_status import (
     COVERING_OUTCOMES,
@@ -78,6 +86,17 @@ def _parser() -> argparse.ArgumentParser:
             "Write security-pillar.json for maintainability-agent to ingest "
             "via --security-pillar (D3). Carries practice level and code "
             "condition as two values that are never averaged."
+        ),
+    )
+    p.add_argument(
+        "--verify-against",
+        metavar="REPORT.json",
+        help=(
+            "Verify a work order's outcome. Audits as normal, then compares "
+            "against the JSON report from the run that produced the order and "
+            "reports what was fixed, what is still open, what was silenced "
+            "rather than repaired, and what this work introduced. Exits "
+            "nonzero unless security actually improved."
         ),
     )
     p.add_argument("--baseline", help="Baseline file path (read).")
@@ -424,9 +443,37 @@ def _do_audit(args: argparse.Namespace) -> int:
         verdict,
         axes,
         security_pillar,
+        root,
     )
     if args.bump_baseline:
         baseline_mod.write(baseline_path, all_findings, baseline)
+
+    # ----- trend -----
+    # Appended before the verification branch returns, so a verify run is
+    # recorded too: repair is the movement most worth seeing in a trend.
+    history_path = _under_root(root, cfg.outputs.get("history_path") or "")
+    if cfg.outputs.get("history_path"):
+        history_mod.append(
+            history_path,
+            history_mod.entry_from(
+                version=__version__,
+                score=score,
+                gate=gate,
+                coverage=coverage,
+                finding_count=len([f for f in all_findings if not f.suppressed]),
+                scanners=tuple(ran),
+            ),
+        )
+
+    trend_line = (
+        history_mod.trend(history_mod.read(history_path))
+        if cfg.outputs.get("history_path")
+        else None
+    )
+
+    # ----- did the work order actually improve anything? -----
+    if args.verify_against:
+        return _do_verify(args, all_findings, root, axes)
 
     # ----- terminal output -----
     if args.json:
@@ -437,7 +484,7 @@ def _do_audit(args: argparse.Namespace) -> int:
         )
         sys.stdout.write("\n")
     else:
-        _print_summary(verdict, score, gate, ran, unavailable, coverage, paths, axes)
+        _print_summary(verdict, score, gate, ran, unavailable, coverage, paths, axes, trend_line)
 
     return _exit_code(args, gate, all_findings)
 
@@ -615,7 +662,11 @@ def _own_artifacts(paths: _OutputPaths, cfg: config_mod.Config, root: Path) -> f
     ]
     # An empty configured path resolves to the root itself, which would put
     # the scan target in this set.
-    for configured in (cfg.outputs.get("baseline_path"), cfg.suppressions_file):
+    for configured in (
+        cfg.outputs.get("baseline_path"),
+        cfg.outputs.get("history_path"),
+        cfg.suppressions_file,
+    ):
         if configured:
             candidates.append(_under_root(root, configured))
     return frozenset(p.resolve() for p in candidates if p is not None)
@@ -717,7 +768,17 @@ def _ingest_sarif_imports(specs: list[str]) -> tuple[list[Finding], list[Scanner
 
 
 def _write_outputs(
-    paths, findings, score, gate, coverage, ran, unavailable, verdict, axes=(), pillar=None
+    paths,
+    findings,
+    score,
+    gate,
+    coverage,
+    ran,
+    unavailable,
+    verdict,
+    axes=(),
+    pillar=None,
+    root: Path | None = None,
 ) -> None:
     if paths.markdown is not None:
         renderers.write_markdown(
@@ -730,7 +791,9 @@ def _write_outputs(
     if paths.comment is not None:
         renderers.write_pr_comment(findings, score, gate, paths.comment, coverage, verdict)
     if paths.prompt is not None:
-        remediation.write(findings, paths.prompt)
+        # The work order needs the axis to tier a finding: a secret in a
+        # test fixture is a suppression decision, not a patch target.
+        remediation.write(findings, paths.prompt, root, lambda f: renderers.axis_of(f, axes))
     # The artifact maintainability-agent ingests (D3). Written last because it
     # is the only output that carries both axes plus the practice level.
     if paths.security_pillar is not None and pillar is not None:
@@ -765,22 +828,47 @@ class _OutputPaths:
 
 
 def _resolve_outputs(args: argparse.Namespace, cfg: config_mod.Config, root: Path) -> _OutputPaths:
-    """CLI flags override config defaults. A flag value of None means
-    'don't emit this format' — by default we emit Markdown only, and
-    other outputs are opt-in via CLI flag or explicit config."""
+    """CLI flags override config, which overrides the built-in defaults.
 
-    def _p(flag_value) -> Path | None:
+    **The remediation prompt is written by default, alongside the report.**
+    It is the output that changes the code; the report is the output that
+    describes it. Only the report used to be written, and the prompt was
+    reachable solely by passing `--prompt-output` — so the artifact that
+    fixes things was off unless you knew to ask, and the artifact that
+    grades things was always on. That is backwards.
+
+    `outputs.prompt_path` was already declared in `DEFAULT_OUTPUTS` and this
+    resolver never read it, so configuring it did nothing either. Four of
+    the six keys were dead the same way. Every key is honoured now; an
+    operator who wants a format off sets it to `null`.
+
+    SARIF, JSON and the PR comment stay off unless asked, because they are
+    for other systems to consume rather than for the person at the terminal,
+    and writing five files into every audited tree by default is its own
+    kind of rude.
+    """
+
+    #: Written on every run without being asked for.
+    always = {"markdown_path", "prompt_path"}
+    #: What the operator actually wrote, as opposed to what they inherited.
+    declared = (cfg.raw.get("outputs") or {}) if isinstance(cfg.raw, dict) else {}
+
+    def _p(flag_value, key: str) -> Path | None:
         if flag_value is not None:
             return (root / flag_value).resolve()
+        if key in always or key in declared:
+            configured = cfg.outputs.get(key)
+            if configured:
+                return (root / configured).resolve()
         return None
 
     return _OutputPaths(
-        markdown=_p(args.output or cfg.outputs.get("markdown_path")),
-        json_out=_p(args.json_output),
-        sarif=_p(args.sarif_output),
-        comment=_p(args.comment_output),
-        prompt=_p(args.prompt_output),
-        security_pillar=_p(args.security_pillar),
+        markdown=_p(args.output, "markdown_path"),
+        json_out=_p(args.json_output, "json_path"),
+        sarif=_p(args.sarif_output, "sarif_path"),
+        comment=_p(args.comment_output, "comment_path"),
+        prompt=_p(args.prompt_output, "prompt_path"),
+        security_pillar=_p(args.security_pillar, "security_pillar_path"),
     )
 
 
@@ -789,12 +877,18 @@ def _under_root(root: Path, value: str) -> Path:
     return path.resolve() if path.is_absolute() else (root / path).resolve()
 
 
-def _print_summary(verdict, score, gate, ran, unavailable, coverage, paths, axes=()) -> None:
+def _print_summary(
+    verdict, score, gate, ran, unavailable, coverage, paths, axes=(), trend=None
+) -> None:
     status = "PASS" if gate.passed else "FAIL"
     print(f"secure-code-agent  ·  score {verdict.headline()}  ·  gate {status}")
     for reason in verdict.reasons:
         print(f"  ! grade withheld: {reason}")
     print(f"  scanned LOC: {score.loc_scanned:,}")
+    # Movement, not the number. A B- is almost meaningless alone; a B- that
+    # was an A- last run is the thing worth seeing.
+    if trend:
+        print(f"  trend: {trend}")
     for axis in axes or ():
         if axis.count or axis.loc:
             print(f"  {axis.headline()}")
@@ -837,6 +931,88 @@ def _validate_scanner_config(cfg: config_mod.Config) -> None:
     unknown_required = sorted(required - known)
     if unknown_required:
         raise ValueError(f"unknown required scanner: {', '.join(unknown_required)}")
+
+
+def _findings_from_report(path: Path) -> list[Finding]:
+    """Rebuild findings from a prior run's JSON report.
+
+    Only the fields verification compares are restored. The fingerprint is
+    the identity and it is stored, so nothing needs recomputing — which
+    matters, because recomputing it from a truncated snippet would produce a
+    different id and report every finding as both fixed and introduced.
+    """
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read --verify-against report {path}: {exc}") from exc
+    if not isinstance(payload, dict) or "findings" not in payload:
+        raise ValueError(f"{path} is not a secure-code-agent JSON report")
+
+    restored: list[Finding] = []
+    for row in payload["findings"]:
+        restored.append(
+            Finding(
+                rule_id=row.get("rule_id", "unknown"),
+                scanner=row.get("scanner", "unknown"),
+                fingerprint=row.get("fingerprint", ""),
+                canonical_cwe=row.get("canonical_cwe"),
+                owasp_top10=row.get("owasp_top10"),
+                asvs_section=row.get("asvs_section"),
+                nist_ssdf=row.get("nist_ssdf"),
+                category=Category(row.get("category", "code_vulnerabilities")),
+                severity=Severity.from_string(row.get("severity", "informational")),
+                confidence=Confidence.from_string(row.get("confidence", "medium")),
+                file_path=Path(row.get("file_path", "")),
+                line_start=int(row.get("line_start") or 0),
+                line_end=row.get("line_end"),
+                code_snippet=row.get("code_snippet"),
+                message=row.get("message", ""),
+                suppressed=bool(row.get("suppressed")),
+            )
+        )
+    return restored
+
+
+def _do_verify(args: argparse.Namespace, after: list[Finding], root: Path, axes=()) -> int:
+    """Compare this run against the one that produced the work order.
+
+    Exits nonzero unless the run passes, because a verification step that
+    always passes verifies nothing. "Improved" is deliberately
+    strict: something fixed, nothing introduced, nothing merely silenced.
+    """
+    before = _findings_from_report(_under_root(root, args.verify_against))
+    result = verify_mod.compare(before, after, root, lambda f: renderers.axis_of(f, axes))
+
+    if args.json:
+        sys.stdout.write(json.dumps(verify_mod.to_dict(result), indent=2) + "\n")
+    else:
+        print(f"work order verification  ·  {result.headline()}")
+        for finding in result.fixed:
+            print(
+                f"  fixed      {finding.rule_id:34s} {finding.file_path.name}:{finding.line_start}"
+            )
+        for finding in result.introduced:
+            print(
+                f"  INTRODUCED {finding.rule_id:34s} "
+                f"{finding.file_path.name}:{finding.line_start} ({finding.severity.value})"
+            )
+        for finding in result.suppressed:
+            print(
+                f"  SILENCED   {finding.rule_id:34s} {finding.file_path.name}:{finding.line_start}"
+            )
+        for finding in result.unresolved:
+            print(
+                f"  still open {finding.rule_id:34s} {finding.file_path.name}:{finding.line_start}"
+            )
+        if result.deferred:
+            print(
+                f"  ({len(result.deferred)} finding(s) in the test tree and documentation "
+                f"are reported but not required — see §ACCEPT)"
+            )
+        for note in result.notes:
+            print(f"  ! {note}")
+
+    return 0 if result.passed else 1
 
 
 if __name__ == "__main__":
