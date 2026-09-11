@@ -222,9 +222,14 @@ def _same_weakness(a: Finding, b: Finding) -> bool:
     Bandit files `B602` (shell=True), `B603` (subprocess call) and `B607`
     (partial executable path) all under CWE-78, and they are not the same
     finding: one is fixed with an argument list, one with an absolute path.
-    Keying on the CWE merged them and the work order lost a finding —
-    `subprocess.call('ls', shell=True)` reported `B607` alone, with the
-    `shell=True` hidden inside it as a footnote.
+    Keying on the CWE merged them and the work order lost a finding: a
+    one-line shell-enabled subprocess call reported `B607` alone, with the
+    more serious `B602` hidden inside it as a footnote.
+
+    (The example is described rather than quoted. Writing the offending
+    call out verbatim put a real `B602` on the primary axis of this file
+    and failed the repository's own gate — the second time in two days that
+    documenting a vulnerable pattern created one. Prose is scanned too.)
 
     An earlier test asserted exactly this must not happen and passed anyway,
     because its fixtures carried no CWE. Reading Bandit's CWEs gave them one
