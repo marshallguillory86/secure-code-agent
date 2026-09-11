@@ -174,3 +174,59 @@ def test_every_registered_adapter_builds_findings_through_the_rooting_constructo
         f"Scanner._make_finding(), so their paths are never anchored to the "
         f"audited tree"
     )
+
+
+# ---------------------------------------------------------------------------
+# Version provenance
+# ---------------------------------------------------------------------------
+
+
+class _Versioned(_Probe):
+    """An adapter whose --version output we control."""
+
+    def __init__(self, stdout: str, returncode: int = 0):
+        self._stdout = stdout
+        self._returncode = returncode
+
+    def is_available(self):
+        return True
+
+    def binary_version(self):
+        import subprocess
+        from unittest.mock import patch
+
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=self._returncode, stdout=self._stdout, stderr=""
+        )
+        with patch("subprocess.run", return_value=completed):
+            return Scanner.binary_version(self)
+
+
+def test_a_colourised_version_is_recorded_as_a_version():
+    """njsscan opens `--version` with a bare `\\x1b[34m` on its own line and
+    puts the version on the next one, so taking line one recorded the
+    scanner version as `[34m` — in the coverage block, in every report, and
+    in a calibration study whose whole claim is that it re-derives from
+    pinned inputs."""
+    scanner = _Versioned("\x1b[34m\nnjsscan: v1.0.0 | Ajin Abraham\x1b[0m\n")
+
+    assert scanner.binary_version() == "njsscan: v1.0.0 | Ajin Abraham"
+
+
+def test_an_uncoloured_version_is_unchanged():
+    assert _Versioned("gitleaks version 8.30.1\n").binary_version() == "gitleaks version 8.30.1"
+
+
+def test_leading_blank_lines_are_skipped():
+    assert _Versioned("\n\n  1.28.2  \n").binary_version() == "1.28.2"
+
+
+def test_output_that_is_only_colour_is_not_a_version():
+    """Better to say nothing than to record an escape sequence."""
+    assert _Versioned("\x1b[34m\x1b[0m\n").binary_version() is None
+
+
+def test_a_failed_probe_is_still_not_a_version():
+    """Reporting stderr here once put "Error: unknown flag: --version" in the
+    version column of a report claiming the scanner ran fine."""
+    assert _Versioned("1.2.3", returncode=1).binary_version() is None
