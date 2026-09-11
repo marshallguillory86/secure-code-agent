@@ -25,6 +25,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D12 | The coverage check, run for the other four languages | 2026-09-09 | Accepted |
 | D13 | Adapters state their outcome; nothing infers it from a finding's name | 2026-09-09 | Accepted |
 | D14 | Parsers are tested against real captured output, and the gap is declared | 2026-09-09 | Accepted |
+| D15 | A scanner's severity is not a measure of consequence, and nothing may rank on it | 2026-09-11 | Accepted |
 
 ---
 
@@ -703,3 +704,84 @@ model changed and should be declared, not that something is broken.
 **This is not D5.** Pinning an uncalibrated number does not calibrate it.
 These prove the scale is *stable*; nobody has yet established that A+
 corresponds to anything real. D5 remains open.
+
+## D15 — A scanner's severity is not a measure of consequence
+
+**Status.** Accepted, 2026-09-11.
+
+**Question.** Four separate problems were solved, or attempted, on the
+assumption that a finding's `severity` says how dangerous it is. All four
+failed the same way, and it took measuring them side by side to see they
+were one problem.
+
+| where | symptom |
+| --- | --- |
+| the score | Django graded F; the number tracked how talkative Bandit is |
+| triage tiers | `B105` produced **0** useful hits in 22 across the corpus |
+| a proposed severity floor | cannot separate httpx from a planted-vulnerability repo |
+| proposed default gates | `critical`-only catches nothing; `critical`+`high` fails half of good code |
+
+**What the field actually encodes.** A scanner's severity answers *"how
+confident am I that this pattern is present and matters in general"*, not
+*"how bad is this in your code"*. Bandit rates SQL injection **medium** and
+`hashlib.md5` **high**. Every mechanism built on top of the field inherits
+that, and each rediscovery looked like a fresh problem.
+
+**The evidence, from the examined corpus and four controls.**
+
+Six candidate rules for a severity floor. None separates:
+
+| rule | corpus trips | vulnerable controls caught |
+| --- | ---: | ---: |
+| `sev>=HIGH` | 5/10 | 2/4 |
+| `sev>=HIGH & conf=HIGH` | 3/10 | 2/4 |
+| `top25` | 6/10 | 4/4 |
+| `top25 & sev>=MEDIUM` | 5/10 | 4/4 |
+| `top25 & sev>=HIGH` | 3/10 | 2/4 |
+
+Anything catching SQL injection and `pickle.loads` — both rated *medium* —
+also catches django, flask, jekyll, lodash and sinatra. A well-maintained
+`httpx` carries one high-confidence HIGH finding; the deliberately
+vulnerable 200k-line control carries two. `B324` (`hashlib.md5`) appears in
+both: RFC-mandated digest authentication in one, an invented token function
+in the other, identical signature.
+
+Two candidate default gates, same wall:
+
+| default | good repos failed | controls caught |
+| --- | ---: | ---: |
+| `fail_on_severity: ["critical"]` | 1/10 | **0/4** |
+| `fail_on_severity: ["critical","high"]` | **5/10** | 2/4 |
+
+**Decision.** Nothing may *rank consequence* by reading a scanner's
+severity. Severity stays a weight in the score and a filter an operator can
+configure — both are honest uses of "how confident is the tool" — but no
+mechanism may claim to identify the dangerous findings from it.
+
+**What works instead, measured.** `fail_on_new` — ratchet on regressions
+rather than absolute state — does not read severity at all, and therefore
+does not inherit the flaw. Through a full adoption lifecycle on a fixture
+with pre-existing debt:
+
+```
+first run, no baseline      exit=1   (everything is new)
+after --bump-baseline       exit=0   (debt accepted once)
+SQL injection introduced    exit=1   <- the case severity gates miss
+plus shell=True             exit=1
+reverted                    exit=0
+```
+
+False positives are baselined once and never asked about again, which is
+exactly the property a severity threshold cannot have.
+
+**Not adopted as a default here.** The first run fails for every new
+adopter, and choosing what a tool refuses to build on first contact is an
+operator's decision rather than this register's. Recorded so the option is
+argued from data when it is taken up.
+
+**The consequence for design.** The only consequence-bearing signal in the
+data is CWE Top-25 membership, which caught 4/4 controls — too broad alone
+at 6/10 corpus trips, but it is the one input that is not the scanner's own
+opinion. Anything future that needs to rank danger should start there, and
+must be measured against both the corpus and known-vulnerable controls
+before it ships.

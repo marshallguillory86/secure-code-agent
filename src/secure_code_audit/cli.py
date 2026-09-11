@@ -897,7 +897,15 @@ def _under_root(root: Path, value: str) -> Path:
 def _print_summary(
     verdict, score, gate, ran, unavailable, coverage, paths, axes=(), trend=None
 ) -> None:
-    status = "PASS" if gate.passed else "FAIL"
+    # "PASS" is a claim that something was checked. With no gate configured
+    # nothing was, and saying so is the difference between a report and a
+    # false assurance.
+    if not gate.passed:
+        status = "FAIL"
+    elif gate.enforced:
+        status = "PASS"
+    else:
+        status = "NOT CONFIGURED"
     print(f"secure-code-agent  ·  score {verdict.headline()}  ·  gate {status}")
     for reason in verdict.reasons:
         print(f"  ! grade withheld: {reason}")
@@ -921,6 +929,15 @@ def _print_summary(
     if not gate.passed:
         for reason in gate.reasons:
             print(f"  ✗ {reason}")
+    elif not gate.enforced:
+        print(
+            "  ! no gate is configured, so nothing here could have failed. "
+            "This audit is a report, not a check."
+        )
+        print(
+            "    Set gates.fail_on_severity in secure-code-agent.json to make "
+            "findings block a build; read the work order either way."
+        )
     written = [
         str(p)
         for p in (

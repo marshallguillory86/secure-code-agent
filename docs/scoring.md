@@ -59,6 +59,16 @@ finding_score = (
 )
 ```
 
+> **What `severity` is, and is not.** It is the scanner's answer to *"how
+> confident am I that this pattern is present and matters in general"* — not
+> *"how bad is this in your code"*. Bandit rates SQL injection **medium** and
+> `hashlib.md5` **high**. It is a legitimate weight here and a legitimate
+> filter in `fail_on_severity`, because both are honest uses of a confidence
+> signal. It must not be used to *identify* the dangerous findings:
+> [D15](decisions.md) records six candidate rules that tried, and the
+> measurements showing none of them separate well-maintained code from a
+> repository with planted vulnerabilities.
+
 ## Category subtotal
 
 ```python

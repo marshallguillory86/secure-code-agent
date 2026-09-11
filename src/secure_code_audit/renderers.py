@@ -51,6 +51,12 @@ def to_json(
         },
         "gate": {
             "passed": gate.passed,
+            # Which gates could actually have failed. Empty means no policy
+            # was configured, and `passed: true` then says only that nothing
+            # tripped — not that anything was checked. A consumer treating
+            # `passed` as a security signal needs to see this.
+            "configured": list(gate.configured),
+            "enforced": gate.enforced,
             "reasons": list(gate.reasons),
             "tripped": list(gate.tripped),
         },

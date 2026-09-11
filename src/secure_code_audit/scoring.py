@@ -551,6 +551,26 @@ class GateResult:
     passed: bool
     reasons: tuple[str, ...]  # human-readable trip reasons
     tripped: tuple[str, ...] = field(default_factory=tuple)
+    #: Gates that could actually have failed this run. Empty means no
+    #: policy was configured, which is **not** the same as passing one.
+    #:
+    #: `passed` stays True in that case — no gate tripped, which is
+    #: accurate — but reporting it as PASS is a claim nothing checked. A
+    #: 200,000-line repository carrying SQL injection, `shell=True`,
+    #: `pickle.loads` and `eval` printed "gate PASS" out of the box, with
+    #: no configuration, because an absent gate cannot trip. The work
+    #: order listed all seven findings correctly at the same time.
+    #:
+    #: `_require_configured_gates` already refuses `--fail-on-gate` in this
+    #: situation, calling it "a green build with no security floor". This
+    #: is the same fact, carried far enough to reach the summary line a
+    #: person actually reads.
+    configured: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def enforced(self) -> bool:
+        """Did any gate actually stand between these findings and a pass?"""
+        return bool(self.configured)
 
 
 # Every gate, with the predicate that decides whether it can actually trip.
@@ -611,6 +631,7 @@ def evaluate_gates(
         passed=not tripped,
         reasons=tuple(reasons),
         tripped=tuple(tripped),
+        configured=active_gates(gate_config),
     )
 
 
