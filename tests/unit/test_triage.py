@@ -222,3 +222,39 @@ def test_every_low_precision_entry_cites_its_evidence():
         assert any(ch.isdigit() for ch in reason), (
             f"{rule_id} cites no measurement — every entry should name what was counted"
         )
+
+
+# ---------------------------------------------------------------------------
+# The work order has to be readable to be worth anything
+# ---------------------------------------------------------------------------
+
+
+def test_a_large_accept_tier_is_summarised_not_listed():
+    """Found by the tool's own self-audit.
+
+    Auditing this repository produced 884 ACCEPT findings, and listing each
+    one gave a 541KB, 15,390-line work order — past most context windows and
+    useless to a person. The action for that tier is "write one suppression
+    entry", not "patch each of these", so the useful shape is per rule.
+    """
+    from secure_code_audit.remediation import generate
+
+    many = [_f("B101", severity=Severity.LOW, line=n) for n in range(500)]
+    order = generate(many, axis_of=lambda _f: "test tree")
+
+    assert len(order.splitlines()) < 200, "the ACCEPT tier is still being listed per finding"
+    assert "| `B101` | 500 |" in order, "the summary lost the count"
+    assert ".scignore.yaml" in order, "no suppression was drafted"
+
+
+def test_an_overlong_fix_tier_says_what_it_left_out():
+    """Capping is fine. Capping silently is the absence-of-evidence failure
+    this whole tool exists to prevent."""
+    from secure_code_audit.remediation import generate
+
+    many = [_f("B602", line=n) for n in range(120)]
+    order = generate(many)
+
+    assert "not listed here" in order
+    assert "80 further finding(s)" in order
+    assert "JSON report" in order, "no pointer to where the rest live"
