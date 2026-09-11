@@ -41,7 +41,43 @@ def test_explicit_missing_config_is_rejected(tmp_path):
 
 
 def test_omitted_missing_default_config_uses_defaults(tmp_path, monkeypatch):
+    """With no config at all, the ratchet is the policy.
+
+    This asserted `gates == {}` — no floor whatsoever, under which an
+    absent gate cannot trip and every audit "passes". `fail_on_new` is the
+    one gate measured to work (D15): severity-based defaults either catch
+    nothing dangerous or fail half of well-maintained code.
+    """
     monkeypatch.chdir(tmp_path)
+
+    assert load().gates == {"fail_on_new": True}
+
+
+def test_an_operator_gates_block_replaces_the_default_entirely(tmp_path, monkeypatch):
+    """Choosing a policy means choosing it, not adding to ours.
+
+    If the default merged in, an operator who deliberately configured only
+    `fail_on_severity` would silently also get the ratchet, and could not
+    turn it off at all.
+    """
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "secure-code-agent.json").write_text(
+        json.dumps({"version": 1, "gates": {"fail_on_severity": ["critical"]}}),
+        encoding="utf-8",
+    )
+
+    gates = load().gates
+
+    assert gates == {"fail_on_severity": ["critical"]}
+    assert "fail_on_new" not in gates
+
+
+def test_an_explicitly_empty_gates_block_means_report_only(tmp_path, monkeypatch):
+    """An operator can still ask for no floor — they just have to say so."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "secure-code-agent.json").write_text(
+        json.dumps({"version": 1, "gates": {}}), encoding="utf-8"
+    )
 
     assert load().gates == {}
 

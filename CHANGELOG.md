@@ -4,7 +4,72 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
-## 0.8.0 — unreleased
+## 0.9.0 — unreleased
+
+**Two behaviour changes.** The default gate is no longer empty, and the LOC
+denominator no longer counts lockfiles or documentation data.
+
+### Changed — the default gate is a ratchet
+
+`DEFAULT gates` was `{}`. An absent gate cannot trip, so every audit
+"passed" — a 200,000-line repository carrying SQL injection, `shell=True`,
+`pickle.loads` and `eval` reported `gate PASS` out of the box. It now
+reports `gate FAIL`.
+
+The default is `{"fail_on_new": true}`. Severity-based defaults were
+measured and rejected (D15): `["critical"]` caught **none** of four
+known-vulnerable control repositories, and `["critical","high"]` failed
+**five of ten** well-maintained ones while still missing SQL injection and
+`pickle.loads`, which Bandit rates *medium*. The ratchet reads no severity
+at all and so inherits none of that — a false positive is baselined once
+and never asked about again.
+
+An operator who writes a `gates` block gets exactly what they wrote; the
+default applies only when none is written. `"gates": {}` still means
+report-only, explicitly.
+
+### Fixed — a first run was reported as a regression
+
+The gate said `2 new finding(s) since baseline` with **no baseline in
+existence**, claiming those findings appeared after one. On a first run the
+truth is that there is nothing to compare against, and that is now what it
+says, along with what to do next.
+
+`load()` returned an empty mapping for a baseline that was absent,
+unreadable or genuinely empty, so a **corrupt baseline silently turned an
+established repository back into a first run** and failed the build with a
+message blaming the code. The three states are now distinguished and each
+says which it is.
+
+### Fixed — the denominator counted things that are not code
+
+`docs/scoring.md` defines the divisor as "scanned code volume". Two kinds of
+line were in it that are not:
+
+- **Lockfiles not named `.lock`.** `**/*.lock` catches `poetry.lock`,
+  `Gemfile.lock`, `Cargo.lock` and `yarn.lock`, and misses every lockfile
+  the JavaScript ecosystem ships. `package-lock.json` alone was 9,699 of
+  axios's 17,532 non-code lines and 5,845 of lodash's 6,222.
+  `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml` and
+  `bun.lockb` are excluded now.
+- **Documentation.** Its *findings* move to their own axis and out of the
+  score; its *lines* stayed in the primary denominator. FastAPI carries
+  7,160 lines of `docs/en/data/` translator and contributor lists diluting
+  the count its code is graded against. Third occurrence of that mismatch,
+  after the test tree and the run's own artifacts. `loc_under` returns
+  `(primary, test, docs)` and the documentation axis reports a real line
+  count.
+
+Grades move **down** where non-code was inflating a denominator — fastapi
+2.47 (C) to 1.09 (D) on a tree that is 23,764 lines of code rather than
+35,655. No repository improved. The examined-corpus median holds at **3.36,
+in the B band**, so the calibration target is unaffected.
+
+`sqrt(LOC)` is unchanged. Per-kLOC was measured and is worse on the case
+that matters: it grades a 200,000-line repository containing SQL injection
+**A+** rather than A−.
+
+## 0.8.0 — 2026-09-11
 
 ### Fixed — "gate PASS" was printed when no gate existed
 

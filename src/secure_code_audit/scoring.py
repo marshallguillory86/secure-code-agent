@@ -691,7 +691,26 @@ def _gate_fail_on_new(
     ]
     if new_findings:
         tripped.append("fail_on_new")
-        reasons.append(f"{len(new_findings)} new finding(s) since baseline")
+        # What "new" means depends on whether there is anything to be new
+        # *against*. Saying "since baseline" when no baseline exists claims
+        # these findings appeared after one, which is the opposite of the
+        # truth on a first run.
+        baseline_state = gate_config.get("_baseline_state")
+        if baseline_state == "absent":
+            reasons.append(
+                f"{len(new_findings)} finding(s), and no baseline exists yet — on a first "
+                f"run everything is new because there is nothing to compare against. "
+                f"Work the order, then re-run with --bump-baseline to accept what is "
+                f"left and gate on regressions from there."
+            )
+        elif baseline_state == "unreadable":
+            reasons.append(
+                f"{len(new_findings)} finding(s) read as new because the baseline file "
+                f"could not be parsed. Fix or delete it — a broken baseline silently "
+                f"turns an established repository back into a first run."
+            )
+        else:
+            reasons.append(f"{len(new_findings)} new finding(s) since baseline")
 
 
 def _gate_min_score(
