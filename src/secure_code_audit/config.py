@@ -85,6 +85,8 @@ DEFAULT_OUTPUTS: dict[str, str] = {
     "comment_path": "secure-code-pr-comment.md",
     "prompt_path": "secure-code-remediation-prompt.md",
     "baseline_path": "secure-code-baseline.json",
+    # Append-only trend. The score's one genuine use is movement over time.
+    "history_path": ".secure-code/history.jsonl",
 }
 
 _SEVERITIES = {"critical", "high", "medium", "low", "informational"}

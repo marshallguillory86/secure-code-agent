@@ -56,3 +56,6 @@ calibration/.corpus/
 # enforces would create a second one, free to drift unnoticed. Delete this
 # line the day a workflow actually runs `uv sync`.
 uv.lock
+
+# Scan history — trend data, appended every run.
+.secure-code/

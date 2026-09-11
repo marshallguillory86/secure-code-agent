@@ -11,7 +11,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 
-from secure_code_audit.findings import Finding, Severity
+from secure_code_audit import triage
+from secure_code_audit.findings import Finding
 from secure_code_audit.standards import cwe_url, owasp_label
 
 _HARD_CONSTRAINTS = """\
@@ -80,22 +81,39 @@ will review.
 """
 
 
-def generate(findings: Iterable[Finding], root: Path | None = None) -> str:
-    """Build the full remediation prompt. Operators write the output to a
-    file and hand it to their agent (Claude Code, Codex, Cursor, Copilot)."""
-    actionable = [f for f in findings if not f.suppressed and f.severity != Severity.INFORMATIONAL]
-    if not actionable:
+def generate(
+    findings: Iterable[Finding],
+    root: Path | None = None,
+    axis_of=lambda _f: "primary",
+) -> str:
+    """Build the work order. The operator hands this to their agent.
+
+    Grouped into tiers rather than listed flat. A flat list gave a
+    `shell=True` command injection and a `PASSWORD_FIELD = "password"`
+    name-match the same billing, so an agent working top-to-bottom spent its
+    care on noise. See `triage.py` for what lands where and why.
+    """
+    tiers = triage.partition(findings, axis_of)
+    if not any(tiers.values()):
         return (
             "# Security remediation — no actionable findings\n\n"
             "secure-code-agent did not surface any actionable security findings "
             "for this run. Nothing to fix.\n"
         )
 
+    fix = tiers[triage.Tier.FIX]
+    review = tiers[triage.Tier.REVIEW]
+    accept = tiers[triage.Tier.ACCEPT]
+
     parts: list[str] = []
-    parts.append("# Security remediation — bounded scope\n")
+    parts.append("# Security work order\n")
     parts.append(
-        "You are fixing the security findings listed in §FINDINGS below.\n"
-        "This is a constrained task, not a refactor.\n"
+        f"**{len(fix)} to fix · {len(review)} to review · "
+        f"{len(accept)} suppression candidates.**\n\n"
+        "Work the tiers in order. Everything in §FIX is a defect the scanner "
+        "is confident about; everything in §REVIEW needs your judgement "
+        "before you touch it, and the reason is stated per finding. This is a "
+        "constrained task, not a refactor.\n"
     )
     parts.append(_HARD_CONSTRAINTS)
     parts.append(_PATCH_PROTOCOL)
@@ -106,21 +124,48 @@ def generate(findings: Iterable[Finding], root: Path | None = None) -> str:
         "entries before editing — they are the authoritative description\n"
         "of the weakness.\n"
     )
-    parts.append("## §FINDINGS\n")
 
-    # Sort: severity desc, then by file
-    sorted_findings = sorted(
-        actionable,
-        key=lambda f: (-f.severity.rank, f.file_path.as_posix(), f.line_start),
-    )
-    for n, f in enumerate(sorted_findings, start=1):
-        parts.append(_finding_block(n, f, root))
+    n = 0
+    if fix:
+        parts.append("## §FIX — patch these\n")
+        for f in fix:
+            n += 1
+            parts.append(_finding_block(n, f, root))
+
+    if review:
+        parts.append("## §REVIEW — confirm before changing\n")
+        parts.append(
+            "These come from rules measured producing findings that are not\n"
+            "defects, or from a scanner reporting low confidence. **Do not\n"
+            "patch one without first checking it is real.** If it is, fix it\n"
+            "under the same constraints as §FIX. If it is not, emit a\n"
+            "suppression candidate with the justification — that is a\n"
+            "successful outcome for this tier, not a failure.\n"
+        )
+        for f in review:
+            n += 1
+            parts.append(_finding_block(n, f, root, note=triage.reason_for(f)))
+
+    if accept:
+        parts.append("## §ACCEPT — test tree and documentation\n")
+        parts.append(
+            "Findings outside the shipped source. A credential in a test\n"
+            "fixture or a tutorial is usually deliberate, and these do not\n"
+            "grade the code condition — but they are still reported, and one\n"
+            "of them may be a real key committed to the wrong place.\n\n"
+            "**Do not patch these.** For each, decide: a genuine secret to\n"
+            "rotate and remove, or a fixture to record in `.scignore.yaml`\n"
+            "with a reason and an expiry. Propose, do not apply.\n"
+        )
+        for f in accept:
+            n += 1
+            parts.append(_finding_block(n, f, root))
 
     parts.append(_footer())
     return "\n".join(parts)
 
 
-def _finding_block(n: int, f: Finding, root: Path | None = None) -> str:
+def _finding_block(n: int, f: Finding, root: Path | None = None, note: str | None = None) -> str:
     lines: list[str] = []
     lines.append(f"### Finding {n}: `{f.rule_id}` — {f.short_desc or f.message[:120]}")
     lines.append("")
@@ -149,6 +194,9 @@ def _finding_block(n: int, f: Finding, root: Path | None = None) -> str:
         lines.append("```")
     lines.append("")
     lines.append(f"**Why this matters:** {f.message}")
+    if note:
+        lines.append("")
+        lines.append(f"**Why this needs checking first:** {note}")
     if f.fix_hint:
         lines.append("")
         lines.append(f"**Suggested approach:** {f.fix_hint}")
@@ -183,5 +231,10 @@ def _display_path(path: Path, root: Path | None) -> str:
         return path.as_posix()
 
 
-def write(findings: Iterable[Finding], path: Path, root: Path | None = None) -> None:
-    path.write_text(generate(findings, root), encoding="utf-8")
+def write(
+    findings: Iterable[Finding],
+    path: Path,
+    root: Path | None = None,
+    axis_of=lambda _f: "primary",
+) -> None:
+    path.write_text(generate(findings, root, axis_of), encoding="utf-8")
