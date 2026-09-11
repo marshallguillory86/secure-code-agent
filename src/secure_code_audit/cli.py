@@ -56,6 +56,7 @@ from secure_code_audit.scoring import (
 )
 from secure_code_audit.scoring import score as score_findings
 from secure_code_audit.scoring import verdict as build_verdict
+from secure_code_audit.standards import categories_for_scanner
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -501,6 +502,12 @@ def _prepare_audit(
         raise ValueError("multiple scan roots are not supported; provide one repository root")
     # The target is resolved first because the default config belongs to it.
     target = Path(args.paths[0]).resolve()
+    # A typo in the path used to reach the scanners, where the first adapter
+    # passed the missing directory as a subprocess `cwd` and the run died
+    # with a raw `FileNotFoundError` traceback. An operator who mistypes a
+    # path should be told so, not handed a stack trace from `subprocess.py`.
+    if not target.exists():
+        raise ValueError(f"scan root does not exist: {target}")
     cfg = config_mod.load(args.config, default_root=target)
     # Set from the command line only. Threading it through the loaded config
     # would let a repository-supplied file assert its own trustworthiness.
@@ -623,14 +630,24 @@ def _measurable_categories(
             domains.add(policy.domain)
 
     measurable = {category for category in Category if category.value in domains}
-    if "multiple" in domains:
-        # builtin_rules reads several categories and declares none of them.
-        measurable |= {
-            Category.SECRETS,
-            Category.CODE_VULNERABILITIES,
-            Category.CRYPTO,
-            Category.CONFIG_IAC,
-        }
+    for execution in executions:
+        # A scanner declaring `multiple` reads several categories and names
+        # none of them, so ask the standards map which rules it actually has.
+        #
+        # This list used to be written out by hand and was wrong in both
+        # directions: it claimed `builtin_rules` covered `secrets` and
+        # `config_iac` — its rules are Python and shell language primitives,
+        # it has never had one of either — and omitted `supply_chain`, which
+        # it does cover. An IaC repository carrying a `public-read` S3
+        # bucket, a 0.0.0.0/0 ingress rule, `USER root` and `chmod 777`
+        # scored `config_iac` **5.0** with neither checkov nor hadolint
+        # installed. A category graded perfectly because nothing could read
+        # it is the absence-as-value defect this function exists to prevent.
+        if execution.outcome not in COVERING_OUTCOMES:
+            continue
+        policy = floor.policy(execution.name)
+        if policy is not None and policy.domain == "multiple":
+            measurable |= categories_for_scanner(execution.name)
     measurable |= {finding.category for finding in findings if not finding.suppressed}
     return measurable
 
@@ -787,7 +804,7 @@ def _write_outputs(
     if paths.json_out is not None:
         renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict, axes)
     if paths.sarif is not None:
-        sarif.write(findings, paths.sarif, coverage)
+        sarif.write(findings, paths.sarif, coverage, lambda f: renderers.axis_of(f, axes))
     if paths.comment is not None:
         renderers.write_pr_comment(findings, score, gate, paths.comment, coverage, verdict)
     if paths.prompt is not None:

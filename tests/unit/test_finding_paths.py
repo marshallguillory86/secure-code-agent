@@ -230,3 +230,55 @@ def test_a_failed_probe_is_still_not_a_version():
     """Reporting stderr here once put "Error: unknown flag: --version" in the
     version column of a report claiming the scanner ran fine."""
     assert _Versioned("1.2.3", returncode=1).binary_version() is None
+
+
+# ---------------------------------------------------------------------------
+# The `python -m` fallback must actually run the tool
+# ---------------------------------------------------------------------------
+
+
+def test_semgrep_declares_no_python_module_fallback():
+    """`python -m semgrep` was deprecated in 1.38.0 and now prints a notice,
+    exits 0, and analyses nothing.
+
+    The fallback fires whenever the module is importable but the binary is
+    off PATH — the normal state after installing njsscan, which pulls
+    semgrep in as a dependency. The outcome was FAILED rather than a silent
+    COMPLETED, so coverage caught it and no grade was claimed on an unrun
+    scanner; but it reported "semgrep failed" to an operator whose actual
+    situation was "semgrep is not on PATH", and it turned five of this
+    project's own tests from skipped into failing.
+    """
+    from secure_code_audit.scanners.semgrep_scanner import SemgrepScanner
+
+    assert SemgrepScanner.python_module is None
+
+
+def test_every_declared_python_module_fallback_can_actually_run():
+    """A fallback that resolves but does nothing is worse than no fallback.
+
+    Checks the module exposes a `__main__`, which is what `python -m`
+    needs. It caught checkov, which ships none — `python -m checkov` fails
+    with "No module named checkov.__main__" — and did so in CI, where the
+    full floor is installed, after passing locally on a machine that did
+    not have checkov.
+
+    **This is necessary and not sufficient.** semgrep *has* a `__main__`;
+    it simply prints a deprecation notice and analyses nothing, which no
+    static check of this kind can see. That one was caught by running the
+    thing. A declared fallback deserves both.
+    """
+    import importlib.util
+
+    from secure_code_audit import scanners as registry
+
+    for name, cls in registry.SCANNERS.items():
+        module = getattr(cls, "python_module", None)
+        if not module:
+            continue
+        if importlib.util.find_spec(module) is None:
+            continue  # not installed here; nothing to check
+        assert importlib.util.find_spec(f"{module}.__main__") is not None, (
+            f"{name} declares python_module={module!r} but it has no __main__, "
+            f"so `python -m {module}` cannot run it"
+        )

@@ -156,7 +156,18 @@ class Scanner(ABC):
         """Run a scanner subprocess with sanitized env, no shell.
 
         Some scanners (npm audit, pip-audit) exit nonzero on findings; pass
-        `allowed_exits` to mark those as success."""
+        `allowed_exits` to mark those as success.
+
+        `cwd` is coerced to a directory. Auditing a single file is supported
+        — the CLI and several adapters carry `target if target.is_dir() else
+        target.parent` for exactly that — but every adapter passed the raw
+        target here, so `secure-code-agent path/to/one.py` died with
+        `NotADirectoryError` out of `subprocess.py` before any scanner ran.
+        Fixing it once here is better than asking fifteen adapters to
+        remember.
+        """
+        if cwd is not None and not cwd.is_dir():
+            cwd = cwd.parent
         env = self._sanitized_env()
         try:
             r = subprocess.run(

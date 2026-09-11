@@ -8,9 +8,19 @@ from pathlib import Path
 
 
 def find_repo_root(start: Path) -> Path:
-    """Walk up from `start` until a .git directory is found. Returns `start`
-    if no git repo is present (a tarball / archive run is still supported)."""
+    """Walk up from `start` until a .git directory is found.
+
+    Returns the nearest directory when no git repo is present, so a tarball
+    or archive run is still supported.
+
+    **A root is always a directory.** Auditing a single file outside a git
+    repository used to return the file itself, and every path built under it
+    became nonsense — `secure-code-agent one.py` died writing its report to
+    `one.py/secure-code-report.md`.
+    """
     cur = start.resolve()
+    if not cur.is_dir():
+        cur = cur.parent
     for parent in (cur, *cur.parents):
         if (parent / ".git").exists():
             return parent
@@ -107,7 +117,12 @@ def loc_under(
     skip = {p.resolve() for p in skip}
     primary = 0
     test = 0
-    for path in root.rglob("*"):
+    # `rglob` on a file yields nothing, so a single-file audit reported zero
+    # lines — and a zero denominator is not normalised at all, so the grade
+    # became the raw subtotal. Auditing one file is supported; it should be
+    # measured against that file.
+    candidates = root.rglob("*") if root.is_dir() else [root]
+    for path in candidates:
         if not path.is_file():
             continue
         if path.resolve() in skip:
