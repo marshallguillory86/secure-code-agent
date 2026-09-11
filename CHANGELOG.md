@@ -4,7 +4,64 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
-## 0.7.0 — unreleased
+## 0.8.0 — unreleased
+
+### Fixed — "gate PASS" was printed when no gate existed
+
+Out of the box, with no configuration, a 200,000-line repository containing
+SQL injection, `shell=True` command injection, `pickle.loads`, MD5 and
+`eval` reported:
+
+```
+score 4.06 — grade withheld (A- unverified)  ·  gate PASS
+```
+
+Every word is technically defensible. The grade *was* withheld. No gate
+tripped, because `DEFAULT gates` is `{}` and an absent gate cannot trip. And
+the line still tells a reader their repository is fine. The work order was
+correct at the same moment — seven findings in §FIX, the SQL injection and
+the `shell=True` among them — so the first-class output worked and the
+summary undid it.
+
+Three states now, where there were two:
+
+```
+gate FAIL            — a configured gate tripped
+gate PASS            — a configured gate held
+gate NOT CONFIGURED  — nothing was checked
+```
+
+An unconfigured run says so in words and points at the work order.
+`gate.configured` and `gate.enforced` are in the JSON report for consumers
+that read `passed` as a security signal.
+
+**`passed` is unchanged.** No gate tripped, which is true, and flipping it
+would fail every ungated CI job that exits 0 today — a behaviour change
+hiding inside a reporting fix. Inert configuration is still not enforcement:
+an empty `fail_on_severity` list and a `min_score` of 0 both read NOT
+CONFIGURED.
+
+### Recorded — D15: a scanner's severity is not a measure of consequence
+
+Four problems solved or attempted on this project turned out to be one
+problem: the score grading Bandit's talkativeness, `B105` scoring 0 useful
+hits in 22, a proposed severity floor, and proposed default gates.
+
+A scanner's severity answers *"how confident am I that this pattern is
+present"*, not *"how bad is this in your code"* — Bandit rates SQL injection
+**medium** and `hashlib.md5` **high**. Six candidate floor rules were
+measured against the corpus and four known-vulnerable controls; none
+separates. Two candidate default gates likewise: `critical`-only catches
+none of four vulnerable controls, `critical`+`high` fails five of ten
+well-maintained repositories.
+
+Severity remains a weight in the score and a filter an operator configures.
+Nothing may use it to *identify* the dangerous findings. The full data is in
+[`docs/decisions.md`](docs/decisions.md) D15, including the one mechanism
+measured to work — `fail_on_new`, which ignores severity entirely and
+therefore does not inherit the flaw.
+
+## 0.7.0 — 2026-09-11
 
 Nine defects, all found by running the tool against repository shapes and
 content the calibration corpus does not contain. Every one survived 526
