@@ -257,9 +257,16 @@ def test_semgrep_declares_no_python_module_fallback():
 def test_every_declared_python_module_fallback_can_actually_run():
     """A fallback that resolves but does nothing is worse than no fallback.
 
-    Checks the module is importable and exposes a `__main__`, which is what
-    `python -m` needs. A tool that deprecates its module entry point the way
-    semgrep did will fail this the next time someone adds it.
+    Checks the module exposes a `__main__`, which is what `python -m`
+    needs. It caught checkov, which ships none — `python -m checkov` fails
+    with "No module named checkov.__main__" — and did so in CI, where the
+    full floor is installed, after passing locally on a machine that did
+    not have checkov.
+
+    **This is necessary and not sufficient.** semgrep *has* a `__main__`;
+    it simply prints a deprecation notice and analyses nothing, which no
+    static check of this kind can see. That one was caught by running the
+    thing. A declared fallback deserves both.
     """
     import importlib.util
 
