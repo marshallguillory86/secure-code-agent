@@ -473,7 +473,7 @@ def _do_audit(args: argparse.Namespace) -> int:
 
     # ----- did the work order actually improve anything? -----
     if args.verify_against:
-        return _do_verify(args, all_findings, root)
+        return _do_verify(args, all_findings, root, axes)
 
     # ----- terminal output -----
     if args.json:
@@ -973,15 +973,15 @@ def _findings_from_report(path: Path) -> list[Finding]:
     return restored
 
 
-def _do_verify(args: argparse.Namespace, after: list[Finding], root: Path) -> int:
+def _do_verify(args: argparse.Namespace, after: list[Finding], root: Path, axes=()) -> int:
     """Compare this run against the one that produced the work order.
 
-    Exits nonzero unless security actually improved, because a verification
-    step that always passes verifies nothing. "Improved" is deliberately
+    Exits nonzero unless the run passes, because a verification step that
+    always passes verifies nothing. "Improved" is deliberately
     strict: something fixed, nothing introduced, nothing merely silenced.
     """
     before = _findings_from_report(_under_root(root, args.verify_against))
-    result = verify_mod.compare(before, after, root)
+    result = verify_mod.compare(before, after, root, lambda f: renderers.axis_of(f, axes))
 
     if args.json:
         sys.stdout.write(json.dumps(verify_mod.to_dict(result), indent=2) + "\n")
@@ -1004,10 +1004,15 @@ def _do_verify(args: argparse.Namespace, after: list[Finding], root: Path) -> in
             print(
                 f"  still open {finding.rule_id:34s} {finding.file_path.name}:{finding.line_start}"
             )
+        if result.deferred:
+            print(
+                f"  ({len(result.deferred)} finding(s) in the test tree and documentation "
+                f"are reported but not required — see §ACCEPT)"
+            )
         for note in result.notes:
             print(f"  ! {note}")
 
-    return 0 if result.improved else 1
+    return 0 if result.passed else 1
 
 
 if __name__ == "__main__":

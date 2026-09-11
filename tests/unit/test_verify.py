@@ -103,11 +103,48 @@ def test_silencing_everything_is_not_an_improvement():
 
 
 def test_an_empty_repository_does_not_claim_improvement():
-    """Nothing found before or after is not a success story."""
+    """Nothing found before or after is not a success story..."""
     result = compare([], [])
 
     assert result.improved is False
-    assert "nothing to verify" in result.headline()
+
+
+def test_but_a_clean_repository_still_passes():
+    """...and it must not fail either.
+
+    These were one property and the conflation made a clean repository
+    impossible to verify: nothing to fix meant nothing was fixed, so the
+    exit code was 1 forever. A team that resolved everything would have had
+    a CI step that could never go green again, which is a good way to teach
+    people to delete the CI step.
+    """
+    result = compare([], [])
+
+    assert result.passed is True
+    assert "nothing to fix, nothing broken" in result.headline()
+
+
+def test_an_unactioned_work_order_still_fails():
+    """ "Nothing regressed" is not enough. Findings that were reported and
+    remain reported mean the order was not done."""
+    result = compare([_f("a")], [_f("a")])
+
+    assert result.passed is False
+
+
+def test_a_regression_fails_even_alongside_real_fixes():
+    result = compare([_f("a"), _f("b")], [_f("z")])
+
+    assert result.regressed is True
+    assert result.passed is False
+
+
+def test_silencing_fails_the_gate():
+    assert compare([_f("a")], [_f("a", suppressed=True)]).passed is False
+
+
+def test_doing_the_work_passes():
+    assert compare([_f("a")], []).passed is True
 
 
 # ---------------------------------------------------------------------------
@@ -191,3 +228,53 @@ def test_resolving_nothing_says_so_plainly():
     result = compare([_f("a")], [_f("a")])
 
     assert any("Nothing was resolved" in note for note in result.notes)
+
+
+# ---------------------------------------------------------------------------
+# The work order does not ask for every finding
+# ---------------------------------------------------------------------------
+
+
+def _test_tree(_f_):
+    return "test tree"
+
+
+def test_test_tree_findings_are_reported_but_not_required():
+    """§ACCEPT says in as many words not to patch the test tree.
+
+    Counting those as outstanding work made verification unpassable on any
+    repository with fixtures: auditing this one produced 899 actionable
+    findings, every one of them in its own test tree, so `passed` was False
+    no matter how much real work had been done.
+    """
+    result = compare([_f("a")], [_f("a")], axis_of=_test_tree)
+
+    assert result.unresolved == ()
+    assert [f.fingerprint for f in result.deferred] == ["a"]
+    assert result.passed is True
+
+
+def test_a_primary_finding_is_still_required():
+    """The exemption is about location, not about letting work slide."""
+    result = compare([_f("a")], [_f("a")])
+
+    assert [f.fingerprint for f in result.unresolved] == ["a"]
+    assert result.passed is False
+
+
+def test_a_new_test_tree_finding_still_counts_as_introduced():
+    """A fresh secret in a fixture is worth knowing wherever it appears.
+    Deferring existing ones must not stop new ones registering."""
+    result = compare([], [_f("z")], axis_of=_test_tree)
+
+    assert [f.fingerprint for f in result.introduced] == ["z"]
+    assert result.passed is False
+
+
+def test_the_headline_does_not_call_a_deferred_tree_clean():
+    """Saying "clean" over 897 deferred findings is the flattering read."""
+    result = compare([_f("a")], [_f("a")], axis_of=_test_tree)
+
+    headline = result.headline()
+    assert "nothing required" in headline
+    assert "clean before and after" not in headline

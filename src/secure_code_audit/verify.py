@@ -30,6 +30,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from secure_code_audit import triage
 from secure_code_audit.findings import Finding, Severity
 
 
@@ -51,10 +52,19 @@ class Verification:
     unresolved: tuple[Finding, ...] = ()
     suppressed: tuple[Finding, ...] = ()
     introduced: tuple[Finding, ...] = ()
+    #: Still present, and the work order never asked for them — the test
+    #: tree and documentation, which §ACCEPT explicitly says not to patch.
+    #: Reported, never required.
+    deferred: tuple[Finding, ...] = ()
     #: Severity totals before and after, for the headline.
     before_count: int = 0
     after_count: int = 0
     notes: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def regressed(self) -> bool:
+        """Did this work make things worse, or only appear to make them better?"""
+        return bool(self.introduced) or bool(self.suppressed)
 
     @property
     def improved(self) -> bool:
@@ -65,12 +75,44 @@ class Verification:
         introduces one has not improved the code, it has traded. The
         operator can read the detail and decide otherwise, but the headline
         does not get to round in the flattering direction.
+
+        This answers "did it get better", which is not the same question as
+        "should CI go red" — see `passed`.
         """
-        return bool(self.fixed) and not self.introduced and not self.suppressed
+        return bool(self.fixed) and not self.regressed
+
+    @property
+    def passed(self) -> bool:
+        """Should this run be allowed through?
+
+        Separate from `improved`, because conflating them made a clean
+        repository impossible to verify: with nothing to fix, nothing was
+        fixed, so `improved` was False and the exit code was 1 — forever.
+        A team that resolved everything would have had a CI step that could
+        never go green again, which is a good way to teach people to delete
+        the CI step.
+
+        So the gate asks the answerable question: nothing regressed, and
+        either work was done or there was none to do. An outstanding work
+        order that went unactioned still fails — `unresolved` with nothing
+        fixed is not "nothing to do".
+        """
+        if self.regressed:
+            return False
+        nothing_to_do = not self.fixed and not self.unresolved
+        return bool(self.fixed) or nothing_to_do
 
     def headline(self) -> str:
         if not any((self.fixed, self.unresolved, self.suppressed, self.introduced)):
-            return "no findings before or after — nothing to verify"
+            if self.deferred:
+                # Saying "clean" over 899 deferred findings would be the
+                # flattering read of a tree full of fixtures. Nothing was
+                # *required*, which is not the same as nothing being there.
+                return (
+                    f"nothing required and nothing broken — "
+                    f"{len(self.deferred)} reported in the test tree and documentation"
+                )
+            return "clean before and after — nothing to fix, nothing broken"
         parts = [f"{len(self.fixed)} fixed"]
         if self.introduced:
             parts.append(f"{len(self.introduced)} introduced")
@@ -140,13 +182,27 @@ def _is_silenced(finding: Finding, root: Path | None) -> bool:
 
 
 def compare(
-    before: Iterable[Finding], after: Iterable[Finding], root: Path | None = None
+    before: Iterable[Finding],
+    after: Iterable[Finding],
+    root: Path | None = None,
+    axis_of=lambda _f: "primary",
 ) -> Verification:
     """Verify one work order's outcome.
 
     `before` is the audit that produced the order; `after` is a fresh audit
     of the same tree once the work is done. `root` lets the check read the
-    source back to tell a repair from a silencing.
+    source back to tell a repair from a silencing. `axis_of` says where each
+    finding lives.
+
+    **The axis matters, because the work order does not ask for all of
+    them.** §ACCEPT says in as many words not to patch the test tree or the
+    documentation. Counting those as outstanding work made verification
+    unpassable on any repository with fixtures: auditing this one produced
+    899 actionable findings, every single one in its own test tree, so
+    `passed` was False no matter how much real work had been done. They are
+    now `deferred` — reported, never required — while a *new* one still
+    counts as introduced, because a fresh secret in a fixture is worth
+    knowing about wherever it appears.
     """
     before = list(before)
     after = list(after)
@@ -162,8 +218,13 @@ def compare(
     silenced_inline = {fp for fp in gone if _is_silenced(old[fp], root)}
     suppressed_now |= silenced_inline
 
+    def _asked_about(finding: Finding) -> bool:
+        return triage.tier_of(finding, axis_of(finding)) is not triage.Tier.ACCEPT
+
     fixed = [f for fp, f in old.items() if fp not in new and fp not in suppressed_now]
-    unresolved = [f for fp, f in old.items() if fp in new]
+    still_open = [f for fp, f in old.items() if fp in new]
+    unresolved = [f for f in still_open if _asked_about(f)]
+    deferred = [f for f in still_open if not _asked_about(f)]
     introduced = [f for fp, f in new.items() if fp not in old]
     suppressed = [old[fp] for fp in suppressed_now]
 
@@ -192,6 +253,7 @@ def compare(
     return Verification(
         fixed=tuple(fixed),
         unresolved=tuple(unresolved),
+        deferred=tuple(deferred),
         suppressed=tuple(suppressed),
         introduced=tuple(introduced),
         before_count=len(old),
@@ -219,11 +281,14 @@ def to_dict(result: Verification) -> dict:
 
     return {
         "improved": result.improved,
+        "passed": result.passed,
+        "regressed": result.regressed,
         "headline": result.headline(),
         "before_count": result.before_count,
         "after_count": result.after_count,
         "fixed": _rows(result.fixed),
         "unresolved": _rows(result.unresolved),
+        "deferred": _rows(result.deferred),
         "suppressed": _rows(result.suppressed),
         "introduced": _rows(result.introduced),
         "notes": list(result.notes),

@@ -343,8 +343,18 @@ def _from_dict(raw: dict[str, Any]) -> Config:
         raise ValueError("outputs must be a JSON object")
     for k, default_v in DEFAULT_OUTPUTS.items():
         value = outputs.get(k, default_v)
+        # `null` turns an output off. The markdown report and the work order
+        # are written on every run, so an operator who does not want one
+        # needs a way to say so — and without this the only way to silence
+        # the work order was to stop using the tool. An empty string stays
+        # an error, because "" is a mistake rather than an intention.
+        if value is None:
+            cfg.outputs[k] = None
+            continue
         if not isinstance(value, str) or not value:
-            raise ValueError(f"outputs.{k} must be a non-empty string")
+            raise ValueError(
+                f"outputs.{k} must be a non-empty string, or null to disable that output"
+            )
         cfg.outputs[k] = value
 
     if "suppressions_file" in raw:
