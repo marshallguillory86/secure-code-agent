@@ -29,14 +29,18 @@ FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "semgrep-offlin
 
 
 def _semgrep() -> list[str] | None:
+    """The semgrep binary, or None.
+
+    **No `python -m semgrep` fallback.** Semgrep deprecated it in 1.38.0: it
+    prints a notice, exits 0, and analyses nothing. The fallback fired
+    whenever the module was importable but the binary was off PATH, which
+    became the normal state the moment njsscan was installed — it pulls
+    semgrep in as a dependency. Five tests here went straight from skipped
+    to failing, reporting that every rule in the offline profile was broken
+    when the truth was that semgrep had never run.
+    """
     found = shutil.which("semgrep")
-    if found:
-        return [found]
-    try:
-        import semgrep  # noqa: F401
-    except ImportError:
-        return None
-    return [sys.executable, "-m", "semgrep"]
+    return [found] if found else None
 
 
 requires_semgrep = pytest.mark.skipif(_semgrep() is None, reason="semgrep is not installed")

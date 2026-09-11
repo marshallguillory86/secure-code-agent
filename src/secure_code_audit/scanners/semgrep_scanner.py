@@ -54,7 +54,20 @@ def _cwe_from_rule(rule: dict) -> str | None:
 class SemgrepScanner(Scanner):
     name = "semgrep"
     binary = "semgrep"
-    python_module = "semgrep"
+    #: **No `python_module` fallback.** Semgrep deprecated `python -m
+    #: semgrep` in 1.38.0: it now prints a notice, exits 0, and analyses
+    #: nothing. The fallback fires whenever the module is importable but the
+    #: binary is off PATH — which is the normal state after installing
+    #: njsscan, since that pulls semgrep in as a dependency.
+    #:
+    #: The outcome was FAILED rather than a silent COMPLETED, so coverage
+    #: caught it and no grade was claimed on an unrun scanner. But "semgrep
+    #: failed" is the wrong thing to tell an operator whose actual situation
+    #: is "semgrep is not on PATH", and it sent five of this project's own
+    #: tests from skipped to failing the moment njsscan was installed.
+    #:
+    #: bandit, njsscan, checkov and pip-audit all still run correctly under
+    #: `python -m`, so the mechanism stays; semgrep simply opts out.
     default_category = Category.CODE_VULNERABILITIES
     install_hint = "pip install 'secure-code-agent[python-scanners]'"
 
