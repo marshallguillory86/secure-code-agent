@@ -224,7 +224,9 @@ than becoming folklore.
 `tests/integration/test_scoring_drift.py` now exists. It pins the letter bands,
 the severity ordering, the worst-category rule, and the property that a perfect
 score sits beside failed coverage without either deriving from the other. It
-proves the scale is *stable*, not that it is *correct* — D5 is still open.
+proves the scale is *stable*; D17 is what establishes it is *correct* — the
+corpus now carries vulnerable-by-design anchors and the scale orders the two
+populations perfectly (AUC 1.00). D5 is closed.
 
 ## 5. Problem 4 — the score's null state is "perfect" — CLOSED 2026-09-09
 
@@ -332,16 +334,21 @@ it is a product decision, not a refactor.
    where `Config` is flat, so generating either from the other needs a mapping
    layer that would itself be a third source of truth.
    `tests/unit/test_contract_sync.py` holds them in step instead.
-5. **Decide the score model** (§5). Conversation before code. **Still open.**
-6. **Calibrate the condition scale** (D5). **Method delivered 2026-09-09,
-   narrowed 2026-09-10.** The harness, the fourteen-repository pinned corpus
-   and the study exist and re-derive exactly ([`calibration/`](../calibration/README.md),
-   [`calibration.md`](calibration.md)). Every *input* question is answered and
-   the corpus median is 4.37 (A−). What remains open is band edges: the
-   distribution is bimodal, and the four repositories at the floor are
-   frameworks graded on constructs they exist to provide. That is a product
-   decision, not a method gap. `test_scoring_drift.py` still pins the scale's
-   *stability* rather than its correctness, and will until the bands are set.
+5. ~~**Decide the score model** (§5).~~ **Closed 2026-09-11 by D16 and D17.**
+   The model is a per-kLOC density, `secrets` excepted as a count, worst
+   category drives the overall, and the grade is explicitly second class to
+   the work order. Every number in it is now chosen from a measurement.
+6. ~~**Calibrate the condition scale** (D5).~~ **Closed 2026-09-11 by D16 and
+   D17.** Method delivered 2026-09-09, narrowed 2026-09-10, and finished when
+   the corpus grew a bad end. The nineteen-repository pinned corpus carries
+   both populations — fourteen maintained projects and five written to be
+   vulnerable — and re-derives exactly
+   ([`calibration/`](../calibration/README.md), [`calibration.md`](calibration.md)).
+   The scale orders them perfectly: AUC 1.00, separation +1.26, maintained
+   median 3.41 (B), every vulnerable-by-design application at F.
+   `test_scoring_drift.py` now pins actual values as well as properties.
+   Three bands (A−, B, C) hold no observation and D17 records that they are
+   presentational granularity rather than measured thresholds.
 7. Resume feature work and defect fixing.
 
 Steps 1–4 are done as of 2026-09-09. Most defects traded during recent review

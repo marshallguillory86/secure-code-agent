@@ -3,8 +3,8 @@
 `calibration/calibrate.py` re-derives per-category subtotals from the JSON
 report rather than reading the grades off it, because `category_grade` clamps
 at 0 and every repository worse than `normalized = 10` therefore reports the
-same 0.0 — destroying exactly the tail that decides whether the
-`sqrt(LOC/1000)` dampener works.
+same 0.0 — destroying exactly the tail that decides whether the normalizer
+works.
 
 Re-deriving means the harness carries its own copy of `finding_score`, over the
 JSON shape instead of the dataclass. That is a second source of truth for the
@@ -15,6 +15,15 @@ notices is worse than no calibration, because the bands chosen from it acquire
 an authority they never earned.
 
 These tests hold the two together.
+
+**It has drifted twice.** The harness summed each category flat, which was
+right until the product started saturating repeats of one rule; after that
+the study's subtotal for Django read 488.06 against the product's 218.5 and
+nothing failed. It also kept its own `sqrt(LOC/1000)` divisor and its own
+`0.5` slope after the product moved to a straight density at slope 1.5. The
+divisor and the slope are imported now; the saturation still cannot be,
+because `category_subtotal` takes `Finding` objects and a saved report holds
+dicts — so it is pinned below instead.
 """
 
 from __future__ import annotations
@@ -25,7 +34,12 @@ from pathlib import Path
 import pytest
 
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
-from secure_code_audit.scoring import finding_score
+from secure_code_audit.scoring import (
+    GRADE_SLOPE,
+    category_subtotal,
+    finding_score,
+    normalize,
+)
 
 REPO = Path(__file__).resolve().parent.parent.parent
 HARNESS = REPO / "calibration" / "calibrate.py"
@@ -61,6 +75,7 @@ def _finding(severity: Severity, confidence: Confidence, category: Category, top
 
 def _as_json(finding: Finding) -> dict:
     return {
+        "rule_id": finding.rule_id,
         "severity": finding.severity.value,
         "confidence": finding.confidence.value,
         "category": finding.category.value,
@@ -133,6 +148,84 @@ def test_the_harness_keeps_the_tail_the_product_clamps_away():
     assert measured["unclamped_overall"] < 0.0, measured
     assert measured["reported_overall"] == 0.0
     assert measured["worst_normalized"] > 10.0
+
+
+def test_the_harness_saturates_repeats_exactly_as_the_product_does():
+    """The drift that went unnoticed, pinned.
+
+    Both sides must apply the rank discount, both must group by rule within
+    a category, and distinct rules must still add in full.
+    """
+    harness = _harness()
+
+    for count in (1, 2, 5, 50):
+        findings = [
+            _finding(Severity.HIGH, Confidence.HIGH, Category.CODE_VULNERABILITIES, False)
+            for _ in range(count)
+        ]
+        expected = category_subtotal(findings, Category.CODE_VULNERABILITIES)
+        actual = harness._subtotals([_as_json(f) for f in findings])
+
+        assert actual["code_vulnerabilities"] == pytest.approx(expected), count
+
+    # A flat sum would agree at count=1 and nowhere else.
+    one = harness._subtotals(
+        [_as_json(_finding(Severity.HIGH, Confidence.HIGH, Category.CODE_VULNERABILITIES, False))]
+    )["code_vulnerabilities"]
+    fifty = harness._subtotals(
+        [
+            _as_json(_finding(Severity.HIGH, Confidence.HIGH, Category.CODE_VULNERABILITIES, False))
+            for _ in range(50)
+        ]
+    )["code_vulnerabilities"]
+    assert fifty < one * 50 * 0.5, "the harness is not saturating at all"
+
+
+def test_distinct_rules_are_not_saturated_against_each_other():
+    """Saturation is per rule. Collapsing across rules would hide independent
+    evidence, which is the opposite of what the discount is for."""
+    harness = _harness()
+
+    def one(rule_id: str) -> dict:
+        finding = _finding(Severity.HIGH, Confidence.HIGH, Category.CODE_VULNERABILITIES, False)
+        return _as_json(finding) | {"rule_id": rule_id}
+
+    same = harness._subtotals([one("A"), one("A")])["code_vulnerabilities"]
+    distinct = harness._subtotals([one("A"), one("B")])["code_vulnerabilities"]
+
+    assert distinct > same
+
+
+def test_the_harness_normalizes_and_slopes_through_the_product():
+    """Not a second copy of the formula — the product's own.
+
+    Reimplementing these is what let the study report `subtotal/sqrt(kLOC)`
+    for a full corpus run after the product had stopped using it.
+    """
+    harness = _harness()
+    payload = {
+        "score": {
+            "loc_scanned": 20_000,
+            "overall": 0.0,
+            "letter": "F",
+            "worst_category": "code_vulnerabilities",
+            "per_severity_count": {},
+        },
+        "findings": [
+            _as_json(_finding(Severity.HIGH, Confidence.HIGH, Category.CODE_VULNERABILITIES, False))
+        ],
+        "coverage": {"status": "complete"},
+    }
+
+    measured = harness.measure(payload)
+    subtotal = measured["subtotals"]["code_vulnerabilities"]
+
+    assert measured["normalized"]["code_vulnerabilities"] == pytest.approx(
+        normalize(subtotal, 20_000), abs=1e-3
+    )
+    assert measured["unclamped_overall"] == pytest.approx(
+        5.0 - normalize(subtotal, 20_000) * GRADE_SLOPE, abs=1e-3
+    )
 
 
 def test_percentiles_do_not_invent_a_distribution_from_nothing():

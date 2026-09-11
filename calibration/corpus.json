@@ -2,39 +2,196 @@
   "$comment": [
     "The calibration corpus, pinned by commit so the study is re-runnable.",
     "",
-    "Selection criteria, and the reason for each:",
+    "TWO POPULATIONS, and the reason there have to be two.",
+    "",
+    "  kind=maintained           Well-known, actively maintained projects with",
+    "                            their own security processes. These set where",
+    "                            the *good* end of the scale sits.",
+    "",
+    "  kind=vulnerable-by-design Training applications written to contain real",
+    "                            vulnerabilities \u2014 OWASP NodeGoat, railsgoat,",
+    "                            WebGoat, PyGoat, and Juice Shop. These set the",
+    "                            *bad* end.",
+    "",
+    "The first version of this corpus had only the maintained half, and said",
+    "so: 'these are all well-maintained OSS projects with their own security",
+    "processes. The distribution measured here is cleaner than the population",
+    "this tool will actually be pointed at.' That bias is exactly what blocked",
+    "D5's band edges. A band table cannot be chosen from a distribution with no",
+    "bad end in it \u2014 there is nothing to calibrate D and F against, and any",
+    "edge placed down there is a number somebody liked.",
+    "",
+    "Selection criteria for the maintained half, and the reason for each:",
     "  - Spans the languages the floor actually reads. Calibrating on Python",
     "    and applying the result to Java would be the same error D11 and D12",
     "    made about rule coverage.",
-    "  - Spans two orders of magnitude of size, because the sqrt(LOC/1000)",
-    "    dampener is an invented normalizer and a corpus of similarly-sized",
-    "    repositories cannot tell us whether it works.",
-    "  - Well-known, actively maintained projects, following the shape MA used",
-    "    at 0.5.0 (django, pytest, black, tornado, httpx, lodash, svelte,",
-    "    fastapi).",
+    "  - Spans two orders of magnitude of size, because the normalizer is an",
+    "    invented one and a corpus of similarly-sized repositories cannot tell",
+    "    us whether it works.",
+    "  - Follows the shape MA used at 0.5.0 (django, pytest, black, tornado,",
+    "    httpx, lodash, svelte, fastapi).",
     "",
-    "KNOWN BIAS, stated rather than discovered later: these are all",
-    "well-maintained OSS projects with their own security processes. The",
-    "distribution measured here is cleaner than the population this tool will",
-    "actually be pointed at. A median calibrated to earn a B here means 'as",
-    "clean as a well-run OSS project', not 'average code'. That is a defensible",
-    "target but it is a choice, and it is D5's to record."
+    "The vulnerable half is never executed. Every one of these is cloned,",
+    "read from disk by the scanners, and nothing else. They are training",
+    "applications, not malware, and WebGoat in particular is included to stay",
+    "unexamined on purpose: D12 records that no offline SAST in the floor",
+    "reads Java, and a deliberately-vulnerable Java application reporting a",
+    "clean score is the sharpest available demonstration of why coverage is",
+    "reported beside the grade and never folded into it."
   ],
   "version": 1,
   "repositories": [
-    { "name": "django",        "url": "https://github.com/django/django",             "commit": "2b30f6255b5ef84afbd827993643d52ef2c0963a", "language": "python", "size": "large" },
-    { "name": "flask",         "url": "https://github.com/pallets/flask",             "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35", "language": "python", "size": "small" },
-    { "name": "requests",      "url": "https://github.com/psf/requests",              "commit": "dae7ef63b4df6eded86637f251fc4e3a06c3b479", "language": "python", "size": "small" },
-    { "name": "httpx",         "url": "https://github.com/encode/httpx",              "commit": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254", "language": "python", "size": "small" },
-    { "name": "fastapi",       "url": "https://github.com/fastapi/fastapi",           "commit": "50113da16fec53b66b80d75e80a89296de4fa5a5", "language": "python", "size": "medium" },
-    { "name": "express",       "url": "https://github.com/expressjs/express",         "commit": "bed501c695a61886399ee622875f3be933c716d8", "language": "javascript", "size": "small" },
-    { "name": "axios",         "url": "https://github.com/axios/axios",               "commit": "1226e6c53eeb0e9d7159bea83556c2ff117b5f2e", "language": "javascript", "size": "small" },
-    { "name": "lodash",        "url": "https://github.com/lodash/lodash",             "commit": "0f79302eaf53618079118dc9663f731e8faa40b7", "language": "javascript", "size": "medium" },
-    { "name": "gin",           "url": "https://github.com/gin-gonic/gin",             "commit": "dcaa4296d111981ffb31ac3eba90bb63e1eb5ab9", "language": "go",     "size": "small" },
-    { "name": "logrus",        "url": "https://github.com/sirupsen/logrus",           "commit": "6d6a132bc03324d4ceb78e1b927f995d014cda20", "language": "go",     "size": "small" },
-    { "name": "sinatra",       "url": "https://github.com/sinatra/sinatra",           "commit": "cb22afd7902b566b6eaba6c4ea89739494a65d12", "language": "ruby",   "size": "small" },
-    { "name": "jekyll",        "url": "https://github.com/jekyll/jekyll",             "commit": "74d751339d3e534aa51d5d7b0640e9bd743509e4", "language": "ruby",   "size": "medium" },
-    { "name": "gson",          "url": "https://github.com/google/gson",               "commit": "8b4b55051489132190cb8d1c61eb9dc7f5381295", "language": "java",   "size": "medium" },
-    { "name": "commons-lang",  "url": "https://github.com/apache/commons-lang",       "commit": "62620f371b9c6ed337854e066d8916e56942d9af", "language": "java",   "size": "medium" }
+    {
+      "name": "django",
+      "url": "https://github.com/django/django",
+      "commit": "2b30f6255b5ef84afbd827993643d52ef2c0963a",
+      "language": "python",
+      "size": "large",
+      "kind": "maintained"
+    },
+    {
+      "name": "flask",
+      "url": "https://github.com/pallets/flask",
+      "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+      "language": "python",
+      "size": "small",
+      "kind": "maintained"
+    },
+    {
+      "name": "requests",
+      "url": "https://github.com/psf/requests",
+      "commit": "dae7ef63b4df6eded86637f251fc4e3a06c3b479",
+      "language": "python",
+      "size": "small",
+      "kind": "maintained"
+    },
+    {
+      "name": "httpx",
+      "url": "https://github.com/encode/httpx",
+      "commit": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254",
+      "language": "python",
+      "size": "small",
+      "kind": "maintained"
+    },
+    {
+      "name": "fastapi",
+      "url": "https://github.com/fastapi/fastapi",
+      "commit": "50113da16fec53b66b80d75e80a89296de4fa5a5",
+      "language": "python",
+      "size": "medium",
+      "kind": "maintained"
+    },
+    {
+      "name": "express",
+      "url": "https://github.com/expressjs/express",
+      "commit": "bed501c695a61886399ee622875f3be933c716d8",
+      "language": "javascript",
+      "size": "small",
+      "kind": "maintained"
+    },
+    {
+      "name": "axios",
+      "url": "https://github.com/axios/axios",
+      "commit": "1226e6c53eeb0e9d7159bea83556c2ff117b5f2e",
+      "language": "javascript",
+      "size": "small",
+      "kind": "maintained"
+    },
+    {
+      "name": "lodash",
+      "url": "https://github.com/lodash/lodash",
+      "commit": "0f79302eaf53618079118dc9663f731e8faa40b7",
+      "language": "javascript",
+      "size": "medium",
+      "kind": "maintained"
+    },
+    {
+      "name": "gin",
+      "url": "https://github.com/gin-gonic/gin",
+      "commit": "dcaa4296d111981ffb31ac3eba90bb63e1eb5ab9",
+      "language": "go",
+      "size": "small",
+      "kind": "maintained"
+    },
+    {
+      "name": "logrus",
+      "url": "https://github.com/sirupsen/logrus",
+      "commit": "6d6a132bc03324d4ceb78e1b927f995d014cda20",
+      "language": "go",
+      "size": "small",
+      "kind": "maintained"
+    },
+    {
+      "name": "sinatra",
+      "url": "https://github.com/sinatra/sinatra",
+      "commit": "cb22afd7902b566b6eaba6c4ea89739494a65d12",
+      "language": "ruby",
+      "size": "small",
+      "kind": "maintained"
+    },
+    {
+      "name": "jekyll",
+      "url": "https://github.com/jekyll/jekyll",
+      "commit": "74d751339d3e534aa51d5d7b0640e9bd743509e4",
+      "language": "ruby",
+      "size": "medium",
+      "kind": "maintained"
+    },
+    {
+      "name": "gson",
+      "url": "https://github.com/google/gson",
+      "commit": "8b4b55051489132190cb8d1c61eb9dc7f5381295",
+      "language": "java",
+      "size": "medium",
+      "kind": "maintained"
+    },
+    {
+      "name": "commons-lang",
+      "url": "https://github.com/apache/commons-lang",
+      "commit": "62620f371b9c6ed337854e066d8916e56942d9af",
+      "language": "java",
+      "size": "medium",
+      "kind": "maintained"
+    },
+    {
+      "name": "pygoat",
+      "url": "https://github.com/adeyosemanputra/pygoat",
+      "commit": "19d17cc8874861142b330636d068bbde54e86b85",
+      "language": "python",
+      "size": "small",
+      "kind": "vulnerable-by-design"
+    },
+    {
+      "name": "nodegoat",
+      "url": "https://github.com/OWASP/NodeGoat",
+      "commit": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
+      "language": "javascript",
+      "size": "small",
+      "kind": "vulnerable-by-design"
+    },
+    {
+      "name": "railsgoat",
+      "url": "https://github.com/OWASP/railsgoat",
+      "commit": "f5951f13089d85c979de09e7da3c8c0fb982f94a",
+      "language": "ruby",
+      "size": "small",
+      "kind": "vulnerable-by-design"
+    },
+    {
+      "name": "juice-shop",
+      "url": "https://github.com/juice-shop/juice-shop",
+      "commit": "1618a611b173b4bf114028e6e02549950606e29d",
+      "language": "typescript",
+      "size": "medium",
+      "kind": "vulnerable-by-design"
+    },
+    {
+      "name": "webgoat",
+      "url": "https://github.com/WebGoat/WebGoat",
+      "commit": "685a4b9df91fb456fc74628343d01615cd29a66a",
+      "language": "java",
+      "size": "medium",
+      "kind": "vulnerable-by-design"
+    }
   ]
 }

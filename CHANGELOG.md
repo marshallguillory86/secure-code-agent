@@ -4,7 +4,124 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
-## 0.9.0 — unreleased
+## 0.10.0 — 2026-09-11
+
+**The scoring model changed, and it now says so.** Two normalizer decisions
+(D16, D17) closed D5, which had been open since the first week. A
+`scoring_model` field lets a consumer tell the models apart.
+
+### Changed — the grade is a density, and `secrets` is a count
+
+The normalizer was `sqrt(LOC/1000)`, which under-corrected for size, so the
+ranking followed how *big* a repository is rather than how much is wrong with
+it. Flask carried **2.2× Django's finding density and normalized at half the
+value**; grade correlated **−0.37** with size. It is now a straight per-kLOC
+density, and the grade slope moved 0.5 → 1.3 with it (D16).
+
+`secrets` is the exception and normalizes by `sqrt(LOC/1000)` (D17). OWASP
+Juice Shop carries four hardcoded API keys and three private keys and graded
+**B+** under straight density, because 115,340 lines divided seven committed
+credentials down to nothing — while Flask, with no secrets at all, graded F.
+A committed private key is one committed private key whether the repository is
+a thousand lines or a million. Damped, not exempted: an absolute count failed
+Django on two low-confidence hits.
+
+**Every grade moves.** A repository with committed secrets scores lower; a
+large repository with diffuse low-severity findings scores higher.
+
+### Added — `scoring_model`, and `security-pillar.json` schema 2
+
+A scoring model can change without the document carrying it changing shape —
+same fields, a different number for the same repository. `schema_version` is
+now `2` and carries a top-level `scoring_model` integer, currently `2`. v2 is
+v1 **plus that one field**; every v1 key keeps its name, type and meaning.
+
+`maintainability-agent` keyed trend comparability on our release version,
+which opened a new series on every release including ones that changed no
+scoring. It now keys on `scoring_model` when present and falls back to the
+version when absent, so old documents keep working (D19).
+
+`SCORING_MODEL` is pinned to a digest of the weight tables, the slope, the
+letter bands and the output of the real `score()` over a fixed matrix, so
+changing a constant *or* a formula without bumping it fails CI.
+
+### Fixed — Bandit's `eval`/`exec` were filed as OS command injection
+
+`B102` was mapped to **CWE-78** and `B307` had no curated entry, so it
+inherited CWE-78 from Bandit. CWE-78 is *OS* command injection — the shell
+weakness `B602` covers. Both are CWE-95 now, matching what semgrep, RuboCop
+and the built-in rules already used.
+
+This was not only a label. Corroboration merges across scanners on a shared
+CWE, so `B102` never merged with the built-in `sca.python.eval` on the same
+`exec(compile(...))` line and **one defect scored twice**; Flask carried four
+such pairs. `is_top25` now follows the documented CWE-95 → CWE-94 ChildOf
+relationship, so describing the weakness accurately is not what removes its
+Top-25 weight.
+
+### Fixed — stored analysis output was scanned as source
+
+This tool's own output is now excluded by default anywhere in a tree, along
+with `.secure-code/` and `.maintainability/`. `_own_artifacts` only ever
+removed the paths the *current run* was about to write, so an archived copy
+was read as source: 556,808 LOC and 550 findings here, and on
+`maintainability-agent` 957,219 LOC of stored audit output about other
+repositories, which **diluted five genuine criticals to an A−**. A stored
+report quotes findings verbatim, so it manufactures findings about findings
+and inflates the LOC denominator at once.
+
+Patterns are derived from `DEFAULT_OUTPUTS`, so adding an output cannot leave
+a readable artifact behind. `vendor/` and `third_party/` are deliberately
+**not** excluded — vendored code is deployed code (D18).
+
+### Fixed — a variable reference is not a credential
+
+`gitleaks.curl-auth-user` fires CRITICAL on `curl -sS -u "$SONAR_TOKEN:"` in a
+GitHub Actions workflow, where no credential is present. Such a finding is now
+demoted to **§REVIEW** with the reason stated, checked by reading the source
+line back because gitleaks runs `--redact` and the variable name is exactly
+what got redacted.
+
+Never to §ACCEPT: it still escalates through `fail_on_category: [secrets]`
+from any axis. `curl -u "$USER:hunter2Passw0rd"` stays in §FIX — half a line
+done correctly must not launder the other half. An unreadable file, an
+out-of-range line, or a history-only finding all leave the finding where it
+was.
+
+### Fixed — `--target` silently audited the wrong tree
+
+`--target` names an *agent* for `--init-agent-standards`. On an audit run it
+was accepted and discarded, so `secure-code-agent --target /some/repo` audited
+the **current directory** and printed a grade for it. Now refused, with the
+working command in the message.
+
+### Calibration — D5 is closed
+
+The corpus gained a bad end: five applications written to be vulnerable (OWASP
+PyGoat, NodeGoat, railsgoat, WebGoat, Juice Shop), cloned and read, never
+executed. Without them there was nothing to place D and F against, which is
+why the band question stayed open.
+
+| | value |
+| --- | ---: |
+| AUC (maintained scores above vulnerable) | **1.00** |
+| separation | **+1.26** |
+| maintained median | **3.41 (B)** |
+| vulnerable median | **0.00 (F)** |
+| Spearman(LOC, grade) | **−0.05** |
+
+Two band edges are measured: D/F at 1.00 falls inside the gap between the
+populations, and the centre lands in B. **A−, B and C hold no observation at
+all**, and no larger corpus fixes that — at that end the difference between
+two repositories is five findings versus eight in twenty thousand lines. Those
+edges are presentational granularity, not measured thresholds. A B+ is not
+meaningfully better than an A−.
+
+`test_scoring_drift.py` now pins actual values as well as properties. Every
+assertion in it had been relational, so a full model retune passed it
+untouched.
+
+## 0.9.0 — 2026-09-11
 
 **Two behaviour changes.** The default gate is no longer empty, and the LOC
 denominator no longer counts lockfiles or documentation data.

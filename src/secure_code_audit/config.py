@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 DEFAULT_CONFIG_PATH = Path("secure-code-agent.json")
@@ -37,6 +37,42 @@ DEFAULT_EXCLUDES: tuple[str, ...] = (
     "**/npm-shrinkwrap.json",
     "**/pnpm-lock.yaml",
     "**/bun.lockb",
+    # --- stored analysis output -------------------------------------------
+    #
+    # This tool's own output is never its input, *wherever* it is stored.
+    #
+    # `cli._own_artifacts` already removes the paths the current run is about
+    # to write, which is what stopped an audit scoring the report it had just
+    # produced. It cannot see a *copy* kept somewhere else, and two
+    # independent reports of that landed on the same day:
+    #
+    #   - this repository scanned `calibration/.corpus` — fourteen cloned
+    #     third-party projects, 556,808 LOC and 550 findings, all about code
+    #     that is not ours;
+    #   - `maintainability-agent` scanned `tools/validation/reports/` —
+    #     957,219 LOC of stored audit output *about other repositories*,
+    #     4,929 findings, which diluted five genuine criticals to an A-.
+    #
+    # A stored report is the worst possible input: it quotes findings
+    # verbatim, including the code snippets and the redacted secrets that
+    # produced them, so it manufactures findings about findings and inflates
+    # the denominator at the same time.
+    #
+    # Filename patterns rather than directory names, because the directory is
+    # whatever the operator chose and the filenames are ours. Derived from
+    # `DEFAULT_OUTPUTS` below so the two cannot drift — see
+    # `_own_output_globs`.
+    #
+    # Deliberately NOT here: `vendor/`, `third_party/` and their kin. Vendored
+    # code is deployed code, and excluding it by default would hide real
+    # vulnerabilities in exactly the place nobody is reading. Stored analysis
+    # output is not code at all; that is the whole difference.
+    ".secure-code/",
+    "**/.secure-code/",
+    # maintainability-agent's state and output directory. Same argument: its
+    # reports quote findings, and its history is append-only JSONL.
+    ".maintainability/",
+    "**/.maintainability/",
 )
 
 #: Conventional test-tree locations across the languages the floor reads.
@@ -106,6 +142,24 @@ DEFAULT_OUTPUTS: dict[str, str] = {
     # Append-only trend. The score's one genuine use is movement over time.
     "history_path": ".secure-code/history.jsonl",
 }
+
+
+def _own_output_globs() -> tuple[str, ...]:
+    """Match this tool's default output filenames anywhere in a tree.
+
+    Kept as a function over `DEFAULT_OUTPUTS` rather than a hand-written list
+    so that adding an output cannot leave a file this tool writes readable by
+    the next run. `history_path` is already covered by the `.secure-code/`
+    directory entries; matching its basename anywhere would be wrong, since
+    `history.jsonl` is not a name this project owns.
+    """
+    names = {
+        PurePosixPath(path).name for key, path in DEFAULT_OUTPUTS.items() if key != "history_path"
+    }
+    return tuple(sorted(f"**/{name}" for name in names))
+
+
+DEFAULT_EXCLUDES = DEFAULT_EXCLUDES + _own_output_globs()
 
 _SEVERITIES = {"critical", "high", "medium", "low", "informational"}
 _CATEGORIES = {

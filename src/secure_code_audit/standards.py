@@ -95,8 +95,19 @@ class StandardsEntry:
 _MAP: dict[tuple[str, str], StandardsEntry] = {
     # ----- Bandit ----------------------------------------------------------
     # Source: https://bandit.readthedocs.io/en/latest/plugins/index.html
+    # B102 read CWE-78 — *OS* command injection, the shell-injection weakness
+    # that B602/B603/B605/B607 cover. `exec()` does not invoke a shell; it
+    # compiles and runs Python. The mislabel travelled: into the OWASP
+    # mapping, into SARIF, into the work order, and into the Top-25 bonus,
+    # which CWE-78 carries and the true weakness does not directly.
+    #
+    # It also broke corroboration, which is how it was found. Bandit's B102
+    # and our own `sca.python.eval` fire on the same `exec(compile(...))`
+    # line in Flask's `config.py`; `_same_weakness` merges across scanners on
+    # a shared CWE, CWE-78 and CWE-95 are not shared, so one defect scored
+    # twice. Flask carried four such pairs and graded F partly on doubles.
     ("bandit", "B102"): StandardsEntry(
-        canonical_cwe="CWE-78",
+        canonical_cwe="CWE-95",
         owasp_top10="A03",
         asvs_section="V5.3.8",
         nist_ssdf="PW.5.1",
@@ -105,6 +116,20 @@ _MAP: dict[tuple[str, str], StandardsEntry] = {
         confidence=Confidence.MEDIUM,
         short_desc="Use of exec() — arbitrary code execution risk.",
         fix_hint="Eliminate exec() entirely. If dynamic dispatch is required, use a typed registry / function map.",
+    ),
+    # B307 (`eval`) had no curated entry, so `_make_finding` fell back to the
+    # CWE the scanner reports — and Bandit files `eval` under CWE-78 too. Same
+    # weakness as B102, same fix, and curating it is what stops the fallback.
+    ("bandit", "B307"): StandardsEntry(
+        canonical_cwe="CWE-95",
+        owasp_top10="A03",
+        asvs_section="V5.2.4",
+        nist_ssdf="PW.5.1",
+        category=Category.CODE_VULNERABILITIES,
+        severity=Severity.HIGH,
+        confidence=Confidence.MEDIUM,
+        short_desc="Use of eval() — arbitrary code execution risk.",
+        fix_hint="Use ast.literal_eval for data. For dispatch, use a dict of callables rather than evaluating a name.",
     ),
     ("bandit", "B301"): StandardsEntry(
         canonical_cwe="CWE-502",
@@ -494,9 +519,41 @@ def lookup(scanner: str, rule_id: str) -> StandardsEntry | None:
     return _MAP.get((scanner.lower(), "*"))
 
 
+#: Child CWEs this project maps to, and the Top-25 entry each is a ChildOf.
+#:
+#: The Top-25 list names classes, and a scanner names the specific weakness
+#: inside one. CWE-95 ("Eval Injection") is a documented ChildOf CWE-94
+#: ("Improper Control of Generation of Code"), which is on the list — so a
+#: confirmed eval injection *is* a Top-25 weakness, and a membership test
+#: that only compares strings says it is not.
+#:
+#: This is deliberately a hand-checked handful rather than an imported CWE
+#: hierarchy. Every entry is a relationship stated in the MITRE definition of
+#: the child, and each is used by a rule this project actually maps. Adding a
+#: parent here widens the 1.25x bonus, so it is a decision, not a lookup.
+_TOP25_PARENT: dict[str, str] = {
+    # cwe.mitre.org/data/definitions/95.html — ChildOf 94
+    "CWE-95": "CWE-94",
+    # cwe.mitre.org/data/definitions/77.html is itself on the list; 78 is the
+    # OS-command child and is also listed, so neither needs an entry here.
+}
+
+
 def is_top25(canonical_cwe: str | None) -> bool:
-    """Is this CWE on the MITRE Top 25 (2025) list? Used for scoring boost."""
-    return canonical_cwe is not None and canonical_cwe in CWE_TOP25_2025
+    """Is this CWE on the MITRE Top 25 (2025) list, directly or as a child?
+
+    Correcting Bandit's B102/B307 from CWE-78 to CWE-95 was right on the
+    weakness and would have quietly removed the Top-25 bonus from every
+    eval/exec finding in the corpus — CWE-78 is on the list and CWE-95 is
+    not. Losing the bonus for the *reason* "we now describe the weakness
+    accurately" is the wrong trade, and CWE-95 is a child of CWE-94, which
+    is listed. So membership follows the relationship.
+    """
+    if canonical_cwe is None:
+        return False
+    if canonical_cwe in CWE_TOP25_2025:
+        return True
+    return _TOP25_PARENT.get(canonical_cwe, "") in CWE_TOP25_2025
 
 
 def cwe_url(canonical_cwe: str) -> str:

@@ -24,6 +24,7 @@
       "**/__pycache__/",
       "**/*.min.js",
       "**/*.lock",
+    "calibration/.corpus/",
       "src/secure_code_audit/scanners/builtin_rules.py",
       "src/secure_code_audit/standards.py",
       "src/secure_code_audit/remediation.py",
