@@ -3,8 +3,9 @@
 
 `docs/decisions.md` D5 has read "Open — method needed" since 2026-09-08. The
 letter bands were borrowed from `maintainability-agent` without its calibration
-study, and the `sqrt(LOC/1000)` dampener is an invented normalizer with no
-corpus behind it. Nobody has established that A+ means anything.
+study, and the dampener was an invented normalizer with no corpus behind it.
+Nobody had established that A+ meant anything. D16 settled the normalizer from
+this corpus; the bands themselves are still borrowed.
 
 This is the harness, not the answer. It audits every repository in
 `corpus.json` at its pinned commit with a fixed scanner set, and reports the
@@ -52,8 +53,10 @@ from secure_code_audit.scoring import (  # noqa: E402
     CATEGORY_WEIGHT,
     CONFIDENCE_WEIGHT,
     CWE_TOP25_BONUS,
+    GRADE_SLOPE,
     SEVERITY_WEIGHT,
     letter_grade,
+    normalize,
 )
 
 #: Scanners the study runs. Fixed deliberately: a distribution measured with a
@@ -146,6 +149,35 @@ def _finding_score(finding: dict) -> float:
     return base
 
 
+def _subtotals(findings: list[dict]) -> dict[str, float]:
+    """`scoring.category_subtotal` for every category at once, over JSON.
+
+    **This must stay in step with the product, and twice it has not been.**
+    The harness used to sum each category flat, which was correct until the
+    product started saturating repeats of one rule at `weight / sqrt(k)`;
+    after that the study's subtotal for Django read 488.06 against the
+    product's 218.5 and nothing complained. It also carried its own
+    `sqrt(LOC/1000)` divisor and its own `0.5` slope, both of which the
+    product has since changed.
+
+    The divisor and the slope are now imported rather than copied. The rank
+    discount cannot be imported — `category_subtotal` takes `Finding`
+    objects and a saved report holds dicts — so it is reimplemented here and
+    `tests/unit/test_calibration_harness.py` pins the two against each other.
+    """
+    by_rule: dict[tuple[str, str], list[float]] = {}
+    for finding in findings:
+        key = (finding["category"], finding["rule_id"])
+        by_rule.setdefault(key, []).append(_finding_score(finding))
+
+    subtotals: dict[str, float] = {c.value: 0.0 for c in Category}
+    for (category, _rule), scores in by_rule.items():
+        subtotals[category] += sum(
+            score / math.sqrt(rank) for rank, score in enumerate(sorted(scores, reverse=True), 1)
+        )
+    return subtotals
+
+
 def scored_findings(payload: dict) -> list[dict]:
     """Only what the score actually counted.
 
@@ -160,15 +192,12 @@ def scored_findings(payload: dict) -> list[dict]:
 def measure(payload: dict) -> dict:
     """Per-category subtotals and *unclamped* normalized values."""
     loc = int(payload["score"]["loc_scanned"])
-    subtotals: dict[str, float] = {c.value: 0.0 for c in Category}
-    for finding in scored_findings(payload):
-        subtotals[finding["category"]] += _finding_score(finding)
+    subtotals = _subtotals(scored_findings(payload))
 
-    divisor = math.sqrt(max(loc, 1) / 1000) if loc > 0 else 1.0
-    normalized = {name: value / divisor for name, value in subtotals.items()}
+    normalized = {name: normalize(value, loc) for name, value in subtotals.items()}
     # The product clamps this to [0, 5]; the study keeps the raw value so the
     # tail survives. `unclamped_overall` can go negative, and that is the point.
-    unclamped = {name: 5.0 - (value * 0.5) for name, value in normalized.items()}
+    unclamped = {name: 5.0 - (value * GRADE_SLOPE) for name, value in normalized.items()}
     worst = min(unclamped.values()) if unclamped else 5.0
 
     return {
@@ -204,13 +233,10 @@ VARIANTS: dict[str, object] = {
 
 
 def worst_normalized(findings: list[dict], loc: int) -> float:
-    subtotals: dict[str, float] = {}
-    for finding in findings:
-        subtotals[finding["category"]] = subtotals.get(finding["category"], 0.0) + _finding_score(
-            finding
-        )
-    divisor = math.sqrt(max(loc, 1) / 1000)
-    return max((value / divisor for value in subtotals.values()), default=0.0)
+    return max(
+        (normalize(value, loc) for value in _subtotals(findings).values()),
+        default=0.0,
+    )
 
 
 def variants(reports: Path) -> dict:
@@ -247,7 +273,7 @@ def variants(reports: Path) -> dict:
         "per_repository": rows,
         "median_worst_normalized": medians,
         "median_grade_at_current_slope": {
-            name: round(max(0.0, 5.0 - value * 0.5), 2) for name, value in medians.items()
+            name: round(max(0.0, 5.0 - value * GRADE_SLOPE), 2) for name, value in medians.items()
         },
     }
 
@@ -409,13 +435,34 @@ def main() -> int:
 
     print("\n--- distribution ---")
     print(json.dumps(summary, indent=2))
-    median = summary["unclamped_overall"].get("median")
-    if median is not None:
+    # The *examined* median, not the median over all 14. Six repositories in
+    # this corpus have no scanner that can read their language, so they report
+    # zero findings and grade A+ — and including them pulled the headline
+    # median to 4.09 (A-) while the repositories anything actually looked at
+    # sat at 3.20 (B). Reporting the first as "the distribution" is P7 broken
+    # in the study that exists to check the scale.
+    distribution = summary.get("examined_overall") or {}
+    median = distribution.get("median")
+    if median is None:
         print(
-            f"\nMedian unclamped overall {median} → letter "
-            f"{letter_grade(max(0.0, min(5.0, median)))}. "
-            f"A calibrated scale would put this in the B band [3.00, 3.50)."
+            "\nNo repository in this corpus was examined by a scanner that "
+            "reads its language, so there is no distribution to report."
         )
+    else:
+        print(
+            f"\nMedian overall across {summary['examined']} examined "
+            f"repositor{'y' if summary['examined'] == 1 else 'ies'}: "
+            f"{median} → {letter_grade(max(0.0, min(5.0, median)))}. "
+            f"The calibration target (D5) is the B band [3.00, 3.50)."
+        )
+        unexamined = summary["measured"] - summary["examined"]
+        if unexamined:
+            print(
+                f"{unexamined} of {summary['measured']} repositories were not "
+                f"examined and are excluded; including them reports "
+                f"{summary['reported_overall'].get('median')}, "
+                f"which measures scanner coverage rather than code quality."
+            )
     return 0
 
 

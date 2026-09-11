@@ -785,3 +785,100 @@ at 6/10 corpus trips, but it is the one input that is not the scanner's own
 opinion. Anything future that needs to rank danger should start there, and
 must be measured against both the corpus and known-vulnerable controls
 before it ships.
+
+---
+
+## D16 — The grade is a density, and the gate is what catches a vulnerability
+
+**Status:** Accepted · 2026-09-11 · supersedes the normalizer half of D5
+
+**Context.** D5 recorded that `sqrt(LOC/1000)` was "an invented normalizer
+with no corpus behind it", and the calibration study then showed what that
+cost. Under it the ranking followed how *big* a repository is rather than how
+much is wrong with it:
+
+| repo | kLOC | weighted findings / kLOC | `sqrt` normalized |
+| --- | ---: | ---: | ---: |
+| django | 144.5 | 1.51 | **18.18** ← ranked worst |
+| flask | 7.8 | **3.35** | 9.38 |
+| fastapi | 23.8 | 1.60 | 7.81 |
+
+Flask carried 2.2× Django's finding density and normalized at half the value.
+Django sat fifth by density and first by penalty. Over the ten examined
+repositories, Spearman correlation of grade against size was **−0.37**, while
+correlation of density against size was **+0.12** — the number was tracking
+size, which is the one thing the dampener exists to remove.
+
+**Decision.** Divide by `LOC/1000` rather than `sqrt(LOC/1000)` — a straight
+density, weighted findings per thousand lines of scanned code — and move the
+grade slope from 0.5 to 1.5 with it. The two only mean anything together.
+
+**Why 1.5.** It is the slope that holds D5's calibration target across the
+examined corpus. Four normalizers were measured on the same pinned run:
+
+```
+  sqrt,   slope 0.5    median 3.36 (B)   F=2   spread 5.00
+  linear, slope 0.5    median 4.40 (A-)  F=0   spread 1.67
+  linear, slope 1.2    median 3.56 (B+)  F=1   spread 4.02
+  linear, slope 1.5    median 3.20 (B)   F=1   spread 5.00   <- adopted
+```
+
+Linear at 0.5 compresses everything into A− and cannot discriminate. 1.5 keeps
+the median in the B band and the full 0-to-5 spread, and fixes the ordering:
+Spearman(LOC, grade) moves **−0.37 → +0.02**, and the worst-ranked repository
+becomes the densest one rather than the largest one.
+
+**The cost, stated rather than discovered later.** A large repository with a
+handful of serious findings scores *better* than it did. Measured on a control
+built for this — 135,841 lines of benign Python plus one module carrying SQL
+injection, `shell=True`, `pickle.loads`, MD5 and `eval`, seven scored findings
+in all:
+
+```
+old model (sqrt, slope 0.5)    3.86  B+
+new model (linear, slope 1.5)  4.71  A
+```
+
+A single HIGH finding in a 100,000-line repository now grades 4.91 — A+. That
+is arithmetically correct for a density and useless as an alarm. Note that the
+old model called the same control B+, so this is a worsening of a number that
+was never safe rather than the loss of one that was.
+
+It is accepted because **the grade was never what catches a vulnerability**,
+and pretending otherwise is what made it dangerous. On that same control, all
+three of the things that do catch it fire — this is the actual output, not a
+description of intent:
+
+- the **work order** puts all seven in §FIX, `B602` first, each with file and
+  line;
+- the report header reads ``**Worst category:** `code_vulnerabilities` ``;
+- the run exits `gate FAIL` on the default `fail_on_new` (D15).
+
+A grade compresses a repository to one number so it can be compared against
+another repository and against itself last week. D15 already established that
+no severity-derived threshold can rank consequence; this records the
+corresponding limit on the score. `docs/scoring.md` now says so in the worked
+example, where the repository with a live SQL injection grades A−.
+
+**Consequences.**
+
+- Every grade the tool has ever emitted moves. Nothing in the wild consumes
+  them yet, so no migration is provided and `history.jsonl` is left alone.
+- `tests/integration/test_scoring_drift.py` passed unchanged through this,
+  because every assertion in it was relational — `< 5.0`, `<= one`, "sorted
+  descending" — and a relational assertion detects inversion, not drift. The
+  model was re-tuned end to end and the drift test said nothing. Pinned
+  values were added; that file's own docstring had promised them.
+- `calibration/calibrate.py` carried its own `sqrt` divisor, its own `0.5`
+  slope, and a flat per-category sum that predated rank-discount saturation.
+  Its subtotal for Django read 488.06 against the product's 218.5. The
+  divisor and slope are imported now and the saturation is pinned by
+  `tests/unit/test_calibration_harness.py`.
+- The study's headline line reported the median over all fourteen corpus
+  repositories, six of which no scanner can read. That reported 4.58 where
+  the examined set sat at 3.20 — P7 broken inside the study that exists to
+  check the scale. It now reports the examined median and names the
+  exclusion.
+
+**Still open.** The letter bands themselves are still borrowed from
+`maintainability-agent` without their own study. D5's other half stands.

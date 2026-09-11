@@ -78,19 +78,31 @@ category_subtotal = sum(finding_score for f in findings_in_category)
 Each category's subtotal is normalized by **scanned code volume** so a 100k-LOC repo isn't penalized for naturally having more lines of code than a 1k-LOC one:
 
 ```python
-category_normalized = category_subtotal / sqrt(loc_scanned / 1000)
+category_normalized = category_subtotal / (loc_scanned / 1000)
 ```
 
-`sqrt(LOC/1000)` is the same dampener `maintainability-agent` uses. It sub-linearly penalizes scale — a 10× larger codebase only suffers a ~3.16× normalization, not 10×.
+This is a straight **density**: weighted findings per thousand lines of scanned code.
+
+It was `sqrt(LOC/1000)` — borrowed from `maintainability-agent` — and that under-corrected, so the ranking followed how *big* a repository is rather than how much is wrong with it. Measured on the calibration corpus:
+
+| repo | LOC | weighted findings / kLOC | `sqrt` normalized |
+|---|---:|---:|---:|
+| django | 144,473 | 1.51 | **18.18** ← ranked worst |
+| flask | 7,841 | **3.35** | 9.38 |
+| fastapi | 23,764 | 1.60 | 7.81 |
+
+Flask carried 2.2× Django's density and normalized at half the value. Spearman correlation of grade against size was −0.37; of density against size, +0.12. The number was tracking the wrong variable. See [decisions.md](decisions.md) D16.
 
 ## Overall score
 
 Map the worst category to a 0.0–5.0 axis. The **worst category drives the overall grade**, not an average — one CRITICAL secret in git history shouldn't be offset by a clean dependency tree.
 
 ```python
-category_grade = clamp(5.0 - (category_normalized * 0.5), 0.0, 5.0)
+category_grade = clamp(5.0 - (category_normalized * 1.5), 0.0, 5.0)
 overall_score  = min(category_grade for category in categories)
 ```
+
+The slope moved 0.5 → 1.5 with the normalizer, because the two only mean anything together. 1.5 is what holds the D5 calibration target across the examined corpus: median 3.20 (B), full 0–5 spread preserved.
 
 ## Letter grade
 
@@ -126,15 +138,23 @@ Dep #3:      1.5 (MED)   × 0.75 (MED conf)   × 1.0 (deps)        × 1.00      
 code_vulnerabilities subtotal = 7.50
 dependencies subtotal         = 3.39
 
-Normalizer: sqrt(12000 / 1000) = sqrt(12) = 3.46
+Normalizer: 12000 / 1000 = 12.0
 
-code_vulnerabilities normalized = 7.50 / 3.46 = 2.17 → grade = 5.0 - (2.17 × 0.5) = 3.92
-dependencies normalized         = 3.39 / 3.46 = 0.98 → grade = 5.0 - (0.98 × 0.5) = 4.51
+code_vulnerabilities normalized = 7.50 / 12.0 = 0.625 → grade = 5.0 - (0.625 × 1.5) = 4.06
+dependencies normalized         = 3.39 / 12.0 = 0.283 → grade = 5.0 - (0.283 × 1.5) = 4.58
 
-Overall = min(3.92, 4.51) = 3.92 → "B+"
+Overall = min(4.06, 4.58) = 4.06 → "A-"
 ```
 
-The SQLi finding alone dropped the repo to B+; the operator sees `code_vulnerabilities` as the worst-performing bucket in the report header and knows where to look.
+**Read that last line carefully, because it is the honest cost of a density.** This repository has a live SQL injection and grades A−. One serious defect in twelve thousand lines *is* a low density, and the grade is reporting the density correctly.
+
+The grade is therefore not the thing that catches it. Three other outputs are, and all of them fire here:
+
+- The **work order** puts the SQLi in §FIX, first, with the file and line.
+- `code_vulnerabilities` is named as the worst category in the report header.
+- The default **`fail_on_new` gate** fails the build, because the finding is new.
+
+A grade compresses a repository to one number so it can be compared against another repository and against itself last week. That is all it is for. If you are looking to the letter to tell you whether you have a vulnerability, look at the work order instead — [product intent](../README.md) puts it first class and the score second for exactly this reason.
 
 ## Configurable hard gates
 

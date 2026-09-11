@@ -5,8 +5,8 @@ first commit. The file did not exist, which `docs/architecture.md` §4 recorded
 as one of the two halves of "no integration tests and no real fixtures".
 
 **What drift means here, and why pinned numbers are the point.** The scoring
-model is a chain of judgement calls — severity weights, the `sqrt(LOC/1000)`
-dampener, the category-grade table, the letter bands — and every one of them is
+model is a chain of judgement calls — severity weights, the per-kLOC
+normalizer, the grade slope, the letter bands — and every one of them is
 a number somebody chose. A change to any of them silently re-grades every
 repository that has ever been scanned, including baselines already accepted by
 a team. These tests pin the output of that chain against fixed inputs so a
@@ -15,6 +15,15 @@ number that quietly moved.
 
 A failure here is not necessarily a bug. It means: the model changed, say so
 out loud, and update the expectation in the same commit that changed it.
+
+**Everything here was once relational** — `< 5.0`, `<= one`, "sorted
+descending" — and relational assertions cannot detect drift, only inversion.
+The normalizer moved from `sqrt(LOC/1000)` to `LOC/1000` and the slope from
+0.5 to 1.5, re-grading every repository in the calibration corpus and moving
+its median from 3.36 to 3.20, and this file passed untouched. The pinned
+block below is the part that actually does the job the module docstring
+claims; the relational tests are kept because they pin different properties
+(ordering, monotonicity, P3) that must hold under *any* tuning.
 
 **These are not calibration.** D5 is still open: nobody has established that
 A+ corresponds to anything real, and pinning an uncalibrated number does not
@@ -203,3 +212,61 @@ def test_a_perfect_score_on_failed_coverage_is_still_failed_coverage():
 
     assert report.letter == "A+"
     assert coverage.status is CoverageStatus.FAILED
+
+
+# --------------------------------------------------------------------------
+# The numbers themselves
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("severity", "loc", "expected"),
+    [
+        (Severity.CRITICAL, 1_000, 0.00),
+        (Severity.CRITICAL, 10_000, 2.75),
+        (Severity.CRITICAL, 100_000, 4.775),
+        (Severity.HIGH, 1_000, 0.00),
+        (Severity.HIGH, 10_000, 4.10),
+        (Severity.HIGH, 100_000, 4.91),
+        (Severity.MEDIUM, 1_000, 1.625),
+        (Severity.MEDIUM, 10_000, 4.6625),
+        (Severity.LOW, 1_000, 3.875),
+        (Severity.LOW, 10_000, 4.8875),
+    ],
+)
+def test_one_finding_scores_exactly_this(severity: Severity, loc: int, expected: float):
+    """One finding, one size, one number — the whole chain in a single value.
+
+    These are not derived from anything; they are what the current model
+    outputs. Touching a severity weight, the normalizer or the slope moves
+    them, which is the point.
+    """
+    assert score([_finding(severity=severity)], loc_scanned=loc).overall == pytest.approx(expected)
+
+
+def test_the_rank_discount_is_pinned():
+    """Ten hits of one rule, not ten times one hit.
+
+    The k-th hit of a rule counts `weight / sqrt(k)`, so ten sum to about
+    5.02x a single hit rather than 10x. If saturation is ever retuned, this
+    is the number that moves.
+    """
+    findings = [_finding(severity=Severity.HIGH, line=n) for n in range(1, 11)]
+
+    assert score(findings, loc_scanned=10_000).overall == pytest.approx(0.4811, abs=1e-4)
+
+
+def test_a_high_finding_in_a_very_large_repository_rounds_to_a_plus():
+    """The stated cost of density normalization, written down rather than
+    discovered later.
+
+    Under `LOC/1000` a single HIGH finding in a 100,000-line repository
+    normalizes to 0.06 and grades 4.91 — A+. That is correct as a *density*
+    and useless as an alarm, which is why the default `fail_on_new` gate,
+    not the grade, is what fails a build. A grade is for comparing and for
+    trend; it was never the thing that catches a vulnerability.
+    """
+    report = score([_finding(severity=Severity.HIGH)], loc_scanned=100_000)
+
+    assert report.letter == "A+"
+    assert report.overall < 5.0  # it did move, just not far enough to matter

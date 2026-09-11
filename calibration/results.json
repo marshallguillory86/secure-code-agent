@@ -15,38 +15,38 @@
     ],
     "examined_overall": {
       "min": 0.0,
-      "p25": 1.0941,
-      "median": 3.3599,
-      "p75": 4.4809,
+      "p25": 2.4874,
+      "median": 3.1962,
+      "p75": 4.6547,
       "max": 5.0
     },
     "examined_worst_normalized": {
       "min": 0.0,
-      "p25": 1.1596,
-      "median": 4.7595,
-      "p75": 10.3788,
-      "max": 40.6052
+      "p25": 0.2302,
+      "median": 1.2026,
+      "p75": 1.6751,
+      "max": 3.3482
     },
     "reported_overall": {
       "min": 0.0,
-      "p25": 2.5793,
-      "median": 4.3114,
+      "p25": 2.5963,
+      "median": 4.5793,
       "p75": 5.0,
       "max": 5.0
     },
     "unclamped_overall": {
-      "min": -15.3026,
-      "p25": 0.1322,
-      "median": 4.0929,
+      "min": -0.0223,
+      "p25": 2.5963,
+      "median": 4.5793,
       "p75": 5.0,
       "max": 5.0
     },
     "worst_normalized": {
       "min": 0.0,
       "p25": 0.0,
-      "median": 1.8143,
-      "p75": 9.7355,
-      "max": 40.6052
+      "median": 0.2805,
+      "p75": 1.6025,
+      "max": 3.3482
     },
     "loc": {
       "min": 2790.0,
@@ -56,34 +56,33 @@
       "max": 144473.0
     },
     "letters": {
-      "A": 1,
+      "A": 4,
       "A+": 4,
-      "A-": 3,
       "B+": 1,
       "B-": 2,
-      "D": 1,
-      "F": 2
+      "C": 2,
+      "F": 1
     },
     "variants": {
       "per_repository": {
         "axios": {
-          "as-run": 1.9202,
-          "no-deps": 1.9202,
-          "no-low": 1.9202,
+          "as-run": 0.3308,
+          "no-deps": 0.3308,
+          "no-low": 0.3308,
           "test_tree_findings": 20.0,
           "test_tree_loc": 28423.0
         },
         "commons-lang": {
-          "as-run": 1.7085,
-          "no-deps": 1.7085,
-          "no-low": 1.7085,
+          "as-run": 0.1317,
+          "no-deps": 0.1317,
+          "no-low": 0.1317,
           "test_tree_findings": 0.0,
           "test_tree_loc": 92783.0
         },
         "django": {
-          "as-run": 40.6052,
-          "no-deps": 40.6052,
-          "no-low": 32.8367,
+          "as-run": 1.5126,
+          "no-deps": 1.5126,
+          "no-low": 1.2278,
           "test_tree_findings": 963.0,
           "test_tree_loc": 319577.0
         },
@@ -95,16 +94,16 @@
           "test_tree_loc": 13483.0
         },
         "fastapi": {
-          "as-run": 28.001,
-          "no-deps": 28.001,
+          "as-run": 1.6025,
+          "no-deps": 1.6025,
           "no-low": 0.0,
           "test_tree_findings": 4899.0,
           "test_tree_loc": 69283.0
         },
         "flask": {
-          "as-run": 10.3788,
-          "no-deps": 10.3788,
-          "no-low": 8.37,
+          "as-run": 3.3482,
+          "no-deps": 3.3482,
+          "no-low": 2.821,
           "test_tree_findings": 1071.0,
           "test_tree_loc": 6077.0
         },
@@ -123,23 +122,23 @@
           "test_tree_loc": 29087.0
         },
         "httpx": {
-          "as-run": 9.7355,
-          "no-deps": 9.7355,
-          "no-low": 2.1786,
+          "as-run": 1.7579,
+          "no-deps": 1.7579,
+          "no-low": 0.791,
           "test_tree_findings": 1304.0,
           "test_tree_loc": 16674.0
         },
         "jekyll": {
-          "as-run": 0.9349,
-          "no-deps": 0.9349,
-          "no-low": 0.9349,
+          "as-run": 0.2302,
+          "no-deps": 0.2302,
+          "no-low": 0.2302,
           "test_tree_findings": 1.0,
           "test_tree_loc": 8900.0
         },
         "lodash": {
-          "as-run": 1.1596,
-          "no-deps": 1.1596,
-          "no-low": 1.1596,
+          "as-run": 0.2038,
+          "no-deps": 0.2038,
+          "no-low": 0.2038,
           "test_tree_findings": 0.0,
           "test_tree_loc": 22198.0
         },
@@ -151,29 +150,29 @@
           "test_tree_loc": 4800.0
         },
         "requests": {
-          "as-run": 5.0709,
-          "no-deps": 5.0709,
+          "as-run": 0.8925,
+          "no-deps": 0.8925,
           "no-low": 0.0,
           "test_tree_findings": 696.0,
           "test_tree_loc": 4284.0
         },
         "sinatra": {
-          "as-run": 4.4482,
-          "no-deps": 4.4482,
-          "no-low": 4.4482,
+          "as-run": 1.6751,
+          "no-deps": 1.6751,
+          "no-low": 1.6751,
           "test_tree_findings": 2.0,
           "test_tree_loc": 13759.0
         }
       },
       "median_worst_normalized": {
-        "as-run": 1.8143,
-        "no-deps": 1.8143,
-        "no-low": 1.0473
+        "as-run": 0.2805,
+        "no-deps": 0.2805,
+        "no-low": 0.1678
       },
       "median_grade_at_current_slope": {
-        "as-run": 4.09,
-        "no-deps": 4.09,
-        "no-low": 4.48
+        "as-run": 4.58,
+        "no-deps": 4.58,
+        "no-low": 4.75
       }
     }
   },
@@ -186,16 +185,16 @@
         "loc_scanned": 144473,
         "subtotals": {
           "secrets": 18.75,
-          "code_vulnerabilities": 488.062
+          "code_vulnerabilities": 218.527
         },
         "normalized": {
-          "secrets": 1.5599,
-          "code_vulnerabilities": 40.6052
+          "secrets": 0.1298,
+          "code_vulnerabilities": 1.5126
         },
-        "worst_normalized": 40.6052,
-        "unclamped_overall": -15.3026,
-        "reported_overall": 0.0,
-        "reported_letter": "F",
+        "worst_normalized": 1.5126,
+        "unclamped_overall": 2.7311,
+        "reported_overall": 2.7311346581820053,
+        "reported_letter": "B-",
         "worst_category": "code_vulnerabilities",
         "finding_count": 271,
         "reported_count": 1238,
@@ -231,7 +230,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 19,
             "reason": null,
             "scope": null
@@ -333,14 +332,14 @@
       "measure": {
         "loc_scanned": 7841,
         "subtotals": {
-          "code_vulnerabilities": 29.062
+          "code_vulnerabilities": 26.253
         },
         "normalized": {
-          "code_vulnerabilities": 10.3788
+          "code_vulnerabilities": 3.3482
         },
-        "worst_normalized": 10.3788,
-        "unclamped_overall": -0.1894,
-        "reported_overall": 0.3121773401483452,
+        "worst_normalized": 3.3482,
+        "unclamped_overall": -0.0223,
+        "reported_overall": 0.0,
         "reported_letter": "F",
         "worst_category": "code_vulnerabilities",
         "finding_count": 17,
@@ -377,7 +376,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 3,
             "reason": null,
             "scope": null
@@ -479,14 +478,14 @@
       "measure": {
         "loc_scanned": 5600,
         "subtotals": {
-          "code_vulnerabilities": 12.0
+          "code_vulnerabilities": 4.998
         },
         "normalized": {
-          "code_vulnerabilities": 5.0709
+          "code_vulnerabilities": 0.8925
         },
-        "worst_normalized": 5.0709,
-        "unclamped_overall": 2.4645,
-        "reported_overall": 3.9439806131300434,
+        "worst_normalized": 0.8925,
+        "unclamped_overall": 3.6613,
+        "reported_overall": 3.661251083166585,
         "reported_letter": "B+",
         "worst_category": "code_vulnerabilities",
         "finding_count": 19,
@@ -523,7 +522,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -625,15 +624,15 @@
       "measure": {
         "loc_scanned": 7585,
         "subtotals": {
-          "code_vulnerabilities": 26.812
+          "code_vulnerabilities": 13.333
         },
         "normalized": {
-          "code_vulnerabilities": 9.7355
+          "code_vulnerabilities": 1.7579
         },
-        "worst_normalized": 9.7355,
-        "unclamped_overall": 0.1322,
-        "reported_overall": 2.579342156531686,
-        "reported_letter": "B-",
+        "worst_normalized": 1.7579,
+        "unclamped_overall": 2.3632,
+        "reported_overall": 2.3632019488406972,
+        "reported_letter": "C",
         "worst_category": "code_vulnerabilities",
         "finding_count": 32,
         "reported_count": 1348,
@@ -669,7 +668,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 1,
             "reason": null,
             "scope": null
@@ -771,15 +770,15 @@
       "measure": {
         "loc_scanned": 23764,
         "subtotals": {
-          "code_vulnerabilities": 136.5
+          "code_vulnerabilities": 38.082
         },
         "normalized": {
-          "code_vulnerabilities": 28.001
+          "code_vulnerabilities": 1.6025
         },
-        "worst_normalized": 28.001,
-        "unclamped_overall": -9.0005,
-        "reported_overall": 1.0940554005969543,
-        "reported_letter": "D",
+        "worst_normalized": 1.6025,
+        "unclamped_overall": 2.5963,
+        "reported_overall": 2.5962596044190978,
+        "reported_letter": "B-",
         "worst_category": "code_vulnerabilities",
         "finding_count": 165,
         "reported_count": 5143,
@@ -815,7 +814,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -957,7 +956,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1059,15 +1058,15 @@
       "measure": {
         "loc_scanned": 19308,
         "subtotals": {
-          "code_vulnerabilities": 8.438
+          "code_vulnerabilities": 6.386
         },
         "normalized": {
-          "code_vulnerabilities": 1.9202
+          "code_vulnerabilities": 0.3308
         },
-        "worst_normalized": 1.9202,
-        "unclamped_overall": 4.0399,
-        "reported_overall": 4.273310773579107,
-        "reported_letter": "A-",
+        "worst_normalized": 0.3308,
+        "unclamped_overall": 4.5039,
+        "reported_overall": 4.503863325628512,
+        "reported_letter": "A",
         "worst_category": "code_vulnerabilities",
         "finding_count": 8,
         "reported_count": 29,
@@ -1103,7 +1102,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1205,15 +1204,15 @@
       "measure": {
         "loc_scanned": 25944,
         "subtotals": {
-          "code_vulnerabilities": 5.906
+          "code_vulnerabilities": 5.288
         },
         "normalized": {
-          "code_vulnerabilities": 1.1596
+          "code_vulnerabilities": 0.2038
         },
-        "worst_normalized": 1.1596,
-        "unclamped_overall": 4.4202,
-        "reported_overall": 4.480867566839776,
-        "reported_letter": "A-",
+        "worst_normalized": 0.2038,
+        "unclamped_overall": 4.6942,
+        "reported_overall": 4.694239803043168,
+        "reported_letter": "A",
         "worst_category": "code_vulnerabilities",
         "finding_count": 6,
         "reported_count": 7,
@@ -1249,7 +1248,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1391,7 +1390,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1533,7 +1532,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1638,12 +1637,12 @@
           "code_vulnerabilities": 11.812
         },
         "normalized": {
-          "code_vulnerabilities": 4.4482
+          "code_vulnerabilities": 1.6751
         },
-        "worst_normalized": 4.4482,
-        "unclamped_overall": 2.7759,
-        "reported_overall": 2.7758930150120587,
-        "reported_letter": "B-",
+        "worst_normalized": 1.6751,
+        "unclamped_overall": 2.4874,
+        "reported_overall": 2.4874149177538287,
+        "reported_letter": "C",
         "worst_category": "code_vulnerabilities",
         "finding_count": 6,
         "reported_count": 10,
@@ -1679,7 +1678,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -1781,24 +1780,24 @@
       "measure": {
         "loc_scanned": 13033,
         "subtotals": {
-          "code_vulnerabilities": 3.375,
+          "code_vulnerabilities": 1.688,
           "supply_chain": 3.0
         },
         "normalized": {
-          "code_vulnerabilities": 0.9349,
-          "supply_chain": 0.831
+          "code_vulnerabilities": 0.1295,
+          "supply_chain": 0.2302
         },
-        "worst_normalized": 0.9349,
-        "unclamped_overall": 4.5326,
-        "reported_overall": 4.584501881578968,
+        "worst_normalized": 0.2302,
+        "unclamped_overall": 4.6547,
+        "reported_overall": 4.654722627177166,
         "reported_letter": "A",
         "worst_category": "supply_chain",
-        "finding_count": 6,
-        "reported_count": 9,
+        "finding_count": 5,
+        "reported_count": 8,
         "per_severity": {
           "critical": 0,
           "high": 1,
-          "medium": 2,
+          "medium": 1,
           "low": 0,
           "informational": 3
         },
@@ -1827,7 +1826,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 1,
             "reason": null,
             "scope": null
@@ -1905,7 +1904,7 @@
               "/Users/marshallguillory/.gem/ruby/2.6.0/bin/rubocop"
             ],
             "version": "1.28.2",
-            "finding_count": 3,
+            "finding_count": 2,
             "reason": null,
             "scope": null
           },
@@ -1969,7 +1968,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null
@@ -2071,15 +2070,15 @@
       "measure": {
         "loc_scanned": 97561,
         "subtotals": {
-          "code_vulnerabilities": 16.875
+          "code_vulnerabilities": 12.85
         },
         "normalized": {
-          "code_vulnerabilities": 1.7085
+          "code_vulnerabilities": 0.1317
         },
-        "worst_normalized": 1.7085,
-        "unclamped_overall": 4.1458,
-        "reported_overall": 4.3495148193546465,
-        "reported_letter": "A-",
+        "worst_normalized": 0.1317,
+        "unclamped_overall": 4.8024,
+        "reported_overall": 4.802430209176321,
+        "reported_letter": "A",
         "worst_category": "code_vulnerabilities",
         "finding_count": 6,
         "reported_count": 7,
@@ -2115,7 +2114,7 @@
             "name": "builtin_rules",
             "outcome": "completed",
             "command": [],
-            "version": "builtin/0.8.0",
+            "version": "builtin/0.9.0",
             "finding_count": 0,
             "reason": null,
             "scope": null

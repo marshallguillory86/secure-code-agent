@@ -160,7 +160,11 @@ def _parser() -> argparse.ArgumentParser:
         "--target",
         action="append",
         default=[],
-        help="Target for --init-agent-standards (codex, claude-code, cursor, copilot, windsurf, generic).",
+        help=(
+            "Agent name for --init-agent-standards (codex, claude-code, cursor, "
+            "copilot, windsurf, generic). NOT the repository to audit — pass that "
+            "as a positional path."
+        ),
     )
     p.add_argument(
         "--instructions-output-dir",
@@ -182,6 +186,22 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.init_agent_standards:
         return _do_init_standards(args)
+
+    if args.target:
+        # `--target` names an *agent* for --init-agent-standards, and it reads
+        # exactly like the flag for "the repository to audit". It was accepted
+        # and silently discarded on an audit run, so `--target /some/repo`
+        # audited the current directory instead and reported a clean result
+        # for a repository nobody had looked at. Found by using the tool: a
+        # 136k-line control was audited from inside itself and appeared to
+        # honour the flag, which is the kind of coincidence that keeps a bug.
+        sys.stderr.write(
+            "ERROR: --target names an agent for --init-agent-standards, not a "
+            "repository to audit.\n"
+            f"       To audit a repository, pass it as a path: "
+            f"secure-code-agent {args.target[0]}\n"
+        )
+        return 2
 
     try:
         return _do_preflight(args) if args.preflight else _do_audit(args)

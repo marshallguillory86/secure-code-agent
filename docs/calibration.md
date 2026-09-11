@@ -2,7 +2,7 @@
 
 The study [D5](decisions.md) has owed since 2026-09-08. The letter bands were
 borrowed from `maintainability-agent` without its calibration study, and the
-`sqrt(LOC/1000)` dampener is an invented normalizer with no corpus behind it.
+dampener was an invented normalizer with no corpus behind it.
 
 Method, corpus and harness: [`calibration/`](../calibration/README.md).
 Raw data: [`calibration/results.json`](../calibration/results.json).
@@ -169,10 +169,10 @@ and B703 as CWE-80 and the merge key preferred the CWE over the alias table.
 Django went back to counting `mark_safe` twice. Every unit test passed
 throughout — they all used rules with no CWE — and the corpus caught it.
 
-### What is still wrong: the normalizer
+### What was wrong: the normalizer — resolved, see D16
 
-Django and Flask remain at F, and the cause is now isolated. Under
-`sqrt(LOC/1000)`, **the largest repository in the corpus ranks worst**:
+Django and Flask remained at F, and the cause was isolated here. Under
+`sqrt(LOC/1000)`, **the largest repository in the corpus ranked worst**:
 
 | | kLOC | sqrt-normalized | per-kLOC |
 | --- | ---: | ---: | ---: |
@@ -185,12 +185,29 @@ which D5 already records as "an invented normalizer with no corpus behind
 it". One HIGH finding costs a full grade point in an 8k-line repository and a
 quarter of that in Django.
 
-**It is not changed here, for three reasons.** It moves every grade the tool
-has ever emitted. The slope would need recalibrating and this corpus cannot
-support that (below). And it weakens the gate: a synthetic 1,939-line
-repository carrying SQL injection, command injection, `pickle.loads`,
-`yaml.load`, `eval`, MD5 and hardcoded credentials scores 0.00 F today and
-would land near D under per-kLOC.
+**It was not changed at the time, for three reasons.** It moves every grade
+the tool has ever emitted. The slope would need recalibrating and this corpus
+could not support that (below). And it weakens the gate: a synthetic
+1,939-line repository carrying SQL injection, command injection,
+`pickle.loads`, `yaml.load`, `eval`, MD5 and hardcoded credentials scored
+0.00 F and would land near D under per-kLOC.
+
+**All three were then answered, and the change was made — D16.** Corpus
+coverage was fixed first (below), which made the slope recalibratable: four
+normalizers were measured on one pinned run and `linear, slope 1.5` was the
+one that held the D5 target. Nothing in the wild consumes a grade yet, so
+"moves every grade ever emitted" cost nothing. The third reason was the real
+one and it stands — the weakening is genuine, and it is why D16 records that
+the gate and the work order, not the number, are what catch a vulnerability.
+
+Re-measured over the same corpus after the change:
+
+| | before (sqrt, 0.5) | after (linear, 1.5) |
+| --- | ---: | ---: |
+| examined median | 3.36 (B) | 3.20 (B) |
+| Spearman(LOC, grade) | −0.37 | **+0.02** |
+| worst-ranked repository | django (largest) | **flask (densest)** |
+| spread | 0.00–5.00 | 0.00–5.00 |
 
 ### Corpus coverage was the blocker, and fixing it answered the question
 

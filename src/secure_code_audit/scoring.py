@@ -3,8 +3,8 @@
 Implements the model documented in docs/scoring.md:
   · finding_score = severity × confidence × category × top25_bonus
   · category_subtotal = Σ finding_score per category
-  · category_normalized = subtotal / sqrt(LOC / 1000)
-  · category_grade = clamp(5.0 - (normalized × 0.5), 0, 5)
+  · category_normalized = subtotal / (LOC / 1000)
+  · category_grade = clamp(5.0 - (normalized × 1.5), 0, 5)
   · overall = min(category_grades)
 """
 
@@ -173,7 +173,7 @@ def category_subtotal(findings: Iterable[Finding], category: Category) -> float:
 
     A straight sum measures how many times a pattern matched, and that
     tracks codebase size times how talkative the scanner is — not how much
-    risk is in the code. `sqrt(LOC)` was meant to cancel the size half.
+    risk is in the code. The normalizer was meant to cancel the size half.
     Nothing cancelled the other half, and the corpus said so plainly: the
     worst-first ordering read Python → JavaScript → Go/Ruby → Java, which is
     the order of Bandit's verbosity, and Django, FastAPI, httpx and Flask all
@@ -217,14 +217,52 @@ def category_subtotal(findings: Iterable[Finding], category: Category) -> float:
 
 
 def normalize(subtotal: float, loc_scanned: int) -> float:
-    """sqrt(LOC/1000) dampener — see docs/scoring.md for the rationale."""
+    """Weighted findings per thousand lines of scanned code — a density.
+
+    This was `sqrt(LOC/1000)` and that under-corrected for size, so the
+    ranking followed how *big* a repository is rather than how much is wrong
+    with it. Measured across the examined corpus:
+
+        repo      LOC        weighted findings/kLOC   sqrt-normalized
+        django    144,473    1.51                     18.18  <- ranked worst
+        flask       7,841    3.35                      9.38
+        fastapi    23,764    1.60                      7.81
+
+    Flask carries **2.2x Django's finding density** and normalised at half
+    the value. Django sat fifth by density and first by penalty. Spearman
+    correlation of grade against size was -0.37 while correlation of density
+    against size was +0.12: the number was tracking the wrong variable.
+
+    Straight density fixes the ordering: re-measured over the same corpus
+    after the change, Spearman(LOC, grade) is +0.02, and the worst-ranked
+    repository is the densest one rather than the largest one. The slope
+    moves with it — see `category_grade` — because the two only make sense
+    together.
+    """
     if loc_scanned <= 0:
         return subtotal
-    return subtotal / math.sqrt(max(loc_scanned, 1) / 1000)
+    return subtotal / (max(loc_scanned, 1) / 1000)
+
+
+#: Grade points lost per weighted finding per kLOC.
+#:
+#: 1.5 rather than the old 0.5, because the divisor changed underneath it.
+#: Chosen to hold the calibration target that D5 settled: the examined-corpus
+#: median lands at 3.20, inside the B band, against 3.36 before — while the
+#: full 0-to-5 spread is preserved and the ordering now follows density.
+#:
+#: The cost, stated: a large repository with a handful of serious findings
+#: scores *better* than it did. A 135,841-line control carrying SQL injection,
+#: `shell=True`, `pickle.loads`, MD5 and `eval` moves 3.86 (B+) to 4.71 (A).
+#: Neither number was ever safe. What actually protects that repository is the
+#: default `fail_on_new` gate, which fails it outright, and the work order,
+#: which puts all seven findings in §FIX. A density is for comparing and for
+#: trend; it was never the thing that catches a vulnerability. See D16.
+GRADE_SLOPE = 1.5
 
 
 def category_grade(normalized: float) -> float:
-    return max(0.0, min(5.0, 5.0 - (normalized * 0.5)))
+    return max(0.0, min(5.0, 5.0 - (normalized * GRADE_SLOPE)))
 
 
 # --- overall score ---------------------------------------------------------
