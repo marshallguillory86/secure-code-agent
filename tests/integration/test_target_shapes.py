@@ -160,3 +160,46 @@ def test_an_unreadable_file_does_not_crash_the_run(tmp_path):
         assert result.returncode == 0
     finally:
         blocked.chmod(0o644)
+
+
+# ---------------------------------------------------------------------------
+# Infrastructure as code
+# ---------------------------------------------------------------------------
+
+
+def _iac_repo(tmp_path: Path) -> Path:
+    (tmp_path / "Dockerfile").write_text(
+        "FROM ubuntu:latest\nUSER root\nRUN chmod 777 /x.sh\n", encoding="utf-8"
+    )
+    (tmp_path / "main.tf").write_text(
+        'resource "aws_s3_bucket" "b" {\n  bucket = "mine"\n  acl    = "public-read"\n}\n',
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_terraform_lines_are_counted(tmp_path):
+    """checkov is in the floor and reads `.tf`, so its findings were scored
+    against a denominator that excluded every file it had read. An IaC
+    repository measured six lines for its Dockerfile and none of its
+    Terraform."""
+    _iac_repo(tmp_path)
+    out = tmp_path / "r.json"
+
+    _run(tmp_path, "--json-output", str(out))
+    report = json.loads(out.read_text(encoding="utf-8"))
+
+    # 3 Dockerfile lines + 4 Terraform lines.
+    assert report["score"]["loc_scanned"] == 7
+
+
+def test_iac_is_not_graded_when_no_iac_scanner_ran(tmp_path):
+    """`--only-scanners bandit,builtin_rules` reads no infrastructure, so
+    `config_iac` has no score — not a perfect one."""
+    _iac_repo(tmp_path)
+    out = tmp_path / "r.json"
+
+    _run(tmp_path, "--json-output", str(out))
+    report = json.loads(out.read_text(encoding="utf-8"))
+
+    assert report["score"]["per_category"]["config_iac"] is None

@@ -56,6 +56,7 @@ from secure_code_audit.scoring import (
 )
 from secure_code_audit.scoring import score as score_findings
 from secure_code_audit.scoring import verdict as build_verdict
+from secure_code_audit.standards import categories_for_scanner
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -629,14 +630,24 @@ def _measurable_categories(
             domains.add(policy.domain)
 
     measurable = {category for category in Category if category.value in domains}
-    if "multiple" in domains:
-        # builtin_rules reads several categories and declares none of them.
-        measurable |= {
-            Category.SECRETS,
-            Category.CODE_VULNERABILITIES,
-            Category.CRYPTO,
-            Category.CONFIG_IAC,
-        }
+    for execution in executions:
+        # A scanner declaring `multiple` reads several categories and names
+        # none of them, so ask the standards map which rules it actually has.
+        #
+        # This list used to be written out by hand and was wrong in both
+        # directions: it claimed `builtin_rules` covered `secrets` and
+        # `config_iac` — its rules are Python and shell language primitives,
+        # it has never had one of either — and omitted `supply_chain`, which
+        # it does cover. An IaC repository carrying a `public-read` S3
+        # bucket, a 0.0.0.0/0 ingress rule, `USER root` and `chmod 777`
+        # scored `config_iac` **5.0** with neither checkov nor hadolint
+        # installed. A category graded perfectly because nothing could read
+        # it is the absence-as-value defect this function exists to prevent.
+        if execution.outcome not in COVERING_OUTCOMES:
+            continue
+        policy = floor.policy(execution.name)
+        if policy is not None and policy.domain == "multiple":
+            measurable |= categories_for_scanner(execution.name)
     measurable |= {finding.category for finding in findings if not finding.suppressed}
     return measurable
 
