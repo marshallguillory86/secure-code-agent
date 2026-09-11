@@ -305,6 +305,51 @@ def is_within(path: Path, root: Path) -> bool:
     return resolved == root_resolved or root_resolved in resolved.parents
 
 
+def containment_root(target: Path) -> Path:
+    """The directory every containment decision is made against.
+
+    **A file target's trust boundary is its parent, not the file.** Auditing
+    `app.py` meant `is_within(<anything>, app.py)` was false for everything,
+    because nothing lives beneath a regular file — so every containment test
+    inverted to "allowed" at once. A `secure-code-agent.json` beside the file
+    read as *outside* the tree, and `--only-scanners bandit` with an in-tree
+    `command` executed a script from the audited repository without
+    `--trust-target-config`. The single-file shape silently opted out of the
+    guard that D1 exists to hold.
+
+    Directories are returned unchanged, so the ordinary repository audit is
+    unaffected.
+    """
+    resolved = target.resolve()
+    return resolved if resolved.is_dir() else resolved.parent
+
+
+def target_config_is_untrusted(config: Config, target: Path) -> bool:
+    """Was this configuration supplied by the audited tree?
+
+    Location, not provenance of the flag: a config *inside* the target is
+    repository content whether it was found by default discovery or named
+    explicitly with `--config`. An operator who means to trust it says so with
+    `--trust-target-config`.
+
+    **This is not the negation of `target_executables_allowed`, and writing it
+    as one was a live regression.** They disagree when there is no config file
+    at all. For execution, "no config" must still *deny* tree-local
+    executables — nothing has authorised them, and an absent file is not
+    permission. For writes, "no config" is simply nothing to distrust: the
+    built-in defaults are relative names that cannot escape. Collapsing the
+    two flipped the execution guard open for every run with no config, which
+    `test_defaults_never_allow_executables_from_the_tree` caught immediately.
+
+    Only `containment_root` is shared.
+    """
+    if config.trust_target_config:
+        return False
+    if config.source_path is None:
+        return False  # built-in defaults are relative names; nothing can escape
+    return is_within(config.source_path, containment_root(target))
+
+
 def target_executables_allowed(config: Config, target: Path) -> bool:
     """May this configuration name an executable inside the audited tree?
 
@@ -318,12 +363,15 @@ def target_executables_allowed(config: Config, target: Path) -> bool:
     repositories wholesale, so a config the operator keeps outside the tree
     still gets the documented tree-local interpreter workflow. Inside the tree,
     it takes an explicit `--trust-target-config`.
+
+    See `target_config_is_untrusted` for why this is *not* expressed as its
+    negation: an absent config denies here and is harmless there.
     """
     if config.trust_target_config:
         return True
     if config.source_path is None:
-        return False  # built-in defaults name no commands anyway
-    return not is_within(config.source_path, target)
+        return False  # nothing authorised a tree-local command
+    return not is_within(config.source_path, containment_root(target))
 
 
 #: Top-level keys the loader understands. Mirrors `properties` in

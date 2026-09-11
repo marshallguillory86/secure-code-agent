@@ -299,6 +299,8 @@ def _print_preflight(rows: list[dict], unselected: list[str], blocking: list[str
 def _do_audit(args: argparse.Namespace) -> int:
     cfg, target, root = _prepare_audit(args)
     _require_configured_gates(args, cfg)
+    # Before anything is resolved or written, and before any scanner runs.
+    _assert_config_writes_are_contained(cfg, root, target)
     # Resolved before the scan so the run can recognise its own artifacts.
     paths = _resolve_outputs(args, cfg, root)
 
@@ -920,6 +922,67 @@ def _resolve_outputs(args: argparse.Namespace, cfg: config_mod.Config, root: Pat
 def _under_root(root: Path, value: str) -> Path:
     path = Path(value).expanduser()
     return path.resolve() if path.is_absolute() else (root / path).resolve()
+
+
+#: Config keys naming a file this tool writes.
+_WRITE_KEYS = (
+    "markdown_path",
+    "json_path",
+    "sarif_path",
+    "comment_path",
+    "prompt_path",
+    "security_pillar_path",
+    "baseline_path",
+    "history_path",
+)
+
+
+def _assert_config_writes_are_contained(cfg: config_mod.Config, root: Path, target: Path) -> None:
+    """A tree may not choose where the host writes.
+
+    D1 draws the line at *executing* what the tree supplies, and that was the
+    only boundary implemented. The tree could still choose file *paths*: the
+    default configuration is loaded from the audit target, and its
+    `outputs.*_path`, baseline and history values were resolved against the
+    root with no containment check at all. A repository shipping
+
+        {"outputs": {"markdown_path": "../../../../.bashrc"}}
+
+    had an ordinary audit overwrite that file, with the report's own content.
+    Arbitrary write is not a lesser thing than arbitrary execute; it is
+    usually a slower route to the same place.
+
+    Three escapes, all closed here and all in the red contract: `..`
+    traversal, an absolute path, and a **symlink inside the tree** pointing
+    out of it. The third is why this resolves before comparing rather than
+    checking the string — `escaped/report.md`, where `escaped` is a symlink
+    to the parent, is textually innocent.
+
+    **Only for a config the tree supplied.** An operator whose config lives
+    outside the audited tree keeps full authority over where things go, and
+    so does anyone passing `--trust-target-config`. Explicit CLI output flags
+    are never touched by this: `--output /tmp/report.md` is the operator
+    speaking, and they are checked nowhere in this function.
+
+    Raises ValueError, so the CLI exits 2 before any scanner runs and before
+    a single byte is written.
+    """
+    if not config_mod.target_config_is_untrusted(cfg, target):
+        return
+    for key in _WRITE_KEYS:
+        configured = cfg.outputs.get(key)
+        if not configured:
+            continue
+        destination = _under_root(root, configured)
+        if config_mod.is_within(destination, root):
+            continue
+        raise ValueError(
+            f"outputs.{key} in {cfg.source_path} resolves to {destination}, which is "
+            f"outside the audit root {root}. Configuration supplied by the audited "
+            f"tree may not choose where this tool writes. Pass the path on the "
+            f"command line instead, move the configuration outside the tree, or "
+            f"re-run with --trust-target-config if you wrote this file yourself."
+        )
 
 
 def _print_summary(
