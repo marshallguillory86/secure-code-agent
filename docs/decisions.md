@@ -181,19 +181,37 @@ condition. Secrets are no longer force-scored onto the primary axis — nothing
 static separates a live credential from a test certificate, so they are gated
 from any axis rather than graded from all of them.
 
-**What is left is not noise, and that is the finding.** Four repositories
-remain at F and every contributing finding was inspected individually. They
-are **true positives**: Django's `exec()` in `commands/shell.py`, its MD5 in
-`auth/hashers.py`, its `mark_safe` in the framework that defines `mark_safe`;
-Flask's `exec()` config loader and SHA-1 session tag; FastAPI's 81 bare
-`assert`s. Django is graded F because it is a framework whose job is to do
-dangerous things safely.
+**An earlier revision of this entry claimed the residue was all true
+positives and that the remaining question was what a grade should mean. That
+was wrong.** Checking that a construct is present is not checking that a
+defect is present. Django's "hardcoded passwords" are `EMAIL_HOST_PASSWORD =
+""` and `SECRET_KEY = ""` — empty defaults. Its "SQL injection" hits include
+an `ImproperlyConfigured` error message and a parameterised `cursor.execute`.
+Its 56 `mark_safe` hits are the admin rendering its own escaped output.
 
-That is the distance between *"contains dangerous constructs"* and *"is
-insecure"*, and no pattern-narrowing closes it — the constructs really are
-there. The product already has the mechanism for that distance: a baseline,
-and suppressions with a required note. What it lacks is a decision about
-whether an *untriaged* run of a framework should read F.
+A tool that grades Django, FastAPI, httpx and Flask all F is measuring how
+talkative Bandit is on large Python codebases. That is the failure this
+decision exists to prevent, and it was a defect to fix rather than a
+judgement call to escalate.
+
+**Fixed: repeats of one rule saturate.** Sorted worst-first, a rule's k-th
+hit counts `weight / sqrt(k)`. Repositories at F went from four to two, httpx
+F to B-, fastapi F to C, requests B- to B+, and none scored lower. The first
+formulation broke P3 — `mean(weight) * sqrt(n)` let nine extra LOW findings
+*improve* a grade — and is pinned against by a monotonicity test.
+
+**Still open, and now concrete.** Django and Flask remain at F because of
+`sqrt(LOC/1000)`, under which the largest repository in the corpus ranks
+worst: django 15.53 normalized against flask 9.12, inverting to 1.29 and 3.17
+per-kLOC. That is size bias in the normalizer meant to remove it.
+
+It is not changed yet because the slope would have to be recalibrated, and
+**this corpus cannot support that**: six of fourteen repositories score
+exactly 0.00 because they are unexamined rather than clean — five
+`tool_unavailable` findings each, Go/Java/JavaScript against an offline floor
+that barely reads them. The product withholds a grade on incomplete coverage;
+the study must hold itself to the same rule. Fixing corpus coverage is a
+precondition for band edges.
 
 **Still open — band edges.** The centre is now defensible: 4.37 (A−) against
 MA's 4.0 target. The *distribution* is not — nine repositories at 4.15 or

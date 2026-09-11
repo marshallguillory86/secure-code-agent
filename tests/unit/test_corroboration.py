@@ -79,6 +79,27 @@ def test_the_witness_is_recorded_rather_than_discarded():
     assert merged[0].corroborated_by == ("bandit:B703",)
 
 
+def test_an_alias_pair_merges_even_when_upstream_gives_them_different_cwes():
+    """The regression the corpus caught and the unit tests did not.
+
+    Bandit files `mark_safe` as CWE-79 under B308 and CWE-80 under B703 —
+    cross-site scripting and "improper neutralization of script-related
+    tags", two names for one check firing on one expression.
+
+    While Bandit's CWEs were being discarded both were None, the key fell
+    back to the alias table, and the pair merged. The moment the adapter
+    started reading them, each acquired a different CWE, the CWE outranked
+    the alias, and Django went back to counting `mark_safe` twice. Every
+    test here passed throughout, because they all used rules with no CWE.
+    """
+    merged = merge_corroborating(
+        [_f("B703", cwe="CWE-80"), _f("B308", cwe="CWE-79")],
+    )
+
+    assert len(merged) == 1
+    assert merged[0].corroborated_by == ("bandit:B308",)
+
+
 def test_two_checks_sharing_a_cwe_at_one_line_are_one_weakness():
     """Where a CWE is mapped it is the discriminator, across scanners too."""
     merged = merge_corroborating(

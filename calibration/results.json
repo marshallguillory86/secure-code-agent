@@ -8,13 +8,13 @@
     "failed": [],
     "reported_overall": {
       "min": 0.0,
-      "p25": 0.1322,
-      "median": 4.3658,
+      "p25": 2.5793,
+      "median": 4.4784,
       "p75": 5.0,
       "max": 5.0
     },
     "unclamped_overall": {
-      "min": -17.8652,
+      "min": -12.0352,
       "p25": 0.1322,
       "median": 4.3659,
       "p75": 5.0,
@@ -25,7 +25,7 @@
       "p25": 0.0,
       "median": 1.2684,
       "p75": 9.7355,
-      "max": 45.7303
+      "max": 34.0704
     },
     "loc": {
       "min": 2964.0,
@@ -39,8 +39,10 @@
       "A+": 5,
       "A-": 1,
       "B": 1,
+      "B+": 1,
       "B-": 1,
-      "F": 4
+      "C": 1,
+      "F": 2
     },
     "variants": {
       "per_repository": {
@@ -59,10 +61,10 @@
           "test_tree_loc": 92783.0
         },
         "django": {
-          "as-run": 45.7303,
-          "no-deps": 45.7303,
-          "no-low": 38.2991,
-          "test_tree_findings": 975.0,
+          "as-run": 34.0704,
+          "no-deps": 34.0704,
+          "no-low": 26.6391,
+          "test_tree_findings": 963.0,
           "test_tree_loc": 319577.0
         },
         "express": {
@@ -164,23 +166,23 @@
         "loc_scanned": 145456,
         "subtotals": {
           "secrets": 18.75,
-          "code_vulnerabilities": 551.531
+          "code_vulnerabilities": 410.906
         },
         "normalized": {
           "secrets": 1.5547,
-          "code_vulnerabilities": 45.7303
+          "code_vulnerabilities": 34.0704
         },
-        "worst_normalized": 45.7303,
-        "unclamped_overall": -17.8652,
+        "worst_normalized": 34.0704,
+        "unclamped_overall": -12.0352,
         "reported_overall": 0.0,
         "reported_letter": "F",
         "worst_category": "code_vulnerabilities",
-        "finding_count": 302,
-        "reported_count": 302,
+        "finding_count": 252,
+        "reported_count": 1219,
         "per_severity": {
           "critical": 1,
           "high": 13,
-          "medium": 167,
+          "medium": 117,
           "low": 116,
           "informational": 5
         },
@@ -201,11 +203,11 @@
         },
         "worst_normalized": 10.0975,
         "unclamped_overall": -0.0487,
-        "reported_overall": 0.0,
+        "reported_overall": 0.4392438147030564,
         "reported_letter": "F",
         "worst_category": "code_vulnerabilities",
         "finding_count": 19,
-        "reported_count": 19,
+        "reported_count": 1097,
         "per_severity": {
           "critical": 0,
           "high": 3,
@@ -230,11 +232,11 @@
         },
         "worst_normalized": 4.9133,
         "unclamped_overall": 2.5433,
-        "reported_overall": 2.5433345029029715,
-        "reported_letter": "B-",
+        "reported_overall": 3.9767996483189028,
+        "reported_letter": "B+",
         "worst_category": "code_vulnerabilities",
         "finding_count": 21,
-        "reported_count": 21,
+        "reported_count": 717,
         "per_severity": {
           "critical": 0,
           "high": 0,
@@ -259,11 +261,11 @@
         },
         "worst_normalized": 9.7355,
         "unclamped_overall": 0.1322,
-        "reported_overall": 0.13223592383663796,
-        "reported_letter": "F",
+        "reported_overall": 2.579342156531686,
+        "reported_letter": "B-",
         "worst_category": "code_vulnerabilities",
         "finding_count": 34,
-        "reported_count": 34,
+        "reported_count": 1339,
         "per_severity": {
           "critical": 0,
           "high": 1,
@@ -288,11 +290,11 @@
         },
         "worst_normalized": 17.9927,
         "unclamped_overall": -3.9963,
-        "reported_overall": 0.0,
-        "reported_letter": "F",
+        "reported_overall": 2.471295372245853,
+        "reported_letter": "C",
         "worst_category": "code_vulnerabilities",
         "finding_count": 136,
-        "reported_count": 136,
+        "reported_count": 5112,
         "per_severity": {
           "critical": 0,
           "high": 0,
@@ -342,7 +344,7 @@
         "reported_letter": "A+",
         "worst_category": null,
         "finding_count": 5,
-        "reported_count": 6,
+        "reported_count": 7,
         "per_severity": {
           "critical": 0,
           "high": 0,
@@ -367,7 +369,7 @@
         },
         "worst_normalized": 0.8283,
         "unclamped_overall": 4.5859,
-        "reported_overall": 4.5858713022869075,
+        "reported_overall": 4.646519045925013,
         "reported_letter": "A",
         "worst_category": "code_vulnerabilities",
         "finding_count": 7,
@@ -396,7 +398,7 @@
         "reported_letter": "A+",
         "worst_category": null,
         "finding_count": 5,
-        "reported_count": 6,
+        "reported_count": 10,
         "per_severity": {
           "critical": 0,
           "high": 0,
@@ -450,7 +452,7 @@
         "reported_letter": "B",
         "worst_category": "code_vulnerabilities",
         "finding_count": 7,
-        "reported_count": 8,
+        "reported_count": 9,
         "per_severity": {
           "critical": 0,
           "high": 2,
@@ -479,7 +481,7 @@
         "reported_letter": "A",
         "worst_category": "supply_chain",
         "finding_count": 6,
-        "reported_count": 7,
+        "reported_count": 8,
         "per_severity": {
           "critical": 0,
           "high": 1,
@@ -529,7 +531,7 @@
         },
         "worst_normalized": 1.7085,
         "unclamped_overall": 4.1458,
-        "reported_overall": 4.1457683384265325,
+        "reported_overall": 4.3495148193546465,
         "reported_letter": "A-",
         "worst_category": "code_vulnerabilities",
         "finding_count": 8,
