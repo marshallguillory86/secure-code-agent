@@ -223,15 +223,15 @@ def test_a_perfect_score_on_failed_coverage_is_still_failed_coverage():
     ("severity", "loc", "expected"),
     [
         (Severity.CRITICAL, 1_000, 0.00),
-        (Severity.CRITICAL, 10_000, 2.75),
-        (Severity.CRITICAL, 100_000, 4.775),
+        (Severity.CRITICAL, 10_000, 3.05),
+        (Severity.CRITICAL, 100_000, 4.805),
         (Severity.HIGH, 1_000, 0.00),
-        (Severity.HIGH, 10_000, 4.10),
-        (Severity.HIGH, 100_000, 4.91),
-        (Severity.MEDIUM, 1_000, 1.625),
-        (Severity.MEDIUM, 10_000, 4.6625),
-        (Severity.LOW, 1_000, 3.875),
-        (Severity.LOW, 10_000, 4.8875),
+        (Severity.HIGH, 10_000, 4.22),
+        (Severity.HIGH, 100_000, 4.922),
+        (Severity.MEDIUM, 1_000, 2.075),
+        (Severity.MEDIUM, 10_000, 4.7075),
+        (Severity.LOW, 1_000, 4.025),
+        (Severity.LOW, 10_000, 4.9025),
     ],
 )
 def test_one_finding_scores_exactly_this(severity: Severity, loc: int, expected: float):
@@ -253,7 +253,7 @@ def test_the_rank_discount_is_pinned():
     """
     findings = [_finding(severity=Severity.HIGH, line=n) for n in range(1, 11)]
 
-    assert score(findings, loc_scanned=10_000).overall == pytest.approx(0.4811, abs=1e-4)
+    assert score(findings, loc_scanned=10_000).overall == pytest.approx(1.0836, abs=1e-4)
 
 
 def test_a_high_finding_in_a_very_large_repository_rounds_to_a_plus():
@@ -261,12 +261,59 @@ def test_a_high_finding_in_a_very_large_repository_rounds_to_a_plus():
     discovered later.
 
     Under `LOC/1000` a single HIGH finding in a 100,000-line repository
-    normalizes to 0.06 and grades 4.91 — A+. That is correct as a *density*
+    normalizes to 0.06 and grades 4.92 — A+. That is correct as a *density*
     and useless as an alarm, which is why the default `fail_on_new` gate,
     not the grade, is what fails a build. A grade is for comparing and for
     trend; it was never the thing that catches a vulnerability.
+
+    `secrets` is the documented exception and is pinned separately below.
     """
     report = score([_finding(severity=Severity.HIGH)], loc_scanned=100_000)
 
     assert report.letter == "A+"
     assert report.overall < 5.0  # it did move, just not far enough to matter
+
+
+# --------------------------------------------------------------------------
+# Secrets are a count, not a rate (D17)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("loc", "expected_letter"),
+    [
+        (1_000, "F"),
+        (10_000, "F"),
+        (100_000, "B"),
+        (1_000_000, "A-"),
+    ],
+)
+def test_one_committed_credential_does_not_dilute_away(loc: int, expected_letter: str):
+    """The Juice Shop case, pinned.
+
+    Four hardcoded API keys and three private keys in 115,340 lines graded
+    **B+** while the repository was a training application written to be
+    insecure. Dividing a committed credential by repository size is what did
+    it. `secrets` normalizes by `sqrt(LOC/1000)` instead.
+
+    A million-line repository with exactly one credential still reaches A-,
+    and that is the deliberate limit of the softening: `secrets` is damped,
+    not exempted, because an absolute count failed Django on two
+    low-confidence hits. What stops a credential being ignored is the gate —
+    `secrets` escalates from *any* axis — not the grade.
+    """
+    finding = _finding(severity=Severity.CRITICAL, category=Category.SECRETS)
+
+    assert score([finding], loc_scanned=loc).letter == expected_letter
+
+
+def test_secrets_are_damped_relative_to_everything_else():
+    """The same weight in another category dilutes faster, which is the whole
+    distinction: an injection sink is a rate, a credential is a count."""
+    loc = 100_000
+    secret = score([_finding(severity=Severity.CRITICAL, category=Category.SECRETS)], loc).overall
+    sink = score(
+        [_finding(severity=Severity.CRITICAL, category=Category.CODE_VULNERABILITIES)], loc
+    ).overall
+
+    assert secret < sink

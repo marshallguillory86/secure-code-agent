@@ -209,6 +209,14 @@ Re-measured over the same corpus after the change:
 | worst-ranked repository | django (largest) | **flask (densest)** |
 | spread | 0.00–5.00 | 0.00–5.00 |
 
+**This was measured against a corpus with no bad end in it, and that mattered.**
+Adding vulnerable-by-design anchors showed straight density had cost
+discriminative power — AUC 0.91 → 0.80 — because it divided committed
+credentials by repository size. D17 amends it: `secrets` normalizes by
+`sqrt(LOC/1000)` and the slope is 1.3. The size-bias fix above stands; the
+figures in this table are superseded by the result section at the end of this
+document.
+
 ### Corpus coverage was the blocker, and fixing it answered the question
 
 Six of the fourteen were scoring near-perfectly because they were
@@ -330,9 +338,33 @@ re-derives. P6 is met.
 **Answered — is the residue noise?** No. It was measured finding by finding
 and it is true positives.
 
-**Still open — band edges, and what a grade means.** The corpus median is
-4.37 (A−) against MA's 4.0 target, so the centre is defensible. The
-distribution is not: it is bimodal, and the four at the bottom are frameworks
-being graded on constructs they exist to provide. Whether that is the right
-answer, or whether an untriaged framework should read lower-but-not-F, is a
-product decision.
+**Closed — band edges, and what a grade means. See D17.** The blocker was
+that this corpus had no bad end: every repository in it was a well-maintained
+OSS project, so there was nothing to place D and F against. Five
+vulnerable-by-design applications are now pinned alongside them (OWASP PyGoat,
+NodeGoat, railsgoat, WebGoat, Juice Shop), cloned and read but never executed.
+
+With both populations present the scale can be scored rather than admired:
+
+| | value |
+| --- | ---: |
+| AUC (maintained above vulnerable) | **1.00** |
+| separation (worst maintained − best vulnerable) | **+1.26** |
+| maintained median | **3.41 (B)** |
+| vulnerable median | **0.00 (F)** |
+| Spearman(LOC, grade) | **−0.05** |
+
+Two edges are measured: **D/F at 1.00 falls inside the population gap**, and
+the centre lands in B. **A−, B and C contain no observation at all**, and no
+larger corpus fixes that — at that end the difference between two
+repositories is five findings versus eight in twenty thousand lines, and
+nothing says one deserves A and the other A+. Those edges are presentational
+granularity, not measured thresholds.
+
+The old worry here — that the bottom of the distribution was frameworks being
+graded on constructs they exist to provide — turned out to be two things. Part
+was real (Django's `mark_safe`, Flask's `exec(compile(...))` in
+`config.from_pyfile`), and the rank discount and triage tiers address it. Part
+was a defect: Bandit's `B102`/`B307` were mapped to CWE-78, so they never
+merged with the built-in `sca.python.eval` finding on the same line and one
+defect scored twice. Flask carried four such pairs.

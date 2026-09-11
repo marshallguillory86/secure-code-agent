@@ -216,7 +216,21 @@ def category_subtotal(findings: Iterable[Finding], category: Category) -> float:
     )
 
 
-def normalize(subtotal: float, loc_scanned: int) -> float:
+#: Categories where a finding is a count rather than a rate.
+#:
+#: One committed credential is one committed credential regardless of how
+#: much code surrounds it. Everything else here — injection sinks, weak
+#: crypto calls, unsafe deserialization — genuinely does scale with how much
+#: code there is, and comparing two repositories on those means comparing
+#: rates. See `normalize` for the measurement that settled which is which.
+COUNT_LIKE_CATEGORIES: frozenset[str] = frozenset({"secrets"})
+
+
+def _category_name(category: Category | str) -> str:
+    return category.value if isinstance(category, Category) else str(category)
+
+
+def normalize(subtotal: float, loc_scanned: int, category: Category | str | None = None) -> float:
     """Weighted findings per thousand lines of scanned code — a density.
 
     This was `sqrt(LOC/1000)` and that under-corrected for size, so the
@@ -238,27 +252,71 @@ def normalize(subtotal: float, loc_scanned: int) -> float:
     repository is the densest one rather than the largest one. The slope
     moves with it — see `category_grade` — because the two only make sense
     together.
+
+    **`secrets` is not a density, and D17 is why.** Adding
+    vulnerable-by-design anchors to the corpus exposed the failure directly:
+    OWASP Juice Shop carries four hardcoded API keys and three private keys
+    and graded **B+**, because 115,340 lines of surrounding code divided
+    seven committed credentials down to nothing. Meanwhile Flask, with no
+    secrets at all, graded F. A committed private key is one committed
+    private key whether the repository is a thousand lines or a million; it
+    is a count, not a rate, and dividing it by size is how a training
+    application built to be insecure outscored a well-run library.
+
+    So `secrets` normalizes by `sqrt(LOC/1000)` instead. Not by nothing: a
+    larger codebase genuinely does carry more configuration surface, and an
+    absolute count made Django fail on two low-confidence hits. Measured over
+    the fourteen examined repositories, against whether a repository is
+    maintained or written to be vulnerable:
+
+        variant                       AUC    separation   Spearman(LOC, grade)
+        linear everywhere (D16)       0.80      -3.76            +0.14
+        sqrt everywhere (pre-D16)     0.91      -0.58            -0.32
+        linear; secrets absolute      0.90      +0.00            -0.24
+        linear; secrets sqrt          1.00      +0.65            -0.01   <-
+
+    AUC is the probability that a maintained repository outscores a
+    vulnerable-by-design one. Negative separation means the populations
+    overlap and *no* band table can tell them apart — which is what blocked
+    D5's band edges for as long as the corpus had no bad end in it.
     """
     if loc_scanned <= 0:
         return subtotal
-    return subtotal / (max(loc_scanned, 1) / 1000)
+    per_kloc = max(loc_scanned, 1) / 1000
+    if category is not None and _category_name(category) in COUNT_LIKE_CATEGORIES:
+        return subtotal / math.sqrt(per_kloc)
+    return subtotal / per_kloc
 
 
-#: Grade points lost per weighted finding per kLOC.
+#: Grade points lost per normalized weighted finding.
 #:
-#: 1.5 rather than the old 0.5, because the divisor changed underneath it.
-#: Chosen to hold the calibration target that D5 settled: the examined-corpus
-#: median lands at 3.20, inside the B band, against 3.36 before — while the
-#: full 0-to-5 spread is preserved and the ordering now follows density.
+#: The slope only rescales — it cannot reorder anything — so it is chosen
+#: against two things the ordering does not fix: where the median of
+#: well-maintained code lands, and how much of the corpus clamps at 0.0 and
+#: loses its tail.
+#:
+#: 1.3 is the largest slope that keeps the maintained-corpus median inside the
+#: B band [3.00, 3.50) *and* keeps the two populations from touching. Measured
+#: across the range, holding the D17 normalizer fixed:
+#:
+#:     slope   median (maintained)   AUC   separation   clamped at 0
+#:      1.2          3.53 (B+)       1.00     +0.98          4
+#:      1.3          3.41 (B)        1.00     +0.65          4   <- adopted
+#:      1.4          3.28 (B)        1.00     +0.31          4
+#:      1.5          3.16 (B)        0.95     +0.00          5
+#:
+#: At 1.5 a maintained repository joins the four vulnerable-by-design ones at
+#: the clamp, the populations touch, and AUC falls. 1.3 has the widest margin
+#: of the slopes that land the median in B.
 #:
 #: The cost, stated: a large repository with a handful of serious findings
-#: scores *better* than it did. A 135,841-line control carrying SQL injection,
-#: `shell=True`, `pickle.loads`, MD5 and `eval` moves 3.86 (B+) to 4.71 (A).
-#: Neither number was ever safe. What actually protects that repository is the
-#: default `fail_on_new` gate, which fails it outright, and the work order,
-#: which puts all seven findings in §FIX. A density is for comparing and for
-#: trend; it was never the thing that catches a vulnerability. See D16.
-GRADE_SLOPE = 1.5
+#: still scores better than a small noisy one. A 135,841-line control carrying
+#: SQL injection, `shell=True`, `pickle.loads`, MD5 and `eval` grades in the
+#: A band. What protects that repository is the default `fail_on_new` gate,
+#: which fails it outright, and the work order, which puts all seven findings
+#: in §FIX. A grade is for comparing and for trend; it was never the thing
+#: that catches a vulnerability. See D16 and D17.
+GRADE_SLOPE = 1.3
 
 
 def category_grade(normalized: float) -> float:
@@ -558,7 +616,7 @@ def score(
             per_category[cat] = None
             continue
         subtotal = category_subtotal(findings, cat)
-        per_category[cat] = category_grade(normalize(subtotal, loc_scanned))
+        per_category[cat] = category_grade(normalize(subtotal, loc_scanned, cat))
 
     for f in findings:
         if not f.suppressed:

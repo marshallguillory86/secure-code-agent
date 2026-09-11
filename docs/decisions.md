@@ -15,7 +15,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D2 | Unknown configuration keys are rejected, not ignored | 2026-09-08 | Accepted |
 | D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | Accepted — [built](ma-integration.md) |
 | D4 | A failing security audit fails MA's CI | 2026-09-08 | Accepted |
-| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | Open — examined-set median is 3.38 (B), the target; one normalizer defect left |
+| D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | **Closed** by D16 and D17 |
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
 | D7 | The project declares a minimum tool floor, and defaults to it | 2026-09-08 | Accepted |
 | D8 | Floor tools have a cadence; repository-level ones arrive by import | 2026-09-08 | Accepted |
@@ -26,6 +26,8 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D13 | Adapters state their outcome; nothing infers it from a finding's name | 2026-09-09 | Accepted |
 | D14 | Parsers are tested against real captured output, and the gap is declared | 2026-09-09 | Accepted |
 | D15 | A scanner's severity is not a measure of consequence, and nothing may rank on it | 2026-09-11 | Accepted |
+| D16 | The grade is a density, and the gate is what catches a vulnerability | 2026-09-11 | Accepted — amended by D17 |
+| D17 | Calibrated against both populations; `secrets` is a count, and three bands are unmeasurable | 2026-09-11 | Accepted — closes D5 |
 
 ---
 
@@ -157,7 +159,12 @@ repository *size*, scoring Django, pytest, black, tornado, httpx, lodash,
 svelte and fastapi all at 0.0/F while a 53-file toy scored 4.6/A. The fix was
 rates, normalized per dimension, calibrated so the corpus median earns a B.
 
-**State: open, and narrowed to one question.** See
+**State: CLOSED — 2026-09-11, by D16 (the normalizer) and D17 (the corpus,
+the `secrets` exception, and what the bands can and cannot mean).** The
+history below is kept because the route matters: each narrowing was wrong in a
+way the next measurement caught, and the register is the record of that.
+
+**State (historical): open, and narrowed to one question.** See
 [`calibration.md`](calibration.md) for the study and
 [`calibration/`](../calibration/README.md) for the harness and pinned corpus.
 
@@ -201,7 +208,7 @@ F to B-, fastapi F to C, requests B- to B+, and none scored lower. The first
 formulation broke P3 — `mean(weight) * sqrt(n)` let nine extra LOW findings
 *improve* a grade — and is pinned against by a monotonicity test.
 
-**Still open, and now concrete.** Django and Flask remain at F because of
+**Open at the time, and now concrete** — closed by D16. Django and Flask remained at F because of
 `sqrt(LOC/1000)`, under which the largest repository in the corpus ranks
 worst: django 15.53 normalized against flask 9.12, inverting to 1.29 and 3.17
 per-kLOC. That is size bias in the normalizer meant to remove it.
@@ -251,7 +258,9 @@ not changed here, because switching to per-kLOC weakens the gate: a synthetic
 `pickle.loads`, `yaml.load`, `eval`, MD5 and hardcoded credentials scores
 0.00 F today and would land near D.
 
-**Still open — band edges.** The centre is now defensible: 4.37 (A−) against
+**Open at the time — band edges** — closed by D17, which found the blocker
+was that this corpus had no bad end to place D and F against. The centre was
+already defensible: 4.37 (A−) against
 MA's 4.0 target. The *distribution* is not — nine repositories at 4.15 or
 better, four at 0.15 or worse, almost nothing between. That cliff comes from
 clamping a linear slope at zero, not from the inputs.
@@ -702,8 +711,12 @@ count, and more findings never improve the score. A failure there means the
 model changed and should be declared, not that something is broken.
 
 **This is not D5.** Pinning an uncalibrated number does not calibrate it.
-These prove the scale is *stable*; nobody has yet established that A+
-corresponds to anything real. D5 remains open.
+These prove the scale is *stable*. What establishes it is *correct* is D17,
+which scores the scale against a corpus carrying both well-maintained code and
+applications written to be vulnerable. Both are needed, and neither
+substitutes for the other: D17 could pass while the scale silently drifted
+between releases, and these pins could pass on a scale that ordered the two
+populations at random.
 
 ## D15 — A scanner's severity is not a measure of consequence
 
@@ -880,5 +893,124 @@ example, where the repository with a live SQL injection grades A−.
   check the scale. It now reports the examined median and names the
   exclusion.
 
-**Still open.** The letter bands themselves are still borrowed from
-`maintainability-agent` without their own study. D5's other half stands.
+**Still open at the time — closed by D17.** The letter bands were still
+borrowed from `maintainability-agent` without their own study. D17 gives them
+one, and the answer is partly negative: two edges are measured and three bands
+hold no observation at all.
+
+---
+
+## D17 — Calibrated against both populations; `secrets` is a count, and three bands are unmeasurable
+
+**Status:** Accepted · 2026-09-11 · amends D16 · **closes D5**
+
+**Context.** D16 fixed size bias and I checked it against the only corpus
+there was — fourteen well-maintained OSS projects. `corpus.json` had stated
+the flaw in that from its first version: *"these are all well-maintained OSS
+projects with their own security processes. The distribution measured here is
+cleaner than the population this tool will actually be pointed at."*
+
+A scale with no bad end cannot be calibrated. There is nothing to place D and
+F against, and D5's band question had been open for that reason since
+2026-09-08.
+
+**Decision, part one: the corpus gets a bad end.** Five applications written
+to be vulnerable are pinned alongside the maintained half and tagged
+`kind: vulnerable-by-design` — OWASP PyGoat, NodeGoat, railsgoat, WebGoat and
+Juice Shop. They are cloned and read; none is ever executed. WebGoat is
+included precisely because it stays **unexamined**: D12 records that no
+offline SAST in the floor reads Java, and a deliberately-vulnerable Java
+application reporting a clean score is the sharpest demonstration available of
+why coverage is reported beside the grade and never folded into it.
+
+Two measures come with them. **AUC** is the probability that a maintained
+repository outscores a vulnerable-by-design one — 1.00 is perfect ordering,
+0.50 is a coin toss. **Separation** is the worst maintained grade minus the
+best vulnerable one; negative means the populations overlap and *no* band
+table can tell them apart.
+
+**What the anchors immediately showed: D16 had made it worse.**
+
+```
+                        AUC    separation
+sqrt everywhere         0.91      -0.58
+linear everywhere (D16) 0.80      -3.76
+```
+
+Juice Shop carries four hardcoded API keys and three private keys and graded
+**B+**, while Flask — which has no secrets at all — graded **F**. I had
+recommended the density change without this evidence, because the evidence did
+not exist. It does now.
+
+**Decision, part two: `secrets` is a count, not a rate.** Seven committed
+credentials divided by 115,340 lines is how a training application built to be
+insecure outscored a well-run library. A committed private key is one
+committed private key whether the repository is a thousand lines or a million.
+`secrets` normalizes by `sqrt(LOC/1000)`; every other category keeps the
+straight density D16 established. Damped, not exempted — an absolute count
+failed Django on two low-confidence hits:
+
+```
+variant                     AUC    separation   Spearman(LOC, grade)
+linear everywhere (D16)     0.80      -3.76            +0.14
+sqrt everywhere (pre-D16)   0.91      -0.58            -0.32
+linear; secrets absolute    0.90      +0.00            -0.24
+linear; secrets sqrt        1.00      +0.65            -0.01   <- adopted
+```
+
+The slope moves 1.5 → 1.3 with it. Slope cannot reorder anything, so it is
+chosen on where the median lands and how much of the corpus clamps at 0.0 and
+loses its tail. 1.3 is the largest slope keeping the maintained median inside
+the B band while the populations stay apart.
+
+**A mapping defect found by the same run.** Flask's F was partly doubles.
+Bandit's `B102` (`exec`) was mapped to **CWE-78** — *OS* command injection,
+the shell weakness `B602` covers — and `B307` (`eval`) had no curated entry so
+it inherited the same wrong CWE from Bandit itself. Corroboration merges
+across scanners on a shared CWE, so `B102` and this project's own
+`sca.python.eval` never merged and one `exec(compile(...))` line scored twice.
+Both are now CWE-95, matching the convention semgrep, RuboCop and the built-in
+rules already used. `is_top25` follows the documented ChildOf relationship to
+CWE-94 so that describing the weakness accurately is not what removes its
+Top-25 weight.
+
+**The result, measured on the pinned corpus.**
+
+| | value |
+| --- | ---: |
+| AUC (maintained above vulnerable) | **1.00** |
+| separation | **+1.26** |
+| maintained median | **3.41 (B)** — D5's target |
+| vulnerable median | **0.00 (F)** |
+| Spearman(LOC, grade) | **−0.05** |
+
+All four examined vulnerable-by-design applications grade F. The maintained
+half spans D to A+.
+
+**Decision, part three: three bands cannot be calibrated, and saying so is the
+closure.** Testing every edge against the distribution rather than assuming:
+
+- The **D/F edge at 1.00 falls inside the population gap** (0.00 → 1.26). This
+  is the one edge that carries a decision, and it is measured.
+- The **centre is measured**: well-maintained code medians at 3.41, in B.
+- **A−, B and C contain no observation at all.** Nine bands cannot be
+  supported by ten maintained repositories, and no larger corpus fixes it,
+  because at that end of the scale the difference between two repositories is
+  five findings versus eight in twenty thousand lines. No ground truth says
+  one of those deserves A and the other A+.
+
+So the band edges above D/F are **presentational granularity, not measured
+thresholds**, and this register now says so. A B+ is not meaningfully better
+than an A−. Reading the letter as though it resolves that finely is the
+failure mode, and it is the same one D15 and D16 describe from other angles:
+the score is second class. The work order is the product.
+
+**Consequences.**
+
+- `calibrate.py` reports the two populations apart, with AUC and separation,
+  and refuses to print a pooled median — which would describe neither.
+- The corpus is 19 repositories; a run is roughly six minutes.
+- Cloning deliberately-vulnerable applications is now part of re-running the
+  study. They are training material, they are never executed, and
+  `calibration/.corpus/` is gitignored and excluded from the self-audit.
+- **D5 is closed.**

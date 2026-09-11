@@ -98,11 +98,23 @@ Flask carried 2.2× Django's density and normalized at half the value. Spearman 
 Map the worst category to a 0.0–5.0 axis. The **worst category drives the overall grade**, not an average — one CRITICAL secret in git history shouldn't be offset by a clean dependency tree.
 
 ```python
-category_grade = clamp(5.0 - (category_normalized * 1.5), 0.0, 5.0)
+category_grade = clamp(5.0 - (category_normalized * 1.3), 0.0, 5.0)
 overall_score  = min(category_grade for category in categories)
 ```
 
-The slope moved 0.5 → 1.5 with the normalizer, because the two only mean anything together. 1.5 is what holds the D5 calibration target across the examined corpus: median 3.20 (B), full 0–5 spread preserved.
+The slope moves with the normalizer, because the two only mean anything together. Slope cannot reorder anything, so it is chosen on where the median lands and how much of the corpus clamps at 0.0 and loses its tail. 1.3 is the largest slope that keeps well-maintained code medianing inside the B band while the two populations stay apart — see [decisions.md](decisions.md) D17.
+
+### `secrets` is the exception
+
+```python
+secrets_normalized = secrets_subtotal / sqrt(loc_scanned / 1000)
+```
+
+One committed private key is one committed private key whether the repository is a thousand lines or a million. It is a count, not a rate.
+
+This was found the hard way. OWASP Juice Shop — a training application written to be insecure — carries four hardcoded API keys and three private keys, and under straight density graded **B+**, because 115,340 lines of surrounding code divided seven committed credentials down to nothing. Flask, with no secrets at all, graded F.
+
+`sqrt` rather than an absolute count, because a larger codebase genuinely does carry more configuration surface, and an absolute count failed Django on two low-confidence hits. Damped, not exempted.
 
 ## Letter grade
 
@@ -138,12 +150,12 @@ Dep #3:      1.5 (MED)   × 0.75 (MED conf)   × 1.0 (deps)        × 1.00      
 code_vulnerabilities subtotal = 7.50
 dependencies subtotal         = 3.39
 
-Normalizer: 12000 / 1000 = 12.0
+Normalizer: 12000 / 1000 = 12.0   (secrets would use sqrt(12) = 3.46 — none here)
 
-code_vulnerabilities normalized = 7.50 / 12.0 = 0.625 → grade = 5.0 - (0.625 × 1.5) = 4.06
-dependencies normalized         = 3.39 / 12.0 = 0.283 → grade = 5.0 - (0.283 × 1.5) = 4.58
+code_vulnerabilities normalized = 7.50 / 12.0 = 0.625 → grade = 5.0 - (0.625 × 1.3) = 4.19
+dependencies normalized         = 3.39 / 12.0 = 0.283 → grade = 5.0 - (0.283 × 1.3) = 4.63
 
-Overall = min(4.06, 4.58) = 4.06 → "A-"
+Overall = min(4.19, 4.63) = 4.19 → "A-"
 ```
 
 **Read that last line carefully, because it is the honest cost of a density.** This repository has a live SQL injection and grades A−. One serious defect in twelve thousand lines *is* a low density, and the grade is reporting the density correctly.
@@ -194,7 +206,16 @@ category rather than the mean, suppressed findings do not count, more findings
 never improve the score, and a perfect score sits beside failed coverage
 without either deriving from the other.
 
-**It proves the scale is stable, not that it is correct.** Nobody has
-established that A+ corresponds to anything real — that is D5, still open —
-and pinning an uncalibrated number does not calibrate it. Changes in scanner
+**It proves the scale is stable. D17 is what establishes it is correct** —
+to the extent anything can. The corpus now carries both populations, and the
+scale orders them perfectly: AUC 1.00, separation +1.26, every
+vulnerable-by-design application at F and well-maintained code medianing at
+3.41 (B).
+
+What that does **not** establish is the edges between adjacent letters above
+D/F. A−, B and C contain no corpus observation at all, and no larger corpus
+fixes that: at the top of the scale the difference between two repositories is
+five findings versus eight in twenty thousand lines, and nothing says one of
+those deserves A and the other A+. Treat those edges as presentational
+granularity. A B+ is not meaningfully better than an A−. Changes in scanner
 output distributions still require release review.

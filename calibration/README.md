@@ -1,9 +1,15 @@
 # Calibration
 
-The method [D5](../docs/decisions.md) owes. `docs/decisions.md` has carried
-*"Open — method needed"* since 2026-09-08: the letter bands were borrowed from
-`maintainability-agent` without its calibration study, and the
-`sqrt(LOC/1000)` dampener is an invented normalizer with no corpus behind it.
+The method [D5](../docs/decisions.md) owed. It carried *"Open — method
+needed"* from 2026-09-08 to 2026-09-11: the letter bands were borrowed from
+`maintainability-agent` without its calibration study, and the dampener was an
+invented normalizer with no corpus behind it.
+
+**D5 is now closed**, by [D16](../docs/decisions.md) (the normalizer) and
+[D17](../docs/decisions.md) (the two-population corpus, the `secrets`
+exception, and what the bands can and cannot mean). This directory is how that
+was measured, and re-running it is how any future change to the scoring model
+is checked.
 
 ```
 python calibration/calibrate.py                       # whole corpus
@@ -15,10 +21,28 @@ Results land in `results.json`; the study itself is
 
 ## The three files
 
-**`corpus.json`** — fourteen repositories pinned by commit. Selected to span
-the languages the floor actually reads, and roughly two orders of magnitude of
-size, because a corpus of similarly-sized repositories cannot tell us anything
-about a size normalizer.
+**`corpus.json`** — nineteen repositories pinned by commit, in **two
+populations**.
+
+Fourteen are `kind: maintained`: well-known, actively maintained projects,
+selected to span the languages the floor actually reads and roughly two orders
+of magnitude of size, because a corpus of similarly-sized repositories cannot
+tell us anything about a size normalizer.
+
+Five are `kind: vulnerable-by-design`: OWASP PyGoat, NodeGoat, railsgoat,
+WebGoat and Juice Shop. Without them the corpus had no bad end, so there was
+nothing to place D and F against and D5's band question could not be answered
+at all — which is exactly where it sat, open, from 2026-09-08 to 2026-09-11.
+They are cloned and read by the scanners and **never executed**. WebGoat is
+here to stay *unexamined*: no offline SAST in the floor reads Java (D12), and
+a deliberately-vulnerable Java application reporting a clean score is the
+sharpest demonstration of why coverage is reported beside the grade.
+
+The two are never pooled. `summarize()` reports each separately along with
+**AUC** — the probability a maintained repository outscores a vulnerable one —
+and **separation**, the worst maintained grade minus the best vulnerable one.
+Negative separation means the populations overlap and no band table can tell
+them apart.
 
 **`calibration-config.json`** — one config for every repository. Without
 `--config` the audit loads the *audited project's* own `secure-code-agent.json`
@@ -100,9 +124,28 @@ is **5.00**: four perfect scores for repositories nobody looked at.
 
 The product refuses to grade what it did not examine (P7). A study that
 computes percentiles over repositories in the same position is doing the
-thing the product refuses to do, so `summarize()` reports
-`examined_overall` alongside the whole-corpus figures and names the
-repositories it left out. **Band edges come from the examined set.**
+thing the product refuses to do, so `summarize()` reports the examined set
+separately and names the repositories it left out.
+
+*(Those figures are from the 2026-09-10 run, kept because they are what
+motivated the change. The current run is below.)*
+
+## The result
+
+Measured on the nineteen-repository corpus at the pinned commits:
+
+| | value |
+| --- | ---: |
+| AUC (maintained scores above vulnerable) | **1.00** |
+| separation | **+1.26** |
+| maintained median | **3.41 (B)** |
+| vulnerable-by-design median | **0.00 (F)** |
+| Spearman(LOC, grade) | **−0.05** |
+
+All four *examined* vulnerable-by-design applications grade F; the maintained
+half spans D to A+. Two band edges are measured — D/F at 1.00 falls inside the
+gap between the populations, and the centre lands in B. A−, B and C hold no
+observation at all, and D17 records why no larger corpus fixes that.
 
 ## Why subtotals are recomputed rather than read
 
