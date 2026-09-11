@@ -501,6 +501,12 @@ def _prepare_audit(
         raise ValueError("multiple scan roots are not supported; provide one repository root")
     # The target is resolved first because the default config belongs to it.
     target = Path(args.paths[0]).resolve()
+    # A typo in the path used to reach the scanners, where the first adapter
+    # passed the missing directory as a subprocess `cwd` and the run died
+    # with a raw `FileNotFoundError` traceback. An operator who mistypes a
+    # path should be told so, not handed a stack trace from `subprocess.py`.
+    if not target.exists():
+        raise ValueError(f"scan root does not exist: {target}")
     cfg = config_mod.load(args.config, default_root=target)
     # Set from the command line only. Threading it through the loaded config
     # would let a repository-supplied file assert its own trustworthiness.

@@ -211,3 +211,63 @@ def test_a_finding_with_no_duplicate_is_returned_untouched():
 
 def test_an_empty_scan_merges_to_nothing():
     assert merge_corroborating([]) == []
+
+
+# ---------------------------------------------------------------------------
+# A shared CWE is not a shared weakness
+# ---------------------------------------------------------------------------
+
+
+def test_two_rules_from_one_scanner_sharing_a_cwe_stay_separate():
+    """The defect this rule exists for, found by auditing a single file.
+
+    Bandit files B602 (`shell=True`), B603 (subprocess call) and B607
+    (partial executable path) all under CWE-78. They are not one finding:
+    one is fixed with an argument list, one with an absolute path. Keying
+    the merge on the CWE collapsed them, so
+    `subprocess.call('ls', shell=True)` reported B607 alone with the
+    `shell=True` buried inside it as a footnote — a work order missing the
+    more serious of the two.
+
+    `test_two_different_weaknesses_at_one_line_stay_two_findings` above
+    asserted this and passed anyway, because its fixtures carried no CWE.
+    Reading Bandit's CWEs gave them one and turned it into a false
+    assurance.
+    """
+    merged = merge_corroborating(
+        [_f("B602", cwe="CWE-78"), _f("B607", cwe="CWE-78")],
+    )
+
+    assert len(merged) == 2
+    assert {f.rule_id for f in merged} == {"B602", "B607"}
+
+
+def test_two_scanners_sharing_a_cwe_still_corroborate():
+    """The other half, and the reason the function exists: bandit and our
+    own rule catching one `shell=True` is one finding with two witnesses."""
+    merged = merge_corroborating(
+        [
+            _f("B602", scanner="bandit", cwe="CWE-78"),
+            _f("sca.python.subprocess.shell_true", scanner="builtin_rules", cwe="CWE-78"),
+        ]
+    )
+
+    assert len(merged) == 1
+    assert merged[0].corroborated_by == ("builtin_rules:sca.python.subprocess.shell_true",)
+
+
+def test_an_alias_pair_merges_regardless_of_cwe():
+    """The hand-checked table still outranks everything for one scanner."""
+    merged = merge_corroborating([_f("B703", cwe="CWE-80"), _f("B308", cwe="CWE-79")])
+
+    assert len(merged) == 1
+
+
+def test_different_scanners_with_no_cwe_do_not_merge():
+    """Without a CWE there is no evidence they are the same weakness, and
+    guessing would hide a finding."""
+    merged = merge_corroborating(
+        [_f("R1", scanner="bandit"), _f("R1", scanner="semgrep")],
+    )
+
+    assert len(merged) == 2

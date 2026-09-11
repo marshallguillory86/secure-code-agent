@@ -207,6 +207,41 @@ RULE_ALIASES: dict[str, dict[str, str]] = {
 }
 
 
+def _canonical_rule(finding: Finding) -> str:
+    """A rule id with aliases resolved, scoped to its scanner."""
+    alias = RULE_ALIASES.get(finding.scanner, {})
+    return f"{finding.scanner}:{alias.get(finding.rule_id, finding.rule_id)}"
+
+
+def _same_weakness(a: Finding, b: Finding) -> bool:
+    """Are these two reports of one weakness, or two weaknesses at one line?
+
+    Two conditions, and a CWE match alone is not enough.
+
+    **Two different rules from the same scanner are two different checks.**
+    Bandit files `B602` (shell=True), `B603` (subprocess call) and `B607`
+    (partial executable path) all under CWE-78, and they are not the same
+    finding: one is fixed with an argument list, one with an absolute path.
+    Keying on the CWE merged them and the work order lost a finding —
+    `subprocess.call('ls', shell=True)` reported `B607` alone, with the
+    `shell=True` hidden inside it as a footnote.
+
+    An earlier test asserted exactly this must not happen and passed anyway,
+    because its fixtures carried no CWE. Reading Bandit's CWEs gave them one
+    and turned a passing test into a false assurance.
+
+    So: the same scanner merges only through the hand-checked alias table.
+    Different scanners merge on a shared CWE, which is the corroboration
+    this function exists for — bandit and our own rule catching one
+    `shell=True` is one finding with two witnesses.
+    """
+    if a.file_path != b.file_path or a.line_start != b.line_start:
+        return False
+    if a.scanner == b.scanner:
+        return _canonical_rule(a) == _canonical_rule(b)
+    return bool(a.canonical_cwe) and a.canonical_cwe == b.canonical_cwe
+
+
 def _merge_key(finding: Finding) -> tuple:
     """What makes two reports the same report.
 
@@ -250,25 +285,35 @@ def merge_corroborating(findings: Iterable[Finding]) -> list[Finding]:
     because a report that lists one line twice is wrong about the code, and
     a work order derived from it would ask for the same fix twice.
     """
-    merged: dict[tuple, Finding] = {}
-    extra: dict[tuple, list[str]] = {}
+    # Keyed by line so the pairwise test only runs against plausible
+    # neighbours; `_same_weakness` decides the rest.
+    by_line: dict[tuple, list[int]] = {}
+    kept: list[Finding] = []
+    witnesses: list[list[str]] = []
 
     for finding in findings:
-        key = _merge_key(finding)
-        kept = merged.get(key)
-        if kept is None:
-            merged[key] = finding
-            extra[key] = []
+        locus = (finding.file_path.as_posix(), finding.line_start)
+        slot = None
+        for index in by_line.get(locus, []):
+            if _same_weakness(kept[index], finding):
+                slot = index
+                break
+        if slot is None:
+            by_line.setdefault(locus, []).append(len(kept))
+            kept.append(finding)
+            witnesses.append([])
             continue
         label = f"{finding.scanner}:{finding.rule_id}"
-        if label not in extra[key] and label != f"{kept.scanner}:{kept.rule_id}":
-            extra[key].append(label)
-        if finding.severity.rank > kept.severity.rank or (
-            finding.severity.rank == kept.severity.rank
-            and CONFIDENCE_RANK[finding.confidence] > CONFIDENCE_RANK[kept.confidence]
+        existing = kept[slot]
+        if label not in witnesses[slot] and label != f"{existing.scanner}:{existing.rule_id}":
+            witnesses[slot].append(label)
+        if finding.severity.rank > existing.severity.rank or (
+            finding.severity.rank == existing.severity.rank
+            and CONFIDENCE_RANK[finding.confidence] > CONFIDENCE_RANK[existing.confidence]
         ):
-            merged[key] = replace(finding, corroborated_by=kept.corroborated_by)
+            kept[slot] = finding
 
     return [
-        replace(f, corroborated_by=tuple(extra[k])) if extra[k] else f for k, f in merged.items()
+        replace(f, corroborated_by=tuple(seen)) if seen else f
+        for f, seen in zip(kept, witnesses, strict=True)
     ]
