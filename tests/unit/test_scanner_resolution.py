@@ -173,6 +173,24 @@ def test_defaults_never_allow_executables_from_the_tree(tmp_path):
     assert target_executables_allowed(Config(), tmp_path) is False
 
 
+def test_a_file_target_refuses_an_in_tree_configured_executable(tmp_path):
+    """A file is an audit target, but its parent is the trust boundary."""
+    target = tmp_path / "app.py"
+    target.write_text("x = 1\n", encoding="utf-8")
+    executable = _tree_with_executable(tmp_path)
+    cfg = _config_naming(
+        tmp_path,
+        [str(executable)],
+        source=tmp_path / "secure-code-agent.json",
+    )
+
+    scanner = BanditScanner()
+    scanner.configure(target, cfg)
+
+    assert target_executables_allowed(cfg, target) is False
+    assert scanner.command == ()
+
+
 def test_the_floor_and_optional_sets_are_disjoint_and_complete():
     from secure_code_audit.scanners import SCANNERS, floor
 

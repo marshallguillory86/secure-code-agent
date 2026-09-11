@@ -125,6 +125,32 @@ def test_a_single_file_still_finds_what_is_in_it(tmp_path):
     assert any(f["rule_id"] == "B602" for f in report["findings"])
 
 
+def test_a_single_file_does_not_execute_a_program_named_by_its_config(tmp_path):
+    """Single-file support must retain the in-tree-config execution guard."""
+    target = tmp_path / "app.py"
+    target.write_text("x = 1\n", encoding="utf-8")
+    marker = tmp_path / "executed"
+    executable = tmp_path / "scanner"
+    executable.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    executable.chmod(0o755)
+    config = tmp_path / "secure-code-agent.json"
+    config.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "scanners": {"bandit": {"command": [str(executable)]}},
+                "outputs": {"markdown_path": None, "prompt_path": None, "history_path": None},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run(target, "--config", str(config), "--only-scanners", "bandit")
+
+    _no_traceback(result)
+    assert not marker.exists()
+
+
 # ---------------------------------------------------------------------------
 # Nothing to scan
 # ---------------------------------------------------------------------------

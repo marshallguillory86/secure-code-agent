@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from secure_code_audit import config as config_mod
 from secure_code_audit.cli import (
     _parse_sarif_import,
@@ -105,6 +107,71 @@ def test_repository_policy_paths_resolve_from_scan_root(tmp_path):
     assert (
         _under_root(tmp_path, ".policy/ignore.yaml") == (tmp_path / ".policy/ignore.yaml").resolve()
     )
+
+
+@pytest.mark.parametrize(
+    "output_key", ["markdown_path", "prompt_path", "baseline_path", "history_path"]
+)
+@pytest.mark.parametrize("escape", ["../operator-file", "/tmp/operator-file", "escaped/output"])
+def test_target_config_cannot_write_audit_artifacts_outside_its_root(tmp_path, output_key, escape):
+    """Repository configuration is untrusted at every write boundary."""
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "app.py").write_text("x = 1\n", encoding="utf-8")
+    outside = tmp_path / "operator-file"
+    outside.write_text("do not overwrite", encoding="utf-8")
+
+    if escape == "/tmp/operator-file":
+        destination = tmp_path / "absolute-output"
+        escape = str(destination)
+    elif escape == "escaped/output":
+        destination = tmp_path / "symlink-output"
+        (target / "escaped").symlink_to(tmp_path, target_is_directory=True)
+        escape = "escaped/symlink-output"
+    else:
+        destination = outside
+
+    outputs = {
+        "markdown_path": None,
+        "json_path": None,
+        "sarif_path": None,
+        "comment_path": None,
+        "prompt_path": None,
+        "baseline_path": "baseline.json",
+        "history_path": None,
+        "security_pillar_path": None,
+    }
+    outputs[output_key] = escape
+    config = target / "secure-code-agent.json"
+    config.write_text(json.dumps({"version": 1, "outputs": outputs}), encoding="utf-8")
+
+    argv = [str(target), "--config", str(config), "--only-scanners", "builtin_rules"]
+    if output_key == "baseline_path":
+        argv.append("--bump-baseline")
+
+    assert main(argv) == 2
+    assert not destination.exists() or destination.read_text(encoding="utf-8") == "do not overwrite"
+
+
+def test_explicit_cli_output_path_remains_an_operator_choice(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "app.py").write_text("x = 1\n", encoding="utf-8")
+    operator_output = tmp_path / "operator-report.md"
+
+    assert (
+        main(
+            [
+                str(target),
+                "--only-scanners",
+                "builtin_rules",
+                "--output",
+                str(operator_output),
+            ]
+        )
+        == 0
+    )
+    assert operator_output.is_file()
 
 
 def test_pip_audit_scope_discloses_bounded_inputs_and_flags():
