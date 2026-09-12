@@ -16,6 +16,34 @@ The sibling of [`maintainability-agent`](https://github.com/marshallguillory86/m
 
 ---
 
+## Try it in one command
+
+```bash
+pip install 'secure-code-agent[python-scanners]'
+secure-code-agent --demo
+```
+
+`--demo` generates a small application carrying seven real defects — SQL
+injection, command injection, unsafe deserialization, a weak hash, dynamic
+evaluation — audits it, and writes the work order you would hand an agent. The
+tree is generated at runtime into a temp directory, so installing this tool
+never puts vulnerable source on your disk.
+
+To audit something real:
+
+```bash
+secure-code-agent /path/to/repo
+```
+
+Any scanner that is missing is named, with the command to install it. This
+tool never installs anything itself — naming a command is not running one —
+and it will not grade what it could not examine. `--preflight` checks the
+whole floor before a run.
+
+A pure-Python repository requires six of the ten floor scanners; the Ruby,
+JavaScript and container tools are *not applicable* rather than missing, so a
+single-language project is never permanently incomplete.
+
 ## Why this exists
 
 AI coding agents ship code at human-review-saturating speed. Point them at a security finding and the documented anti-patterns are:
@@ -396,7 +424,7 @@ For agents that support invokable skills, this repo ships a portable skill under
 ## GitHub Action
 
 ```yaml
-- uses: marshallguillory86/secure-code-agent@v0.10.0
+- uses: marshallguillory86/secure-code-agent@v0.11.0
   with:
     config: secure-code-agent.json
     fail-on-gate: true

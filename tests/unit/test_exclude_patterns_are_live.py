@@ -213,6 +213,55 @@ def test_a_globbing_pattern_matches_the_component_not_the_whole_path():
 
 
 # ---------------------------------------------------------------------------
+# A pattern may name more than one segment
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("pattern", "rel", "expected"),
+    [
+        ("calibration/.corpus/", "calibration/.corpus/django/a.py", True),
+        ("a/b/", "a/b/c.py", True),
+        ("a/b/", "a/x/c.py", False),
+        ("a/b/", "z/a/b/c.py", True),
+        ("src/*/generated/", "src/pkg/generated/x.py", True),
+        ("src/*/generated/", "src/pkg/other/x.py", False),
+    ],
+)
+def test_a_multi_segment_directory_pattern_matches_a_consecutive_run(
+    pattern: str, rel: str, expected: bool
+):
+    """`calibration/.corpus/` is an ordinary thing to write, and the first
+    glob-capable version of the matcher compared one component at a time — so
+    no single component ever equalled `calibration/.corpus` and the pattern
+    went inert.
+
+    **That regression was introduced by the fix for inert patterns**, which is
+    the failure mode this whole module is about arriving one layer up. It was
+    caught a task later, when the repository inventory started walking
+    nineteen cloned corpus repositories it was configured to exclude — not by
+    any test here, because none covered a two-segment pattern.
+    """
+    assert _excluded(rel, pattern) is expected
+
+
+def test_this_repositorys_own_multi_segment_exclude_is_live(tmp_path):
+    """Read from the shipped config, because that is where it was inert."""
+    import json
+
+    repo_root = Path(__file__).resolve().parents[2]
+    patterns = json.loads((repo_root / "secure-code-agent.json").read_text(encoding="utf-8"))[
+        "paths"
+    ]["exclude_patterns"]
+    multi = [p for p in patterns if p.endswith("/") and p.count("/") > 1]
+
+    assert multi, "expected at least one multi-segment directory exclude to guard"
+    for pattern in multi:
+        probe = repo_root / f"{pattern.rstrip('/')}/nested/file.py"
+        assert is_excluded(probe, repo_root, patterns), f"{pattern} is inert"
+
+
+# ---------------------------------------------------------------------------
 # The case that actually broke
 # ---------------------------------------------------------------------------
 

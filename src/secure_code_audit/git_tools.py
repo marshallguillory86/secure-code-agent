@@ -101,11 +101,32 @@ def _matches_directory(rel: str, name: str) -> bool:
     to match. An earlier test asserted that it did; that was documenting an
     accident as intent, and it is corrected alongside this.
 
+    **A pattern may name more than one segment.** `calibration/.corpus/` and
+    `src/generated/` are ordinary things to write, and the first version of
+    this globbed one component at a time — so no single component ever equalled
+    `calibration/.corpus` and the pattern went inert. That regression was
+    introduced *by* the fix for inert patterns and was caught one task later,
+    when the repository inventory started walking nineteen cloned corpus
+    repositories it was supposed to be excluding. Segments are matched as a
+    consecutive run.
+
     An inert exclude is the worst kind of configuration defect: it reads as
     intent, it never errors, and the only symptom is findings the operator
     believed they had excluded.
     """
-    return any(fnmatch.fnmatch(component, name) for component in rel.split("/")[:-1])
+    wanted = [segment for segment in name.split("/") if segment]
+    if not wanted:
+        return False
+    # Directory components only: the last element of `rel` is the file.
+    components = rel.split("/")[:-1]
+    span = len(wanted)
+    for start in range(len(components) - span + 1):
+        if all(
+            fnmatch.fnmatch(component, pattern)
+            for component, pattern in zip(components[start : start + span], wanted, strict=True)
+        ):
+            return True
+    return False
 
 
 def in_scope(path: Path, include_exts: Iterable[str]) -> bool:

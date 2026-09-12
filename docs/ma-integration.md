@@ -1,6 +1,6 @@
 # maintainability-agent integration
 
-> Status: **v0.10.0 — 2026-09-11.** The `security-pillar.json` contract, schema v2.
+> Status: **v0.11.0 — 2026-09-11.** The `security-pillar.json` contract, schema v2.
 
 `maintainability-agent`'s [ADR 007](https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/adr-007-pillars-and-practice.md)
 §1 declares Security a **`DELEGATED`** pillar naming this tool, and reports it
