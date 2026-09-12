@@ -136,9 +136,12 @@ def _parser() -> argparse.ArgumentParser:
         "--trust-target-config",
         action="store_true",
         help=(
-            "Allow a config inside the audited tree to name executables from "
-            "that tree. Only for repositories you own. CLI-only by design: a "
-            "config file cannot grant itself this."
+            "Treat a config inside the audited tree as if you wrote it. This "
+            "grants it TWO things: (1) it may name executables from that tree, "
+            "which this host will then run, and (2) it may direct this tool's "
+            "outputs, baseline and history to paths outside the tree. Only for "
+            "repositories you own. CLI-only by design: a config file cannot "
+            "grant itself this."
         ),
     )
 

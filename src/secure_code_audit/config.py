@@ -141,6 +141,16 @@ DEFAULT_OUTPUTS: dict[str, str] = {
     "baseline_path": "secure-code-baseline.json",
     # Append-only trend. The score's one genuine use is movement over time.
     "history_path": ".secure-code/history.jsonl",
+    # The artifact maintainability-agent ingests (D3). Off unless declared,
+    # like sarif/json/comment — the default only supplies the name.
+    #
+    # It was missing here while `_resolve_outputs` read it, so
+    # `outputs.security_pillar_path` was a **dead key**: the validation loop
+    # below iterates this mapping, so a configured value never reached
+    # `cfg.outputs` and the resolver read `None` from it every time. That is
+    # the seventh instance of the defect `_resolve_outputs` already
+    # describes — "four of the six keys were dead the same way".
+    "security_pillar_path": "security-pillar.json",
 }
 
 
@@ -480,6 +490,19 @@ def _from_dict(raw: dict[str, Any]) -> Config:
     outputs = raw.get("outputs", {})
     if not isinstance(outputs, dict):
         raise ValueError("outputs must be a JSON object")
+    # D2 applies inside `outputs`, and it did not. The loop below iterates
+    # the *known* keys, so anything else was read by nobody and reported by
+    # nobody: `outputs.markdwon_path` was accepted in silence while the
+    # report went to the default path. That is precisely the failure D2 cites
+    # for top-level keys — "a typo'd gate name disabled a gate with no
+    # diagnostic" — surviving one level down because the check was never
+    # applied recursively.
+    unknown = sorted(set(outputs) - set(DEFAULT_OUTPUTS))
+    if unknown:
+        raise ValueError(
+            f"unknown outputs key(s): {', '.join(unknown)}. "
+            f"Known keys: {', '.join(sorted(DEFAULT_OUTPUTS))}"
+        )
     for k, default_v in DEFAULT_OUTPUTS.items():
         value = outputs.get(k, default_v)
         # `null` turns an output off. The markdown report and the work order

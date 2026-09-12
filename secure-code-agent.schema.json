@@ -217,29 +217,63 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "markdown_path": {
-          "type": "string",
-          "default": "secure-code-report.md"
-        },
-        "json_path": {
-          "type": "string",
-          "default": "secure-code-report.json"
-        },
-        "sarif_path": {
-          "type": "string",
-          "default": "secure-code.sarif"
+        "baseline_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": "secure-code-baseline.json"
         },
         "comment_path": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "default": "secure-code-pr-comment.md"
         },
+        "history_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": ".secure-code/history.jsonl",
+          "description": "Append-only JSONL trend log. null to disable."
+        },
+        "json_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": "secure-code-report.json"
+        },
+        "markdown_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": "secure-code-report.md"
+        },
         "prompt_path": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "default": "secure-code-remediation-prompt.md"
         },
-        "baseline_path": {
-          "type": "string",
-          "default": "secure-code-baseline.json"
+        "sarif_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": "secure-code.sarif"
+        },
+        "security_pillar_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": "security-pillar.json",
+          "description": "security-pillar.json for maintainability-agent to ingest (D3). null to disable."
         }
       }
     },
