@@ -76,9 +76,36 @@ def _matches(rel: str, name: str, pat: str) -> bool:
         bare = pat[3:] if pat.startswith("**/") else pat
         if not bare:  # a lone `**/` would otherwise exclude the entire tree
             return False
-        return rel.startswith(bare) or f"/{bare}" in f"/{rel}/"
+        return _matches_directory(rel, bare.rstrip("/"))
     bare = pat[3:] if pat.startswith("**/") else pat
     return fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(rel, bare) or fnmatch.fnmatch(name, bare)
+
+
+def _matches_directory(rel: str, name: str) -> bool:
+    """Does any directory component of `rel` match the glob `name`?
+
+    **The directory branch did no globbing at all.** It compared with
+    `startswith` and a substring test, so a pattern holding a glob was
+    *inert*: `*.egg-info/` matched nothing while `src/pkg.egg-info/` sat in
+    the tree being scanned, and `build-*/` and `test_*/` were the same. The
+    `**/` spelling was one instance of the class and fixing it left the rest
+    — an instance mistaken for a class, twice over, since
+    `maintainability-agent` found the same thing in its own matcher (its
+    D156) and reported the generalisation back.
+
+    **The final component is excluded from the comparison.** A trailing slash
+    says *directory*, so `*.egg-info/` must not match a **file** named
+    `notes.egg-info` — and it did, until this was narrowed. Every caller
+    filters to `path.is_file()` before asking, or asks about a finding's file
+    path, so nothing prunes directories and nothing needs the final component
+    to match. An earlier test asserted that it did; that was documenting an
+    accident as intent, and it is corrected alongside this.
+
+    An inert exclude is the worst kind of configuration defect: it reads as
+    intent, it never errors, and the only symptom is findings the operator
+    believed they had excluded.
+    """
+    return any(fnmatch.fnmatch(component, name) for component in rel.split("/")[:-1])
 
 
 def in_scope(path: Path, include_exts: Iterable[str]) -> bool:

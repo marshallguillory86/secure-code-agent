@@ -132,21 +132,23 @@ def test_a_similarly_named_directory_is_not_matched():
     assert _excluded("my__pycache__/x.py", "**/__pycache__/") is False
 
 
-def test_the_directory_itself_is_matched_not_only_its_contents():
-    """A path *equal* to the excluded directory is excluded.
+def test_a_trailing_slash_does_not_match_a_file_of_that_name():
+    """A trailing slash says *directory*.
 
-    `_matches` compares against `f"/{rel}/"`, so a bare `src/__pycache__`
-    matches too. That is deliberate — `is_excluded` is called on directories
-    as well as files during the walk, and a rule that excluded a directory's
-    contents but not the directory would be a strange thing to have to
-    reason about.
+    **This test previously asserted the opposite**, on the reasoning that
+    `is_excluded` is called on directories during the walk and narrowing it
+    "would break the directory walk". That reasoning was wrong and I did not
+    check it: every caller filters to `path.is_file()` first, or asks about a
+    finding's file path. Nothing prunes directories, so nothing needed the
+    final component to match.
 
-    It does mean a *file* named exactly `__pycache__` would be excluded.
-    Noted rather than fixed: it is vanishingly rare, excluding it is
-    harmless, and narrowing this to satisfy a hypothetical would break the
-    directory walk, which is not.
+    Leaving it cost a real false positive once directory patterns started
+    globbing: `*.egg-info/` matched a *file* named `notes.egg-info`. The
+    earlier test had documented an accident as intent, which is worse than
+    having no test — it argued against the fix.
     """
-    assert _excluded("src/__pycache__", "**/__pycache__/") is True
+    assert _excluded("src/__pycache__", "**/__pycache__/") is False
+    assert _excluded("src/notes.egg-info", "*.egg-info/") is False
 
 
 def test_an_unrelated_path_is_untouched():
@@ -159,6 +161,55 @@ def test_a_lone_double_star_excludes_nothing():
     repository with nothing scanned."""
     assert _excluded("src/app.py", "**/") is False
     assert _excluded("anything/at/all.py", "**/") is False
+
+
+# ---------------------------------------------------------------------------
+# Directory patterns must glob, which is the class `**/` was one instance of
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("pattern", "rel"),
+    [
+        ("*.egg-info/", "src/pkg.egg-info/PKG-INFO"),
+        ("*.egg-info/", "pkg.egg-info/PKG-INFO"),
+        ("**/*.egg-info/", "src/pkg.egg-info/PKG-INFO"),
+        ("build-*/", "build-x86/out.js"),
+        ("test_*/", "a/b/test_data/x.py"),
+        ("*cache*/", "a/.ruff_cache/x"),
+    ],
+)
+def test_a_directory_pattern_holding_a_glob_is_live(pattern: str, rel: str):
+    """The directory branch did no globbing at all — it compared with
+    `startswith` and a substring test — so **any** directory pattern holding
+    a glob was inert.
+
+    `**/dir/` was one instance and fixing only that left the class. The
+    `maintainability-agent` maintainer found the same hole in their own
+    matcher and reported the generalisation back; this is that generalisation
+    applied here. An instance mistaken for a class, twice over.
+    """
+    assert _excluded(rel, pattern), f"{pattern} is inert against {rel}"
+
+
+@pytest.mark.parametrize(
+    ("pattern", "rel"),
+    [
+        ("*.egg-info/", "src/app.py"),
+        ("build-*/", "src/builder/x.js"),
+        ("test_*/", "src/testing/x.py"),
+    ],
+)
+def test_a_globbing_directory_pattern_still_discriminates(pattern: str, rel: str):
+    """Matching everything would satisfy the test above and exclude the repo."""
+    assert not _excluded(rel, pattern)
+
+
+def test_a_globbing_pattern_matches_the_component_not_the_whole_path():
+    """`*` must not be allowed to cross separators here, or `build-*/` would
+    swallow every path containing `build-` anywhere ahead of it."""
+    assert _excluded("build-x86/out.js", "build-*/")
+    assert not _excluded("src/nested/out.js", "build-*/")
 
 
 # ---------------------------------------------------------------------------
