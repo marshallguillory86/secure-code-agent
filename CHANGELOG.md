@@ -4,6 +4,73 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.11.0 — 2026-09-11
+
+**The first five minutes, and a work order that is a prompt again.**
+
+### Added — `--demo`
+
+`secure-code-agent --demo` generates a small application carrying seven real
+defects, audits it, and writes the work order. A fresh install pointed at any
+repository used to report `coverage: FAILED` and four missing scanners;
+pointed at *this* repository it reported 0 to fix, 0 to review and 1,108
+suppression candidates, because a security tool's tests are deliberately
+vulnerable fixtures. Both are correct and neither demonstrates anything.
+
+The fixture is assembled at runtime, never shipped — writing it into the
+package would put vulnerable source in every `site-packages` and make this
+project's own audit flag its own demo.
+
+### Added — install guidance where the failure happens
+
+A coverage failure now names the install command for each missing scanner,
+from the same source `--preflight` uses. The guidance existed and the failure
+path printed only the names, so a first run was a scavenger hunt. **The tool
+still installs nothing**; naming a command is not running one.
+
+### Changed — the work order is a prompt, not a backlog
+
+| | Django | PyGoat |
+| --- | ---: | ---: |
+| previously | 1,954 lines | 1,602 lines |
+| now | **254** | **229** |
+
+Ordinary repositories land at 85–145 lines. §FIX caps at 12 findings, §REVIEW
+is one line per finding, quoted snippets cap at 3 lines — Django's twelve §FIX
+blocks had carried **212 lines inside code fences** — per-finding metadata
+collapses from eight bullets to one standards line, and the constraints go
+from 30 lines to 10.
+
+All ten hard constraints survive, and a test asserts each one is still
+present. Nothing is dropped silently: every truncation is stated and points at
+the JSON report.
+
+### Fixed — exclude patterns that matched nothing
+
+A directory pattern holding a glob was **inert**: `*.egg-info/` matched
+nothing while `src/pkg.egg-info/` was scanned, and so were `build-*/` and
+`test_*/`. The directory branch did no globbing at all. `**/dir/` was one
+instance of that class, fixed earlier; this is the class.
+
+Multi-segment patterns (`calibration/.corpus/`) are matched as a consecutive
+run of components — a regression introduced by the first fix and caught when
+the repository inventory started walking nineteen cloned corpus repositories
+it was configured to exclude.
+
+### Fixed — documentation that described an older tool
+
+Every doc now carries a `> Status:` header naming the version it describes,
+and a test enforces it. README told adopters to pin `@v0.3.0` — seven releases
+stale. `docs/ma-integration.md` documented `schema_version: 1` and "a field
+may be added without a bump", contradicting the shipped contract and the rule
+agreed with the consumer.
+
+### Known
+
+A dependency CVE on a `requirements.txt` is filed on the **documentation**
+axis, because the axis split reads the file extension. A dependency finding is
+not documentation whatever the manifest is called. Not fixed here.
+
 ## 0.10.0 — 2026-09-11
 
 **The scoring model changed, and it now says so.** Two normalizer decisions
