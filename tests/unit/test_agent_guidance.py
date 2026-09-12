@@ -7,6 +7,13 @@ in step. The recorded drift is specific and embarrassing: *"the `--changed-only`
 deprecation updated four locations and missed two, leaving shipped agent
 instructions recommending a flag that exits 2."*
 
+**It then drifted the other way.** `--changed-only` shipped in 0.12.0, and six
+documents went on saying it was reserved and exited 2 — so the guidance was
+wrong in both directions within one release cycle, and the test below encoded
+the first error while the second one shipped. A check that pins today's
+answer is a check that has to be inverted every time the answer changes; what
+this pins now is that **one** answer is given, and that it is the shipped one.
+
 Generating five copies from one source is the doc's preferred fix and is a
 larger change than it looks — these files are different formats for different
 consumers, and the prose in each is deliberately shaped for its audience.
@@ -30,10 +37,18 @@ from secure_code_audit.cli import _parser
 REPO = Path(__file__).resolve().parent.parent.parent
 SKILLS = REPO / "skills"
 
-#: Flags the CLI parses but which always fail. Recommending one of these is
-#: worse than recommending an unknown flag: argparse rejects the unknown one
-#: immediately, while this reaches the audit and exits 2 partway through.
-ALWAYS_FAILS = {"--changed-only"}
+#: Wording that described `--changed-only` before it was implemented. Shipped
+#: guidance may not carry it: an agent told the flag "exits 2" will not reach
+#: for the PR-shaped audit that now exists, which is the same harm as the
+#: original drift with the sign flipped.
+STALE_CHANGED_ONLY = (
+    "reserved",
+    "not yet safely implemented",
+    "not implemented",
+    "exits 2",
+    "exit code 2",
+    "always fails",
+)
 
 
 #: Where an agent could read a recommendation from. `instructions.py` is
@@ -120,36 +135,49 @@ def test_no_shipped_guidance_invokes_a_flag_the_cli_would_reject(name: str):
 
 
 @pytest.mark.parametrize("name", sorted(_guidance_documents()))
-def test_a_flag_that_always_fails_is_never_recommended(name: str):
-    """The exact drift that shipped once already.
+def test_guidance_never_describes_changed_only_as_unimplemented(name: str):
+    """The drift that shipped, in the direction it shipped the second time.
 
-    `--changed-only` is parsed and then refuses to run, because a scoped audit
-    that silently claims full coverage is worse than no scoped audit. Guidance
-    may *describe* that — an agent should know why not to reach for it — but it
-    must never appear as something to pass.
+    `--changed-only` is real as of 0.12.0. Guidance still calling it reserved
+    steers an agent away from the PR-shaped audit that exists, which is the
+    original defect with the sign flipped.
     """
     body = _guidance_documents()[name]
 
-    for flag in ALWAYS_FAILS:
-        for line in body.splitlines():
-            if flag not in line:
-                continue
-            # A line that mentions the flag must also say it does not work.
-            explains = any(
-                marker in line.lower()
-                for marker in ("reserved", "not implemented", "exits 2", "fails", "do not", "never")
-            )
-            assert explains, (
-                f"{name} mentions {flag} without saying it is reserved and "
-                f"exits 2:\n    {line.strip()}"
-            )
+    for line in body.splitlines():
+        if "--changed-only" not in line:
+            continue
+        stale = [marker for marker in STALE_CHANGED_ONLY if marker in line.lower()]
+        assert not stale, (
+            f"{name} still describes --changed-only as {stale[0]!r}; it shipped "
+            f"in 0.12.0:\n    {line.strip()}"
+        )
 
 
 def test_instructions_and_the_skill_agree_on_the_changed_only_status():
-    """The two copies that disagreed, held together explicitly."""
+    """The two copies that disagreed, held together explicitly.
+
+    Now in the shipped direction: whichever of them mentions the flag must
+    describe what it does, not what it used to refuse to do.
+    """
     rendered = instructions.render()
     skill = (SKILLS / "secure-code-agent" / "SKILL.md").read_text(encoding="utf-8")
 
     for body in (rendered, skill):
-        if "--changed-only" in body:
-            assert "exits 2" in body or "reserved" in body.lower()
+        if "--changed-only" not in body:
+            continue
+        lowered = body.lower()
+        for marker in STALE_CHANGED_ONLY:
+            assert marker not in lowered or "--changed-only" not in lowered.split(marker)[0][-400:]
+
+
+def test_the_shipped_skill_recommends_the_flag():
+    """Non-vacuity: a skill that simply stopped mentioning `--changed-only`
+    would satisfy every assertion above while telling an agent nothing."""
+    skill = (SKILLS / "secure-code-agent" / "SKILL.md").read_text(encoding="utf-8")
+    # Whitespace-collapsed: the phrase wraps across lines in the shipped file,
+    # and a re-wrap is not a change in what the guidance says.
+    flat = " ".join(skill.lower().split())
+
+    assert "--changed-only" in skill
+    assert "no grade" in flat, "the skill names the flag without saying it issues no grade"

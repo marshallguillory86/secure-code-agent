@@ -1,6 +1,6 @@
 # secure-code-agent — Product Intent
 
-> Status: **v0.12.0 — 2026-09-11.** The single source of truth for
+> Status: **v0.12.1 — 2026-09-11.** The single source of truth for
 > *why this exists, who it serves, and what it refuses to become.*
 > Companion docs: [`design.md`](design.md) for how it is built,
 > [`architecture.md`](architecture.md) for where the build diverges from the
@@ -235,8 +235,9 @@ with "never," and so a contributor knows what a good proposal looks like.
   scorer does not yet do it.
 - Operator-defined standards rule packs. The mapping table is currently
   compiled into the package.
-- Scoped changed-file audits. `--changed-only` is reserved and fails explicitly
-  rather than silently auditing the wrong scope.
+- ~~Scoped changed-file audits.~~ **Shipped in 0.12.0.** `--changed-only REF`
+  scans the whole tree, scopes the *report* to files changed since `REF`, and
+  withholds the grade — a run that looks at less must not score better.
 - SBOM generation and signature verification — better served by dedicated tools
   this agent can be paired with.
 

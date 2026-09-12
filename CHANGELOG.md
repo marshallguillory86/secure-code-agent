@@ -4,20 +4,74 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
-## 0.12.0 — 2026-09-11
+## 0.12.1 — 2026-09-12
 
-**Four review objections closed.** The differentiator is measurable, a
-PR-shaped audit exists, an untriaged run stops leading with a letter, and
-there is a chat door.
+**One contract, not two.** 0.12.0 shipped `--changed-only` and left six
+documents describing it as reserved. A feature the docs deny is a feature
+nobody uses.
+
+### Fixed — the shipped contract is the documented contract
+
+`--changed-only` is real. `docs/product-intent.md`, `docs/design.md`,
+`docs/architecture.md` (two places), `README.md`, `skills/secure-code-agent/SKILL.md`
+and the Copilot prompt all said it was reserved and exited 2.
+
+`test_agent_guidance.py` had encoded the *old* refusal, so it passed while the
+guidance was wrong — it now fails on the stale wording instead, and a
+non-vacuity check requires the skill to actually recommend the flag. The flag
+had also never been exercised behaviourally; `test_plan_features.py` named it
+in a docstring and tested none of it. It now has a fixture proving the report
+is scoped, the grade is withheld, the whole tree is still scanned, and an
+unresolvable ref is an error.
+
+### Fixed — every surface says the same thing about an untriaged run
+
+The terminal led with `N finding(s), none triaged` while the Markdown report
+and the PR comment still led with the letter. One audit said two different
+things depending on where it was read, and the report is the one a reviewer
+opens. Both now route through `Verdict.headline()`.
+
+### Fixed — documentation that described older behaviour
+
+`docs/work-orders.md` said §FIX and §REVIEW cap at 40 blocks. They cap at 12
+and 12, with snippets trimmed to 3 lines and the §ACCEPT table to 8 rules.
+
+The 0.12.0 note claimed "the differentiator is measurable". It is measurable
+at **file** granularity: a rewritten session model *inside* a cited file still
+reads as conformant. Walked back to what `--verify-against` actually reports.
+Whether a bounded work order keeps an agent in scope remains **unmeasured** —
+product-intent §8 Q2 stays open.
+
+### Note on release dates
+
+0.11.0, 0.11.1 and 0.12.0 were dated 2026-09-11 here and shipped 2026-09-12
+UTC. Corrected. Seven releases inside about twenty-four hours is a real
+cadence and not a typo; the dates should at least be true.
+
+## 0.12.0 — 2026-09-12
+
+**Four review objections closed.** Blast radius is measurable at file
+granularity, a PR-shaped audit exists, an untriaged run stops leading with a
+letter, and there is a chat door.
+
+Note what this does **not** establish. Whether a bounded work order actually
+keeps an agent inside its scope is still unmeasured — product-intent §8 Q2
+remains open. What shipped is the instrument: `--verify-against` now reports
+which *files* changed outside the cited set. It does not judge whether a
+change was appropriate, and it says nothing at line granularity.
 
 ### Added — scope conformance in `--verify-against`
 
 > *"Only verify is mechanical, and only for silencing and regressions — not
 > for 'did you rewrite the session model.'"*
 
-That is now mechanical. The work order cites files; the repository knows what
-changed. `--verify-against` reports **blast radius**: which changed files were
-never cited, as `scope: conformant` or `scope: EXCEEDED`.
+Partly mechanical now, at **file** granularity. The work order cites files;
+the repository knows which files changed. `--verify-against` reports which
+changed files were never cited, as `scope: conformant` or `scope: EXCEEDED`.
+
+A rewritten session model *inside* a cited file still reads as conformant.
+This narrows the question from "did it stay in scope" to "did it touch
+anything it was not asked about", which is the answerable half.
 
 The JSON report records the `commit` it was taken at, which is the input this
 needs. Where it cannot be answered — no commit in the before-report, not a git
@@ -67,7 +121,7 @@ Triage is **decoupled from evidence**: it does not withhold the grade.
 Folding them together made a verified grade unreachable on first contact for
 any repository with one finding.
 
-## 0.11.1 — 2026-09-11
+## 0.11.1 — 2026-09-12
 
 ### Fixed — a vulnerable dependency was filed under "documentation"
 
@@ -83,7 +137,7 @@ and the label is the product.
 Found by building the `--demo` fixture in 0.11.0, shipped as a known defect in
 that release rather than fixed mid-flight.
 
-## 0.11.0 — 2026-09-11
+## 0.11.0 — 2026-09-12
 
 **The first five minutes, and a work order that is a prompt again.**
 

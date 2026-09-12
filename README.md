@@ -441,9 +441,11 @@ secure-code-agent --sarif-import codeql-results.sarif \
                    --sarif-import snyk-results.sarif
 ```
 
-`--changed-only` is reserved but not yet safely implemented. Passing it fails
-with exit code 2 so a caller cannot accidentally treat an unscoped audit as a
-changed-file audit.
+`--changed-only REF` scopes the **report** to files changed since `REF`. The
+whole tree is still scanned — scanners read trees, not diffs — and **no grade
+is issued**, because a run that looks at less must not score better. A ref git
+cannot resolve is an error rather than an empty diff, since "nothing changed"
+and "your ref is wrong" otherwise produce the same finding count.
 
 The current orchestrator accepts one repository root per invocation. Multiple
 positional roots fail with exit code 2 instead of silently ignoring coverage.
@@ -461,7 +463,7 @@ For agents that support invokable skills, this repo ships a portable skill under
 ## GitHub Action
 
 ```yaml
-- uses: marshallguillory86/secure-code-agent@v0.12.0
+- uses: marshallguillory86/secure-code-agent@v0.12.1
   with:
     config: secure-code-agent.json
     fail-on-gate: true
