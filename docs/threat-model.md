@@ -58,6 +58,44 @@ withhold.
 The containment check runs on the resolved path from **every** route, not just
 the relative one, because `PATH` may contain `.` or a tree-local directory.
 
+**A file target's boundary is its parent directory.** Nothing lives beneath a
+regular file, so `secure-code-agent app.py` made every containment test false
+at once and the single-file shape silently opted out of the guard above. A
+configured executable beside the file was executed without the flag. Both
+checks now normalise a file target to its parent.
+
+### The tree does not choose where the host writes, either
+
+The line above is about *executing* what the tree supplies, and for a while it
+was the only line. The tree could still choose **paths**: the default config is
+loaded from the audit target, and `outputs.*_path`, `baseline_path` and
+`history_path` were resolved with no containment check at all. A repository
+shipping `{"outputs": {"markdown_path": "../../../../.bashrc"}}` had an
+ordinary audit overwrite that file with the report's own content. Arbitrary
+write is not a lesser thing than arbitrary execute; it is usually a slower
+route to the same place.
+
+A config supplied by the tree may now only write beneath the audit root, with
+`..` traversal, absolute paths and **symlinks inside the tree pointing out of
+it** all refused — the last is why the check resolves before comparing rather
+than inspecting the string. The run exits 2 before any scanner starts.
+
+Explicit CLI output flags are untouched: `--output /tmp/report.md` is the
+operator speaking.
+
+### What `--trust-target-config` grants
+
+It says: *treat this tree's config as though you wrote it.* That is *two*
+grants, and both are real:
+
+1. the config may name executables from that tree, which this host will run;
+2. the config may direct outputs, baseline and history to paths outside the
+   tree.
+
+One flag rather than two because it is one judgement — whether this
+repository's config is an operator artifact. But it is worth being plain that
+saying yes hands over both, not just the first.
+
 **Mitigations:**
 - All scanner invocations are `subprocess.run(args=[...], shell=False, cwd=target, env=_sanitized_env())`.
 - Repository-supplied configuration cannot select an executable inside the audited tree; see the ruling above.

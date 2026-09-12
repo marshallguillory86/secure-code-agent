@@ -208,3 +208,84 @@ def test_the_build_stamps_the_package_version_into_its_metadata():
 
     assert getattr(module, attribute) == __version__
     assert __version__.count(".") >= 2, f"{__version__!r} is not a release version"
+
+
+# ---------------------------------------------------------------------------
+# outputs: the schema and the loader are one contract
+# ---------------------------------------------------------------------------
+#
+# They had drifted four separate ways at once, and every one was silent:
+#
+#   - `history_path` was a documented default the schema omitted, and
+#     `outputs` declares `additionalProperties: false`, so an editor flagged
+#     a key the tool ships.
+#   - `security_pillar_path` was read by `_resolve_outputs` and never
+#     populated by the loader, because the validation loop iterates
+#     `DEFAULT_OUTPUTS` and it was not in there. Configuring it did nothing.
+#     That is the seventh instance of the defect `_resolve_outputs` itself
+#     describes: "four of the six keys were dead the same way".
+#   - `null` disables an output and has for some time, while the schema still
+#     said `"type": "string"` — so the documented way to turn a report off
+#     was invalid according to the file that documents it.
+#   - an unknown key such as `outputs.markdwon_path` was accepted in silence
+#     and the report went to the default path. D2 exists to prevent exactly
+#     that, and was never applied one level down.
+#
+# A default, a schema entry and loader acceptance are three statements of one
+# fact. These bind them, so adding an output means adding it once.
+
+
+def _schema_outputs() -> dict:
+    return SCHEMA["properties"]["outputs"]
+
+
+def test_every_default_output_is_declared_in_the_schema():
+    from secure_code_audit.config import DEFAULT_OUTPUTS
+
+    missing = sorted(set(DEFAULT_OUTPUTS) - set(_schema_outputs()["properties"]))
+
+    assert not missing, (
+        f"{missing} ship as defaults but the schema omits them, and outputs "
+        f"declares additionalProperties:false — an editor rejects what the tool writes"
+    )
+
+
+def test_the_schema_declares_no_output_the_loader_ignores():
+    from secure_code_audit.config import DEFAULT_OUTPUTS
+
+    extra = sorted(set(_schema_outputs()["properties"]) - set(DEFAULT_OUTPUTS))
+
+    assert not extra, (
+        f"{extra} are offered by the schema but the loader never reads them, "
+        f"so configuring one does nothing"
+    )
+
+
+def test_unknown_output_keys_are_rejected_by_both(tmp_path):
+    """D2, one level down. The schema said so; the loader did not."""
+    from secure_code_audit.config import load
+
+    assert _schema_outputs()["additionalProperties"] is False
+
+    config = tmp_path / "c.json"
+    config.write_text(
+        json.dumps({"version": 1, "outputs": {"markdwon_path": "t.md"}}), encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="unknown outputs key"):
+        load(config)
+
+
+def test_every_output_accepts_null_in_the_schema():
+    """`null` turns an output off, and the schema must say a string is not
+    the only legal value — otherwise the documented way to disable a report
+    is invalid according to the file documenting it."""
+    for key, spec in _schema_outputs()["properties"].items():
+        assert "null" in spec["type"], f"outputs.{key} cannot be disabled per the schema"
+
+
+def test_the_schema_default_matches_the_shipped_default():
+    from secure_code_audit.config import DEFAULT_OUTPUTS
+
+    for key, spec in _schema_outputs()["properties"].items():
+        assert spec.get("default") == DEFAULT_OUTPUTS[key], key
