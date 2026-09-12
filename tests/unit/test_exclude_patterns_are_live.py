@@ -32,6 +32,24 @@ ROOT = Path("/repo")
 #: Directory patterns shipped by default, in both spellings.
 _DIRECTORY_DEFAULTS = sorted({p for p in DEFAULT_EXCLUDES if p.endswith("/")})
 
+#: File patterns shipped by default. Covered for the same reason, on the
+#: other branch of `_matches`.
+#:
+#: The `maintainability-agent` maintainer hit the identical inert-directory
+#: defect and their first fix stripped `**/` from *every* pattern, anchoring
+#: `**/generated/*.py` to the repository root. A file pattern already matches
+#: through `fnmatch`, where `*` crosses separators, so it needs no help and
+#: is harmed by the help. Their suite caught it; mine would not have, because
+#: the structural check below only walked the directory half — half a
+#: structural rule, which is the kind that reads as covered.
+_FILE_DEFAULTS = sorted({p for p in DEFAULT_EXCLUDES if not p.endswith("/")})
+
+
+def _sample_for(pattern: str) -> str:
+    """A filename the pattern is meant to match."""
+    bare = pattern[3:] if pattern.startswith("**/") else pattern
+    return bare.replace("*", "sample")
+
 
 def _excluded(rel: str, *patterns: str) -> bool:
     return is_excluded(ROOT / rel, ROOT, patterns)
@@ -69,6 +87,39 @@ def test_every_shipped_directory_pattern_matches_at_depth(pattern: str):
     rel = f"a/b/{name.rstrip('/')}/file.txt"
 
     assert _excluded(rel, pattern), f"{pattern} does not match below the root"
+
+
+# ---------------------------------------------------------------------------
+# The file branch, which a uniform `**/` strip would have killed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("pattern", _FILE_DEFAULTS)
+@pytest.mark.parametrize("depth", [0, 1, 3])
+def test_every_shipped_file_pattern_matches_at_every_depth(pattern: str, depth: int):
+    """`**/*.min.js` and `**/*.lock` must match at the root and below it.
+
+    This is the assertion that fails if someone "simplifies" `_matches` by
+    stripping `**/` from every pattern and anchoring the result — the fix
+    that creates a new dead exclude while closing the old one.
+    """
+    rel = "/".join(["pkg"] * depth + [_sample_for(pattern)])
+
+    assert _excluded(rel, pattern), f"{pattern} does not match {rel}"
+
+
+def test_a_file_pattern_is_not_anchored_to_the_root():
+    """The specific regression, named. `*` crosses separators in `fnmatch`,
+    so the file branch never needed the `**/` strip that the directory branch
+    did."""
+    assert _excluded("a/b/c/vendor.min.js", "**/*.min.js") is True
+    assert _excluded("deep/nested/path/poetry.lock", "**/*.lock") is True
+
+
+def test_a_file_pattern_still_discriminates():
+    """Matching everything would pass the tests above and exclude the repo."""
+    assert _excluded("src/app.py", "**/*.min.js") is False
+    assert _excluded("src/app.py", "**/*.lock") is False
 
 
 # ---------------------------------------------------------------------------
