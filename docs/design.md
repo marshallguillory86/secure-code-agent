@@ -1,6 +1,6 @@
 # secure-code-agent — Design Spec
 
-> Status: **v0.1 — design locked, MVP in flight.**
+> Status: **v0.10.0 — shipped; this records the design as built.**
 > Companion docs: [`product-intent.md`](product-intent.md) (why this exists), [`architecture.md`](architecture.md) (the system as built), [`standards.md`](standards.md), [`scoring.md`](scoring.md), [`scanners.md`](scanners.md), [`remediation.md`](remediation.md), [`threat-model.md`](threat-model.md).
 
 ## 1. Problem

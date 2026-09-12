@@ -396,7 +396,7 @@ For agents that support invokable skills, this repo ships a portable skill under
 ## GitHub Action
 
 ```yaml
-- uses: marshallguillory86/secure-code-agent@v0.3.0
+- uses: marshallguillory86/secure-code-agent@v0.10.0
   with:
     config: secure-code-agent.json
     fail-on-gate: true
@@ -462,7 +462,7 @@ Full design philosophy in [`docs/design.md`](docs/design.md).
 - [`docs/calibration.md`](docs/calibration.md)   — The calibration study, its corpus, and what it found
 - [`docs/design.md`](docs/design.md)              — Architecture + non-goals + scanner protocol
 - [`docs/architecture.md`](docs/architecture.md)  — Audit of the system as built + remediation sequence
-- [`docs/release-blockers.md`](docs/release-blockers.md) — Open v0.3.0 release blockers (do not tag until closed)
+- [`docs/release-blockers.md`](docs/release-blockers.md) — the v0.3.0 release blockers, all closed (historical)
 - [`docs/standards.md`](docs/standards.md)        — NIST SSDF / OWASP / CWE / Scorecard / SARIF citations
 - [`docs/scoring.md`](docs/scoring.md)            — Weighting model + worked examples
 - [`docs/scanners.md`](docs/scanners.md)          — Per-scanner integrations + caveats

@@ -1,5 +1,7 @@
 # Bounded remediation prompts
 
+> Status: **v0.10.0 — 2026-09-11.** The bounded work order handed to an agent.
+
 This is the differentiator. Every other scanner stops at "here's a list of findings." `secure-code-agent` generates an LLM-ready prompt scoped to the actual findings, with explicit guardrails against the failure modes that make AI security fixes worse than the bugs they patch.
 
 ## The failure modes we're constraining
