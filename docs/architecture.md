@@ -1,6 +1,6 @@
 # secure-code-agent — Architecture Audit
 
-> Status: **v0.12.0 — 2026-09-11.** Assessment of the system as built.
+> Status: **v0.12.1 — 2026-09-11.** Assessment of the system as built.
 > Companion docs: [`design.md`](design.md) states the intended architecture;
 > this document records where the implementation diverges from it and which
 > divergences are generating recurring defects.
@@ -151,7 +151,7 @@ in each case the copies have already drifted.
 | --- | --- | --- |
 | Config shape | [`config.py:99-118`](../src/secure_code_audit/config.py#L99-L118) hand validation (264 lines) **and** `secure-code-agent.schema.json`, not connected at runtime | The schema rejected its own `$schema` key; `require_scanners` minimum had to be enforced separately in both |
 | Score qualification when coverage is incomplete | Five sites: [`cli.py:453`](../src/secure_code_audit/cli.py#L453), [`renderers.py:35`](../src/secure_code_audit/renderers.py#L35), [`:169`](../src/secure_code_audit/renderers.py#L169), [`:348`](../src/secure_code_audit/renderers.py#L348), [`sarif.py:69`](../src/secure_code_audit/sarif.py#L69) | Each was implemented separately; the SARIF site was missed entirely on the first pass |
-| Agent guidance | `instructions.py::_BODY`, `skills/secure-code-agent/SKILL.md`, `skills/secure-code-agent/copilot/*.prompt.md`, `skills/secure-code-agent/agents/*.yaml`, `README.md`, `docs/` | The `--changed-only` deprecation updated four locations and missed two, leaving shipped agent instructions recommending a flag that exits 2 |
+| Agent guidance | `instructions.py::_BODY`, `skills/secure-code-agent/SKILL.md`, `skills/secure-code-agent/copilot/*.prompt.md`, `skills/secure-code-agent/agents/*.yaml`, `README.md`, `docs/` | Drifted twice in opposite directions: the `--changed-only` deprecation updated four locations and missed two, then shipping the flag in 0.12.0 left six saying it exits 2. `test_agent_guidance.py` now fails on either wording |
 | Packaging | `pyproject.toml` `package-data` globs **and** the directory actually existing | The globs once matched nothing at all; now `test_the_offline_ruleset_is_declared_as_package_data` fails if a shipped data file is not matched by one |
 
 ### Fix
@@ -177,8 +177,8 @@ One source each.
   the shipped guidance that invokes one of our console scripts, and fails if
   the CLI would reject it. Invocation lines rather than all prose, so the docs
   can still name another tool's flags — `--only-verified` is TruffleHog's. It
-  also fails if `--changed-only` is mentioned without saying it is reserved and
-  exits 2, which is the exact sentence that shipped wrong.
+  also fails if `--changed-only` is described as reserved or as exiting 2 —
+  the flag shipped in 0.12.0, and that sentence is now the one that is wrong.
 - **Packaging:** delete the `package-data` line, or restore the `data/`
   directory if the standards map moves back to data files (see §5).
 
@@ -308,9 +308,9 @@ it is a product decision, not a refactor.
   docstring says so), and Semgrep alone publishes thousands of rules. This wants
   to be shipped data with an operator overlay. The `(scanner, "*")` wildcard
   fallback is currently absorbing the coverage gap.
-- **`--changed-only` is a flag that always exits 2.** Implement it or delete it;
-  a permanently-erroring flag is API debt that has already caused documentation
-  drift.
+- ~~**`--changed-only` is a flag that always exits 2.**~~ **Closed in 0.12.0**
+  by implementing it with the property that made it unsafe: the whole tree is
+  scanned, the report is scoped, and the grade is withheld.
 - **Two console scripts** (`secure-code-agent`, `secure-code-audit`) for one
   entry point.
 - **`secure-code-report.json` is not gitignored** while `secure-code-report.md`

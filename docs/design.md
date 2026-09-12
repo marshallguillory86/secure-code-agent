@@ -1,6 +1,6 @@
 # secure-code-agent — Design Spec
 
-> Status: **v0.12.0 — shipped; this records the design as built.**
+> Status: **v0.12.1 — shipped; this records the design as built.**
 > Companion docs: [`product-intent.md`](product-intent.md) (why this exists), [`architecture.md`](architecture.md) (the system as built), [`standards.md`](standards.md), [`scoring.md`](scoring.md), [`scanners.md`](scanners.md), [`remediation.md`](remediation.md), [`threat-model.md`](threat-model.md).
 
 ## 1. Problem
@@ -266,7 +266,8 @@ secure-code-agent [path]
   --bump-baseline                Rewrite baseline from current findings
   --fail-on-gate                 Exit nonzero if any gate trips
   --fail-on-new                  Exit nonzero on findings not in baseline
-  --changed-only REF             Reserved; currently fails explicitly because safe scoped execution is not implemented
+  --changed-only REF             Report only findings in files changed since REF.
+                                 Whole tree still scanned; grade withheld.
   --target codex|claude-code|cursor|copilot|windsurf|generic
                                  Init agent standards file for that host
   --instructions-output-dir DIR  Where to write the agent standards file

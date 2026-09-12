@@ -38,10 +38,10 @@ secure-code-agent \
   --comment-output secure-code-pr-comment.md
 ```
 
-3. Changed-file audits are reserved but not yet safely implemented. Do not
-   pass `--changed-only`; it exits 2 instead of silently claiming scoped coverage.
-
-   Use a full audit with `--fail-on-new` until changed-file execution is implemented.
+3. For branch or PR work, pass `--changed-only REF` (e.g. `origin/main`). It
+   scans the whole tree and scopes the *report* to what changed. It issues no
+   grade, deliberately — a scoped run has no denominator it can defend. Pair
+   it with `--fail-on-new` to gate on regressions.
 
 4. If the audit emits `secure-code-remediation-prompt.md`, **read it before
    editing** and treat it as the bounded task.

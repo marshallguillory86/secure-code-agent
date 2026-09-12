@@ -260,3 +260,171 @@ def test_the_json_report_records_the_commit(tmp_path):
     main([str(root), "--only-scanners", "builtin_rules", "--json-output", str(out)])
 
     assert json.loads(out.read_text(encoding="utf-8"))["commit"] == _head(root)
+
+
+# ---------------------------------------------------------------------------
+# --changed-only, behaviourally
+# ---------------------------------------------------------------------------
+#
+# This section named the flag in a docstring and tested none of it, which is
+# how six documents went on calling it reserved for a whole release. A flag
+# described but not exercised is a flag nobody can tell is broken.
+
+
+def _scoped_fixture(tmp_path: Path) -> tuple[Path, str]:
+    """A repo with one committed defect and one added afterwards."""
+    root = _repo(tmp_path)
+    (root / "src" / "old.py").write_text(
+        "import subprocess\ndef a(x):\n    return subprocess.call('ls '+x, " + "shell=True)\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "-c",
+            "user.email=t@example.invalid",
+            "-c",
+            "user.name=t",
+            "commit",
+            "--no-verify",
+            "-qm",
+            "old",
+        ],
+        check=True,
+        capture_output=True,
+        env={**os.environ, "GIT_IDENTITY_OVERRIDE": "1"},
+    )
+    since = _head(root)
+    (root / "src" / "new.py").write_text(
+        "import subprocess\ndef b(x):\n    return subprocess.call('cat '+x, " + "shell=True)\n",
+        encoding="utf-8",
+    )
+    return root, since
+
+
+def _audit_json(root: Path, out: Path, *extra: str) -> dict:
+    from secure_code_audit.cli import main
+
+    main([str(root), "--only-scanners", "builtin_rules", "--json-output", str(out), *extra])
+    return json.loads(out.read_text(encoding="utf-8"))
+
+
+def test_a_full_audit_sees_both_files(tmp_path):
+    """The control. Without it, a scoped run finding one thing proves nothing."""
+    root, _ = _scoped_fixture(tmp_path)
+
+    payload = _audit_json(root, tmp_path / "full.json")
+    files = {
+        Path(f["file_path"]).name for f in payload["findings"] if f["severity"] != "informational"
+    }
+
+    assert files == {"old.py", "new.py"}
+
+
+def test_changed_only_scopes_the_report_to_what_changed(tmp_path):
+    root, since = _scoped_fixture(tmp_path)
+
+    payload = _audit_json(root, tmp_path / "scoped.json", "--changed-only", since)
+    files = {
+        Path(f["file_path"]).name for f in payload["findings"] if f["severity"] != "informational"
+    }
+
+    assert files == {"new.py"}, "the unchanged file's finding leaked into a scoped report"
+
+
+def test_changed_only_withholds_the_grade(tmp_path):
+    """The property that made this unsafe to ship for six releases: a run that
+    looks at less must not score better."""
+    root, since = _scoped_fixture(tmp_path)
+
+    payload = _audit_json(root, tmp_path / "scoped.json", "--changed-only", since)
+
+    assert payload["score"]["verified_grade"] is None
+    assert any("scoped to files changed" in r for r in payload["score"]["evidence_reasons"])
+
+
+def test_an_unresolvable_ref_is_an_error_not_an_empty_diff(tmp_path, capsys):
+    """ "Nothing changed" and "your ref is wrong" produce the same finding count
+    and only one of them should exit 0."""
+    from secure_code_audit.cli import main
+
+    root, _ = _scoped_fixture(tmp_path)
+
+    exit_code = main([str(root), "--only-scanners", "builtin_rules", "--changed-only", "nope/nope"])
+
+    assert exit_code == 2
+    assert "--changed-only" in capsys.readouterr().err
+
+
+def test_changed_only_still_scans_the_whole_tree(tmp_path):
+    """Scanners read trees, not diffs. The LOC denominator is the whole tree
+    even though the report is a slice, which is exactly why no grade is
+    issued — the two would not match."""
+    root, since = _scoped_fixture(tmp_path)
+
+    full = _audit_json(root, tmp_path / "a.json")
+    scoped = _audit_json(root, tmp_path / "b.json", "--changed-only", since)
+
+    assert scoped["score"]["loc_scanned"] == full["score"]["loc_scanned"]
+
+
+# ---------------------------------------------------------------------------
+# Every surface says the same thing
+# ---------------------------------------------------------------------------
+
+
+def test_the_markdown_report_leads_with_the_untriaged_line(tmp_path):
+    """The terminal did this from the day it shipped and the Markdown report
+    did not, so one audit said two different things depending on where it was
+    read — and the report is the one a reviewer opens."""
+    from secure_code_audit import renderers
+    from secure_code_audit.scoring import GateResult, score
+
+    report = score([], 1000)
+    verdict = Verdict(
+        estimate=0.0, estimated_letter="F", verified_grade=None, reasons=(), untriaged=7
+    )
+    markdown = renderers._markdown(
+        [], report, GateResult(passed=True, reasons=()), [], [], verdict=verdict
+    )
+
+    assert "none triaged" in markdown
+    assert "starting position" in markdown
+
+
+def test_the_pr_comment_leads_with_the_untriaged_line(tmp_path):
+    """The most widely read artifact this tool produces, and the least likely
+    to be cross-checked against the JSON."""
+    from secure_code_audit import renderers
+    from secure_code_audit.scoring import GateResult, score
+
+    report = score([], 1000)
+    verdict = Verdict(
+        estimate=0.0, estimated_letter="F", verified_grade=None, reasons=(), untriaged=7
+    )
+    comment = renderers._pr_comment(
+        [], report, GateResult(passed=True, reasons=()), verdict=verdict
+    )
+
+    assert "none triaged" in comment
+
+
+def test_a_triaged_run_still_shows_its_letter_on_every_surface():
+    """The fix must not delete the grade from the reports that carry it."""
+    from secure_code_audit import renderers
+    from secure_code_audit.scoring import GateResult, score
+
+    report = score([], 1000)
+    verdict = Verdict(
+        estimate=5.0, estimated_letter="A+", verified_grade="A+", reasons=(), untriaged=0
+    )
+
+    assert "A+" in renderers._markdown(
+        [], report, GateResult(passed=True, reasons=()), [], [], verdict=verdict
+    )
+    assert "A+" in renderers._pr_comment(
+        [], report, GateResult(passed=True, reasons=()), verdict=verdict
+    )
