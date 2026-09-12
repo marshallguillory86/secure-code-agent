@@ -1,6 +1,6 @@
 # Calibration study — 2026-09-10
 
-> Status: **v0.11.1 — 2026-09-11.** The D5 calibration study, closed by D16 and D17.
+> Status: **v0.12.0 — 2026-09-11.** The D5 calibration study, closed by D16 and D17.
 
 The study [D5](decisions.md) has owed since 2026-09-08. The letter bands were
 borrowed from `maintainability-agent` without its calibration study, and the

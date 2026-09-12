@@ -49,6 +49,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The chat door. Optional because the CLI is the tested surface and the MCP
+# server drives it by subprocess rather than reimplementing it — so nobody
+# who only wants the gate pays for an MCP dependency.
+mcp = [
+  "mcp>=1.0,<2",
+]
+
 # Scanners the default configuration lists in gates.require_scanners. Pinned
 # exactly: a gate asserting "bandit completed" should mean a known Bandit
 # completed, not whatever Bandit resolved that day.
@@ -86,6 +93,7 @@ dev = [
 [project.scripts]
 secure-code-agent = "secure_code_audit.cli:main"
 secure-code-audit = "secure_code_audit.cli:main"
+secure-code-agent-mcp = "secure_code_audit.mcp_server:main"
 
 [project.urls]
 Homepage      = "https://github.com/marshallguillory86/secure-code-agent"

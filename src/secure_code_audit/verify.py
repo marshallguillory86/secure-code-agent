@@ -45,6 +45,108 @@ class Outcome(enum.Enum):
 
 
 @dataclass(frozen=True)
+class Scope:
+    """Did the work stay inside the order?
+
+    The product's claim is that a bounded work order keeps an agent from
+    doing crypto roulette, auth rewrites and 600-line "while I was in there"
+    patches. Until now only *silencing* and *regressions* were mechanical —
+    a reviewer put it exactly: "ten hard constraints are a leash I can still
+    ignore ... not for 'did you rewrite the session model'."
+
+    This makes that question mechanical. The work order cites files and
+    lines; the repository knows what actually changed. Everything changed
+    outside the cited files is collateral, and collateral is the measurable
+    shadow of the constraint the prompt cannot enforce.
+
+    **`known` is False when the answer is unavailable** — no commit in the
+    before-report, or not a git repository. An unknown scope is reported as
+    unknown and never as conformant: a measurement that failed must not read
+    as a clean result, which is the same rule the coverage axis applies to
+    scanners.
+    """
+
+    known: bool = False
+    reason: str | None = None
+    #: Files the work order named.
+    cited: tuple[str, ...] = ()
+    #: Files that actually changed, including untracked additions.
+    changed: tuple[str, ...] = ()
+    #: Changed, and never cited. The blast radius.
+    collateral: tuple[str, ...] = ()
+
+    @property
+    def conformant(self) -> bool:
+        """Only ever True when the question was actually answered."""
+        return self.known and not self.collateral
+
+    def headline(self) -> str:
+        if not self.known:
+            return f"scope: unknown ({self.reason or 'no baseline commit recorded'})"
+        if not self.changed:
+            return "scope: nothing changed"
+        if not self.collateral:
+            return f"scope: conformant — {len(self.changed)} file(s), all cited in the order"
+        return (
+            f"scope: EXCEEDED — {len(self.collateral)} of {len(self.changed)} changed "
+            f"file(s) were never cited: {', '.join(sorted(self.collateral)[:5])}"
+            + (" …" if len(self.collateral) > 5 else "")
+        )
+
+
+def measure_scope(
+    before: Iterable[Finding],
+    root: Path | None,
+    since: str | None,
+    ours: Iterable[Path] = (),
+) -> Scope:
+    """Compare what the order cited against what the repository changed."""
+    if root is None:
+        return Scope(reason="no repository root")
+    if not since:
+        return Scope(reason="the before-report records no commit")
+
+    from secure_code_audit.git_tools import changed_files
+
+    paths, reason = changed_files(root, since)
+    if paths is None:
+        return Scope(reason=reason)
+
+    cited: set[str] = set()
+    for finding in before:
+        try:
+            cited.add(finding.file_path.resolve().relative_to(root.resolve()).as_posix())
+        except (ValueError, OSError):
+            cited.add(finding.file_path.as_posix())
+
+    # This tool's own artifacts are written *by* the run doing the verifying.
+    # An agent that fixed something did not "also change
+    # secure-code-report.md"; we did, a second ago. Counting them as
+    # collateral would make every verification exceed its scope.
+    #
+    # The set comes from the caller — `cli._own_artifacts`, the same function
+    # that keeps a run from scanning its own report — rather than a list of
+    # default basenames here. A report written to `--json-output
+    # before.json` is ours too, and a hard-coded list of defaults said it was
+    # the agent's.
+    ignored: set[str] = set()
+    for artifact in ours:
+        try:
+            ignored.add(artifact.resolve().relative_to(root.resolve()).as_posix())
+        except (ValueError, OSError):
+            continue
+    changed = {
+        path for path in paths if path not in ignored and not path.startswith(".secure-code/")
+    }
+    return Scope(
+        known=True,
+        cited=tuple(sorted(cited)),
+        changed=tuple(sorted(changed)),
+        collateral=tuple(sorted(changed - cited)),
+    )
+
+
+@dataclass(frozen=True)
 class Verification:
     """What changed between two audits of the same repository."""
 
@@ -60,6 +162,8 @@ class Verification:
     before_count: int = 0
     after_count: int = 0
     notes: tuple[str, ...] = field(default_factory=tuple)
+    #: Blast radius, when it could be measured.
+    scope: Scope = field(default_factory=Scope)
 
     @property
     def regressed(self) -> bool:
@@ -262,6 +366,17 @@ def compare(
     )
 
 
+def _scope_to_dict(scope: Scope) -> dict:
+    return {
+        "known": scope.known,
+        "reason": scope.reason,
+        "conformant": scope.conformant,
+        "cited": list(scope.cited),
+        "changed": list(scope.changed),
+        "collateral": list(scope.collateral),
+    }
+
+
 def to_dict(result: Verification) -> dict:
     """The machine-readable form, for CI and for maintainability-agent."""
 
@@ -291,5 +406,6 @@ def to_dict(result: Verification) -> dict:
         "deferred": _rows(result.deferred),
         "suppressed": _rows(result.suppressed),
         "introduced": _rows(result.introduced),
+        "scope": _scope_to_dict(result.scope),
         "notes": list(result.notes),
     }
