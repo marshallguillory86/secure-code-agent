@@ -44,6 +44,43 @@ A pure-Python repository requires six of the ten floor scanners; the Ruby,
 JavaScript and container tools are *not applicable* rather than missing, so a
 single-language project is never permanently incomplete.
 
+## In your editor or an agent, not just a terminal
+
+```bash
+pip install 'secure-code-agent[mcp]'
+secure-code-agent-mcp
+```
+
+Exposes `audit_repository`, `preflight` and `agent_info`. It never audits
+unasked — `audit_repository` without `action="run"` returns the question — and
+it hands back the **work order first**, because the score is second class.
+
+## Auditing a pull request
+
+```bash
+secure-code-agent . --changed-only origin/main
+```
+
+The whole tree is still scanned; the *report* is scoped to what changed. **No
+grade is issued** for a scoped run, because a run that looks at less must not
+score better.
+
+## Proving the agent stayed inside the order
+
+```bash
+secure-code-agent . --verify-against before.json
+```
+
+Reports what was fixed, what is still open, what was **silenced rather than
+fixed** — and the blast radius: which changed files the work order never
+cited.
+
+```
+work order verification  ·  improved: 1 fixed
+  fixed      sca.python.subprocess.shell_true   bad.py:3
+  scope: EXCEEDED — 1 of 2 changed file(s) were never cited: src/other.py
+```
+
 ## Why this exists
 
 AI coding agents ship code at human-review-saturating speed. Point them at a security finding and the documented anti-patterns are:
@@ -424,7 +461,7 @@ For agents that support invokable skills, this repo ships a portable skill under
 ## GitHub Action
 
 ```yaml
-- uses: marshallguillory86/secure-code-agent@v0.11.1
+- uses: marshallguillory86/secure-code-agent@v0.12.0
   with:
     config: secure-code-agent.json
     fail-on-gate: true

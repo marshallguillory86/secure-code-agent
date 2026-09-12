@@ -12,4 +12,4 @@
 #:
 #: PyPI is immutable, so 0.4.0 stays wrong. 0.5.0 is the first build whose
 #: artifacts name their own producer correctly.
-__version__ = "0.11.1"
+__version__ = "0.12.0"

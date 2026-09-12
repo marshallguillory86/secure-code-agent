@@ -10,6 +10,7 @@ from pathlib import Path
 
 from secure_code_audit import __version__
 from secure_code_audit.findings import Finding, Severity
+from secure_code_audit.git_tools import head_commit
 from secure_code_audit.scanner_status import CoverageReport
 from secure_code_audit.scanners import floor
 from secure_code_audit.scoring import AxisReport, GateResult, ScoreReport, Verdict
@@ -27,11 +28,17 @@ def to_json(
     coverage: CoverageReport | None = None,
     verdict: Verdict | None = None,
     axes: Iterable[AxisReport] = (),
+    root: Path | None = None,
 ) -> dict:
     findings = list(findings)
     return {
         "version": __version__,
         "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        # The commit this was taken at, so a later `--verify-against` can ask
+        # what actually changed rather than inferring it from two finding
+        # sets. Null outside a git repository, which is honest: the scope
+        # measurement then reports itself unknown rather than conformant.
+        "commit": head_commit(root) if root is not None else None,
         "score": {
             "overall": score.overall,
             "letter": score.letter,
@@ -207,9 +214,10 @@ def write_json(
     coverage: CoverageReport | None = None,
     verdict: Verdict | None = None,
     axes: Iterable[AxisReport] = (),
+    root: Path | None = None,
 ) -> None:
     path.write_text(
-        json.dumps(to_json(findings, score, gate, coverage, verdict, axes), indent=2),
+        json.dumps(to_json(findings, score, gate, coverage, verdict, axes, root), indent=2),
         encoding="utf-8",
     )
 

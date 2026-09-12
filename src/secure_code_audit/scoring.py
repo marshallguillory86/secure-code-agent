@@ -151,6 +151,9 @@ class Verdict:
     estimated_letter: str | None
     verified_grade: str | None
     reasons: tuple[str, ...]
+    #: Findings exist and none has been triaged — no baseline, nothing
+    #: accepted, nobody has looked. See `headline`.
+    untriaged: int = 0
 
     @property
     def is_verified(self) -> bool:
@@ -161,17 +164,51 @@ class Verdict:
         return "complete" if self.is_verified else "incomplete"
 
     def headline(self) -> str:
-        """One line, used by every renderer that shows a score."""
+        """One line, used by every renderer that shows a score.
+
+        **An untriaged run leads with the work, not a letter.** A reviewer put
+        the failure precisely: *"a staff engineer who sees Django at F turns
+        the gate off."* They are right to, and the F is not wrong — it is a
+        density of findings nobody has looked at yet, which is a starting
+        position rather than a verdict on the code. Leading with the letter
+        invites the reader to treat it as one, and the letter they see on
+        first contact decides whether the tool survives the afternoon.
+
+        So on a first run with findings and no baseline, the headline states
+        the work. The number is still in the report, in the JSON, and in the
+        trend; it is simply not the first thing said about a repository
+        nobody has triaged.
+        """
         if self.estimate is None:
             return "no score — nothing measurable was scanned"
+        if self.untriaged:
+            return f"{self.untriaged} finding(s), none triaged — a starting position, not a grade"
         if self.is_verified:
-            return f"{self.estimate:.2f} ({self.verified_grade})"
-        return f"{self.estimate:.2f} — grade withheld ({self.estimated_letter} unverified)"
+            return f"score {self.estimate:.2f} ({self.verified_grade})"
+        return f"score {self.estimate:.2f} — grade withheld ({self.estimated_letter} unverified)"
 
 
-def verdict(report: ScoreReport, gate_config: dict, coverage: CoverageReport | None) -> Verdict:
+def verdict(
+    report: ScoreReport,
+    gate_config: dict,
+    coverage: CoverageReport | None,
+    untriaged: int = 0,
+) -> Verdict:
     """Decide the letter, or withhold it, once for the whole run."""
     reasons = list(evidence_reasons(gate_config, coverage))
+    # `untriaged` deliberately does NOT join `reasons`.
+    #
+    # It did, briefly, and that conflated two different axes. `reasons`
+    # answers *did we look* — coverage, required scanners, evidence — and
+    # withholding the grade is its consequence. Triage answers *did you
+    # review what we found*, which is the operator's work rather than the
+    # scanners'. Folding it in made a verified grade unreachable on first
+    # contact for any repository with a single finding, and
+    # `test_a_grade_is_issued_only_when_a_declared_scanner_set_actually_ran`
+    # caught it: the positive half of P7 stopped being reachable.
+    #
+    # So an untriaged run changes what the headline *leads with* and nothing
+    # else. The grade is still computed, still reported, still in the trend.
     if report.overall is None:
         # Nothing measurable ran. There is no estimate to qualify, so the
         # reason is stated rather than a letter being caveated — a caveated
@@ -182,6 +219,7 @@ def verdict(report: ScoreReport, gate_config: dict, coverage: CoverageReport | N
         estimated_letter=report.letter,
         verified_grade=None if reasons else report.letter,
         reasons=tuple(reasons),
+        untriaged=untriaged,
     )
 
 

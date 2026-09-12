@@ -216,3 +216,92 @@ def loc_under(
         else:
             primary += lines
     return primary, test, docs
+
+
+def _git() -> str | None:
+    """Resolve `git` to an absolute path, once.
+
+    Invoking a bare `git` leaves the choice of binary to `PATH`, which is the
+    same class of exposure this project refuses for scanner commands — and
+    Bandit says so (`B607`, partial executable path). Resolving it is cheaper
+    than suppressing it, and consistent with how every scanner adapter here
+    already resolves its tool.
+    """
+    import shutil  # noqa: PLC0415
+
+    return shutil.which("git")
+
+
+def head_commit(root: Path) -> str | None:
+    """The commit an audit was taken at, or None outside a git repository.
+
+    Recorded in the JSON report so a later `--verify-against` can ask *what
+    actually changed* rather than inferring it from two finding sets. Two
+    reports tell you which findings moved; they cannot tell you that an agent
+    also rewrote three unrelated modules, and that is the question the work
+    order's constraints exist to answer.
+    """
+    import subprocess  # noqa: PLC0415 — only needed on this path
+
+    git = _git()
+    if git is None:
+        return None
+    try:
+        completed = subprocess.run(
+            [git, "-C", str(root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    sha = completed.stdout.strip()
+    return sha or None
+
+
+def changed_files(root: Path, since: str) -> tuple[frozenset[str], str | None] | tuple[None, str]:
+    """Repository-relative paths changed since `since`, or a reason it is unknown.
+
+    Includes uncommitted work, because an agent handed a work order usually
+    has not committed. `git diff --name-only <sha>` covers tracked
+    modifications against the working tree; untracked files are asked for
+    separately, since a newly added module is exactly the kind of collateral
+    worth seeing.
+
+    Returns `(paths, None)` on success and `(None, reason)` when the answer is
+    unavailable — never an empty set standing in for "could not tell", which
+    would read as "nothing changed" and turn a failed measurement into a
+    clean bill of health.
+    """
+    import subprocess  # noqa: PLC0415
+
+    git = _git()
+    if git is None:
+        return None, "git is not on PATH"
+
+    def _run(args: list[str]) -> tuple[str, str | None]:
+        try:
+            completed = subprocess.run(
+                [git, "-C", str(root), *args],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return "", f"git failed: {type(exc).__name__}"
+        if completed.returncode != 0:
+            return "", (completed.stderr.strip().splitlines() or ["git failed"])[0]
+        return completed.stdout, None
+
+    tracked, reason = _run(["diff", "--name-only", since])
+    if reason is not None:
+        return None, reason
+    untracked, reason = _run(["ls-files", "--others", "--exclude-standard"])
+    if reason is not None:
+        return None, reason
+    paths = {line.strip() for line in (tracked + untracked).splitlines() if line.strip()}
+    return frozenset(paths), None
