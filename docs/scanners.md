@@ -1,5 +1,7 @@
 # Scanner integrations
 
+> Status: **v0.11.0 — 2026-09-11.** The scanner floor, its tiers and install routes.
+
 The agent is an orchestrator — it shells out to each scanner, parses canonical output, and maps to the unified `Finding` schema. We don't reimplement SAST.
 
 ## The declared floor

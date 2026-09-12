@@ -1,5 +1,7 @@
 # maintainability-agent integration
 
+> Status: **v0.11.0 — 2026-09-11.** The `security-pillar.json` contract, schema v2.
+
 `maintainability-agent`'s [ADR 007](https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/adr-007-pillars-and-practice.md)
 §1 declares Security a **`DELEGATED`** pillar naming this tool, and reports it
 as `NotApplicable` so that a reader never mistakes silence for safety. This
@@ -32,8 +34,9 @@ maintainability-agent . --security-pillar security-pillar.json
 ```json
 {
   "schema": "secure-code-agent/security-pillar",
-  "schema_version": 1,
-  "producer": { "tool": "secure-code-agent", "version": "0.4.0" },
+  "schema_version": 2,
+  "scoring_model": 2,
+  "producer": { "tool": "secure-code-agent", "version": "0.10.0" },
   "generated": "2026-09-09T20:00:00Z",
   "pillar": "security",
   "scope": "owned",
@@ -137,11 +140,36 @@ See [`calibration.md`](calibration.md) for the measurements.
 
 ## Versioning
 
-`schema_version` is `1`. A field may be added without a bump; removing or
-re-meaning one requires it. `producer.version` records which build produced the
-document — it is provenance, and it is kept in step with `pyproject.toml` by
-`test_the_package_version_matches_pyproject` after drifting once and stamping
-`0.3.0` into every artifact a v0.4.0 wheel produced.
+`schema_version` is **2**. v2 is v1 plus `scoring_model`; every v1 key keeps
+its name, type and meaning.
+
+**Any shape change bumps it, additions included.** This paragraph previously
+read "a field may be added without a bump", and that was wrong in the
+direction that costs a consumer silently: MA validates the document and
+reports *no delegated pillar* rather than a partial one, so a v1 document
+that grew a field would be refused with nothing on either side saying why.
+`tests/unit/test_pillar_contract.py` pins every key and type so an addition
+cannot land without this decision being taken.
+
+**A bump is a two-repository release, in order:** specify the shape, MA lands
+a reader accepting both versions, *then* this tool emits the new one. v2 was
+cut that way — MA's reader accepts v1 and v2 and falls back to
+`producer.version` when `scoring_model` is absent, so neither release blocked
+the other.
+
+`scoring_model` is an integer naming the scoring model that produced
+`condition`. A delegated pillar can change its scoring model **without**
+changing its schema — D16 and D17 did exactly that — and MA keys trend
+comparability on this field, so a repository's condition is never compared
+across a model change. It is pinned to a digest of the weights, the slope, the
+bands and the real `score()` output, so the model cannot move without it.
+`1` is reserved and never emitted: it would denote every release before the
+field existed, and those do not share one model.
+
+`producer.version` records which build produced the document. It is
+load-bearing rather than decorative — it is the trend key for any v1 document
+— and is held to `__version__` by `test_pillar_contract.py` after drifting
+once and stamping `0.3.0` into every artifact a v0.4.0 wheel produced.
 
 ## What this does not do
 

@@ -15,87 +15,98 @@ from secure_code_audit import triage
 from secure_code_audit.findings import Finding
 from secure_code_audit.standards import cwe_url, owasp_label
 
+#: The ten constraints, one line each.
+#:
+#: They are the product — the reviewer's word for them was "the leash" — and
+#: not one is dropped here. What is dropped is the wrapping: thirty lines of
+#: text carrying ten instructions. An instruction an agent has to wade to is
+#: an instruction it is likelier to skip, so brevity is on the side of
+#: compliance rather than against it.
 _HARD_CONSTRAINTS = """\
-## Hard constraints (MUST NOT violate)
+## Hard constraints — MUST NOT violate
 
-1. Fix only the findings listed in §FINDINGS. Do not touch unrelated
-   code, files, or modules.
-2. Do not change cryptographic algorithms, key derivation, IV/nonce
-   handling, padding modes, or random sources unless a finding in
-   §FINDINGS explicitly names them as the defect.
-3. Do not change authentication flows, session handling, token
-   lifetime, cookie attributes, or authorization gates unless a
-   finding in §FINDINGS explicitly names them.
-4. Do not weaken input validation, output encoding, sanitization,
-   bounds checks, regex strictness, or rate limits to make existing
-   tests pass.
-5. Do not disable, delete, or skip security tests. Do not remove
-   `@_limiter.limit`, `@require_auth`, `@require_csrf`, or similar
-   decorators.
-6. Do not silence linter warnings via `# nosec`, `# noqa`, `# type:
-   ignore`, `eslint-disable`, `sonar-disable`, or equivalent.
-7. Do not introduce new third-party dependencies. Prefer stdlib or
-   already-vendored libraries. If a new dependency is necessary,
-   stop and ask the operator first.
-8. Preserve behavior. Same inputs must produce the same outputs
-   unless a finding explicitly proves the current behavior is
-   unsafe (in which case, name the input/output pair that changes
-   in the patch description).
-9. Add a focused test that exercises the specific security boundary
-   you fixed. The test must FAIL on the pre-fix code and PASS on the
-   post-fix code. No "TODO: add test later".
-10. Keep the patch small. If you find yourself rewriting a function
-    rather than patching it, stop and report the structural issue
-    to the operator instead.
+1. Fix only the findings listed. Touch nothing else.
+2. Do not change crypto algorithms, key derivation, IV/nonce, padding or random sources unless a finding names them.
+3. Do not change auth flows, sessions, token lifetime, cookie attributes or authorization gates unless a finding names them.
+4. Do not weaken validation, encoding, sanitization, bounds checks, regex strictness or rate limits to make tests pass.
+5. Do not disable, delete or skip security tests, or remove `@require_auth`-style decorators.
+6. Do not silence warnings: no `# nosec`, `# noqa`, `# type: ignore`, `eslint-disable` or equivalent.
+7. Do not add dependencies. If one is genuinely required, stop and ask.
+8. Preserve behaviour. If a finding proves current behaviour unsafe, name the input → old/new output.
+9. Add one focused test per fix that FAILS before and PASSES after. No "TODO: add test later".
+10. Keep the patch small. If you are rewriting a function rather than patching it, stop and report why.
 """
 
 
 _PATCH_PROTOCOL = """\
-## Patch protocol
+## Protocol
 
-For each finding:
+Per finding: quote the lines you will change, state the minimum change and
+the test you will add, apply it, then confirm the test fails on the pre-fix
+code and passes after. Do not re-run this tool; CI will.
 
-  1. Quote the specific lines you will change (file:line_start-line_end).
-  2. State the minimum change that resolves the finding.
-  3. State the test you will add.
-  4. Apply the change.
-  5. Run the test. Confirm it fails on the pre-fix code (via git stash
-     or equivalent) and passes after.
-  6. Re-run the audit (the operator's CI will do this — you don't need
-     to invoke secure-code-agent yourself).
+Report per finding: id · files changed (`file:line`) · test added · behaviour
+change (yes/no, with input → old/new) · standards satisfied.
 
-## Reporting
-
-When done, emit a single summary block per finding:
-
-  · Finding id:
-  · Files changed (file:line ranges):
-  · Test added (file:line range):
-  · Behavior change (yes/no — if yes, name input → old output / new output):
-  · Standards satisfied:
-
-If you discover the finding is a false positive, do NOT apply a fix.
-Instead, emit a suppression candidate for `.scignore.yaml` with the
-justification and a proposed `expires` date (max 90 days). Operator
-will review.
+A false positive is a successful outcome: do not patch it. Emit a
+`.scignore.yaml` suppression candidate with the justification and a proposed
+`expires` date (90 days maximum) for the operator to review.
 """
 
 
-#: Beyond this, a tier is summarised instead of listed. A work order has to
-#: be readable to be worth anything, and listing every finding stopped it
-#: being so: auditing this repository produced 884 ACCEPT findings and a
-#: 541KB, 15,390-line prompt no agent could act on and most could not read.
-#: Truncation is always stated, never silent.
-_MAX_BLOCKS = 40
+#: Findings given a full patch block. A work order is a prompt, not a backlog.
+#:
+#: Truncation is always stated, never silent. The first version of this file
+#: listed every finding and produced a 541KB, 15,390-line prompt from this
+#: repository's own audit — one no agent could act on and most could not
+#: read. Capping at 40 per tier fixed that number and not the principle:
+#: Django still produced 1,954 lines and PyGoat 1,602.
+#:
+#: This was 40 **per tier**, which produced 1,954 lines on Django and 1,602 on
+#: PyGoat — eighty blocks of roughly twenty-three lines each. That is a
+#: program, not something a person pastes into an agent, and it is the
+#: sprawling unreviewable change the bounded prompt exists to prevent,
+#: arriving one step earlier.
+#:
+#: Twelve is a batch an agent can hold and an operator can verify with
+#: `--verify-against` before taking the next one. The remainder is not lost:
+#: it is counted, and the full backlog is in the report, which is a file
+#: someone scrolls rather than a payload someone pastes.
+_MAX_BLOCKS = 12
+
+#: §REVIEW is judgement, not patching, so it gets one line per finding rather
+#: than a patch block. Listing forty of them in full was 881 lines of Django's
+#: work order describing work the agent is explicitly told not to do yet.
+_MAX_REVIEW_LINES = 12
+
+#: Lines of code quoted per finding.
+#:
+#: The single biggest contributor to length, and invisible until measured:
+#: Django's twelve §FIX blocks carried **212 lines inside code fences**,
+#: roughly eighteen each, because scanners return whole-function context. A
+#: work order needs enough to locate the defect, not to reproduce the
+#: function — the agent has the file.
+_MAX_SNIPPET_LINES = 3
+
+#: Rules listed in the §ACCEPT table before it is summarised. The tier is a
+#: decision per rule, and twenty-eight rows is a backlog again.
+_MAX_ACCEPT_ROWS = 8
+
+
+def _snippet(text: str) -> list[str]:
+    lines = [line for line in text.rstrip().split("\n") if line.strip()]
+    if len(lines) <= _MAX_SNIPPET_LINES:
+        return lines
+    kept = lines[:_MAX_SNIPPET_LINES]
+    kept.append(f"… {len(lines) - _MAX_SNIPPET_LINES} more line(s) — open the file")
+    return kept
 
 
 def _overflow(remaining: int, section: str) -> str:
     """Say what was left out. Never drop findings silently."""
     return (
-        f"> **{remaining} further finding(s) in {section} are not listed here.**\n"
-        f"> The work order is capped at {_MAX_BLOCKS} per tier so it stays\n"
-        f"> readable. Fix these, re-run the audit, and the next order carries\n"
-        f"> the rest. Every finding is in the JSON report regardless.\n"
+        f"> **{remaining} more in {section}.** Fix this batch, re-run, and the "
+        f"next order carries the rest. All of them are in the JSON report.\n"
     )
 
 
@@ -124,14 +135,21 @@ def _accept_summary(findings: list[Finding], root: Path | None) -> str:
     by_rule: dict[str, list[Finding]] = {}
     for finding in findings:
         by_rule.setdefault(finding.rule_id, []).append(finding)
-    for rule_id, group in sorted(
+    ranked = sorted(
         by_rule.items(), key=lambda kv: (-max(f.severity.rank for f in kv[1]), -len(kv[1]))
-    ):
+    )
+    for rule_id, group in ranked[:_MAX_ACCEPT_ROWS]:
         worst = max(group, key=lambda f: f.severity.rank)
         example = _display_path(worst.file_path, root)
         lines.append(
             f"| `{rule_id}` | {len(group)} | {worst.severity.value} | "
             f"`{example}:{worst.line_start}` |"
+        )
+    if len(ranked) > _MAX_ACCEPT_ROWS:
+        hidden = ranked[_MAX_ACCEPT_ROWS:]
+        lines.append(
+            f"| _{len(hidden)} more rule(s)_ | {sum(len(g) for _, g in hidden)} | | "
+            f"_see the report_ |"
         )
     first = max(findings, key=lambda f: f.severity.rank)
     lines.extend(
@@ -187,13 +205,9 @@ def generate(
     )
     parts.append(_HARD_CONSTRAINTS)
     parts.append(_PATCH_PROTOCOL)
-    parts.append("## Standards context\n")
-    parts.append(
-        "Each finding below carries its CWE id, OWASP Top 10 bucket, OWASP\n"
-        "ASVS section, and NIST SSDF practice. Read the linked standards\n"
-        "entries before editing — they are the authoritative description\n"
-        "of the weakness.\n"
-    )
+    # The standards-context section was four lines saying that each finding
+    # carries its standards. Each finding carries its standards; saying so
+    # is not context.
 
     n = 0
     if fix:
@@ -207,18 +221,20 @@ def generate(
     if review:
         parts.append("## §REVIEW — confirm before changing\n")
         parts.append(
-            "These come from rules measured producing findings that are not\n"
-            "defects, or from a scanner reporting low confidence. **Do not\n"
-            "patch one without first checking it is real.** If it is, fix it\n"
-            "under the same constraints as §FIX. If it is not, emit a\n"
-            "suppression candidate with the justification — that is a\n"
-            "successful outcome for this tier, not a failure.\n"
+            "Low-precision rules or low scanner confidence. **Check each is "
+            "real before patching it.** If it is, fix it under the §FIX "
+            "constraints. If it is not, emit a suppression candidate with the "
+            "justification — that is a successful outcome for this tier.\n"
         )
-        for f in review[:_MAX_BLOCKS]:
-            n += 1
-            parts.append(_finding_block(n, f, root, note=triage.reason_for(f)))
-        if len(review) > _MAX_BLOCKS:
-            parts.append(_overflow(len(review) - _MAX_BLOCKS, "§REVIEW"))
+        listed = review[:_MAX_REVIEW_LINES]
+        parts.append(
+            "\n".join(
+                _review_line(i, f, root, triage.reason_for(f)) for i, f in enumerate(listed, 1)
+            )
+            + "\n"
+        )
+        if len(review) > _MAX_REVIEW_LINES:
+            parts.append(_overflow(len(review) - _MAX_REVIEW_LINES, "§REVIEW"))
 
     if accept:
         parts.append("## §ACCEPT — test tree and documentation\n")
@@ -228,43 +244,56 @@ def generate(
     return "\n".join(parts)
 
 
-def _finding_block(n: int, f: Finding, root: Path | None = None, note: str | None = None) -> str:
-    lines: list[str] = []
-    lines.append(f"### Finding {n}: `{f.rule_id}` — {f.short_desc or f.message[:120]}")
-    lines.append("")
-    lines.append(f"- **Severity:** {f.severity.value} ({f.confidence.value} confidence)")
+def _location(f: Finding, root: Path | None) -> str:
+    span = f"-{f.line_end}" if f.line_end and f.line_end != f.line_start else ""
+    return f"{_display_path(f.file_path, root)}:{f.line_start}{span}"
+
+
+def _standards(f: Finding) -> str:
+    """One trailing line, not eight bullets.
+
+    Severity, CWE, OWASP, ASVS, SSDF, scanner and category were each their
+    own bullet — a reference card per finding, which is report material. An
+    agent patching a line needs what it is, where it is, and what to do; the
+    standards line stays because it is the citation that makes a finding
+    checkable, compressed to the width it deserves.
+    """
+    bits: list[str] = []
     if f.canonical_cwe:
-        top25 = " (MITRE Top 25)" if f.cwe_top25 else ""
-        lines.append(f"- **CWE:** [{f.canonical_cwe}]({cwe_url(f.canonical_cwe)}){top25}")
+        top25 = " (Top 25)" if f.cwe_top25 else ""
+        bits.append(f"[{f.canonical_cwe}]({cwe_url(f.canonical_cwe)}){top25}")
     if f.owasp_top10:
-        lines.append(f"- **OWASP Top 10:** {owasp_label(f.owasp_top10)}")
+        bits.append(owasp_label(f.owasp_top10))
     if f.asvs_section:
-        lines.append(f"- **OWASP ASVS:** `{f.asvs_section}`")
+        bits.append(f"ASVS `{f.asvs_section}`")
     if f.nist_ssdf:
-        lines.append(f"- **NIST SSDF:** `{f.nist_ssdf}`")
-    lines.append(f"- **Scanner:** `{f.scanner}`")
-    lines.append(f"- **Category:** `{f.category.value}`")
-    lines.append("")
-    lines.append(
-        f"**Location:** `{_display_path(f.file_path, root)}:{f.line_start}"
-        + (f"-{f.line_end}" if f.line_end and f.line_end != f.line_start else "")
-        + "`"
-    )
+        # Dropped in the first compression pass and restored: it costs nothing
+        # on a line that already exists, and this tool claims an SSDF mapping.
+        # Brevity may remove wrapping, not claims.
+        bits.append(f"SSDF `{f.nist_ssdf}`")
+    bits.append(f"{f.severity.value}/{f.confidence.value} via `{f.scanner}`")
+    return " · ".join(bits)
+
+
+def _finding_block(n: int, f: Finding, root: Path | None = None, note: str | None = None) -> str:
+    # Location rides the heading. It was its own line with a blank either
+    # side — three lines to say where, twelve times over.
+    heading = f"### {n}. `{f.rule_id}` — {f.short_desc or f.message[:90]}"
+    lines = [heading, "", f"`{_location(f, root)}`"]
     if f.code_snippet:
-        lines.append("")
-        lines.append("```")
-        lines.append(f.code_snippet.rstrip())
-        lines.append("```")
+        lines += ["", "```", *_snippet(f.code_snippet), "```"]
     lines.append("")
-    lines.append(f"**Why this matters:** {f.message}")
     if note:
-        lines.append("")
-        lines.append(f"**Why this needs checking first:** {note}")
-    if f.fix_hint:
-        lines.append("")
-        lines.append(f"**Suggested approach:** {f.fix_hint}")
-    lines.append("")
+        lines += [f"**Check first:** {note}", ""]
+    lines.append(f.fix_hint or f.message)
+    lines += [_standards(f), ""]
     return "\n".join(lines)
+
+
+def _review_line(n: int, f: Finding, root: Path | None, note: str | None) -> str:
+    """One line. §REVIEW is judgement, not a patch instruction."""
+    reason = f" — {note}" if note else ""
+    return f"{n}. `{_location(f, root)}` · `{f.rule_id}` {f.short_desc or ''}{reason}".rstrip()
 
 
 def _footer() -> str:

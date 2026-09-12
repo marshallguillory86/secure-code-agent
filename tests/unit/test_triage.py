@@ -250,11 +250,15 @@ def test_a_large_accept_tier_is_summarised_not_listed():
 def test_an_overlong_fix_tier_says_what_it_left_out():
     """Capping is fine. Capping silently is the absence-of-evidence failure
     this whole tool exists to prevent."""
-    from secure_code_audit.remediation import generate
+    from secure_code_audit.remediation import _MAX_BLOCKS, generate
 
     many = [_f("B602", line=n) for n in range(120)]
     order = generate(many)
 
-    assert "not listed here" in order
-    assert "80 further finding(s)" in order
+    # Derived from the cap rather than hard-coded: the cap moved 40 -> 12 when
+    # the work order was cut down to a prompt, and a literal here would have
+    # had to be found and changed by hand.
+    assert "more in" in order
+    assert f"{120 - _MAX_BLOCKS} more in" in order
+    assert "in the JSON report" in order
     assert "JSON report" in order, "no pointer to where the rest live"

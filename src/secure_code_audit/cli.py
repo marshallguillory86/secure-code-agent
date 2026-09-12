@@ -15,6 +15,7 @@ from pathlib import Path
 
 from secure_code_audit import (
     __version__,
+    demo,
     instructions,
     remediation,
     renderers,
@@ -146,6 +147,16 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     p.add_argument(
+        "--demo",
+        action="store_true",
+        help=(
+            "Audit a generated example application instead of a repository, so "
+            "a first run produces a real work order without a scanner scavenger "
+            "hunt. The tree is written to a temp directory and is never shipped."
+        ),
+    )
+
+    p.add_argument(
         "--preflight",
         action="store_true",
         help=(
@@ -189,6 +200,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.init_agent_standards:
         return _do_init_standards(args)
+
+    if getattr(args, "demo", False):
+        # `paths` defaults to ["."], so "was a path given" is a comparison
+        # against the default rather than a truth test.
+        if args.paths != ["."]:
+            sys.stderr.write("ERROR: --demo audits its own generated tree; drop the path.\n")
+            return 2
+        root = demo.build()
+        print(demo.describe(root))
+        args.paths = [str(root)]
 
     if args.target:
         # `--target` names an *agent* for --init-agent-standards, and it reads
@@ -988,6 +1009,41 @@ def _assert_config_writes_are_contained(cfg: config_mod.Config, root: Path, targ
         )
 
 
+def _print_install_guidance(unavailable: list[str]) -> None:
+    """Say how to resolve a missing scanner, at the moment it is missing.
+
+    `--preflight` already produced exactly this — one install command per
+    scanner — and the failure path printed only the names. So the first run
+    of a fresh install reported four missing tools and left the operator to
+    find `--preflight` on their own, which is a scavenger hunt wearing a
+    coverage report.
+
+    The guidance is the adapter's own `install_hint`, so it cannot drift from
+    what `--preflight` says. The tool still installs nothing itself; naming
+    the command is not running it.
+    """
+    from secure_code_audit.scanners import SCANNERS
+
+    def hint_for(name: str) -> str:
+        """Empty rather than raising. Advice must never break a run, and an
+        imported SARIF can name a scanner this build does not ship."""
+        cls = SCANNERS.get(name)
+        if cls is None:
+            return ""
+        try:
+            return cls().unavailable_fix_hint() or ""
+        except Exception:  # noqa: BLE001 — see above
+            return ""
+
+    shown = [(name, hint) for name in unavailable if (hint := hint_for(name))]
+    if not shown:
+        return
+    print("  to resolve:")
+    for name, hint in shown:
+        print(f"    {name}: {hint}")
+    print("    (or --preflight to check the whole floor before a run)")
+
+
 def _print_summary(
     verdict, score, gate, ran, unavailable, coverage, paths, axes=(), trend=None
 ) -> None:
@@ -1020,6 +1076,7 @@ def _print_summary(
     print(coverage_line)
     if unavailable:
         print(f"  unavailable: {', '.join(unavailable)}")
+        _print_install_guidance(unavailable)
     if not gate.passed:
         for reason in gate.reasons:
             print(f"  ✗ {reason}")

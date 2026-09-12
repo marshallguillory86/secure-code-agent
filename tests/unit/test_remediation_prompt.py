@@ -41,13 +41,13 @@ def test_prompt_includes_all_hard_constraints():
     # The ten hard constraints we promise (see docs/remediation.md).
     for clause in (
         "Fix only the findings",
-        "cryptographic algorithms",
-        "authentication flows",
-        "weaken input validation",
-        "disable, delete, or skip security tests",
-        "silence linter warnings",
-        "introduce new third-party dependencies",
-        "Preserve behavior",
+        "crypto algorithms",
+        "auth flows",
+        "weaken validation",
+        "disable, delete or skip security tests",
+        "silence warnings",
+        "Do not add dependencies",
+        "Preserve behaviour",
         "focused test",
         "Keep the patch small",
     ):
@@ -77,7 +77,7 @@ def test_prompt_sorts_critical_first():
     crit = _f(severity=Severity.CRITICAL, rule_id="B")
     prompt = generate([high, crit])
     # The CRITICAL block must appear before the HIGH block.
-    assert prompt.index("Finding 1: `B`") < prompt.index("Finding 2: `A`")
+    assert prompt.index("1. `B`") < prompt.index("2. `A`")
 
 
 def test_prompt_no_findings_message():

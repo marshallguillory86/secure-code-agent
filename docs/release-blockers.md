@@ -1,4 +1,4 @@
-# v0.3.0 Release Blockers
+# v0.3.0 Release Blockers — historical, all closed
 
 > Status: **all eight closed, 2026-09-09.** Raised by hostile audit against
 > `a65527c`, 2026-08-10, and each independently verified against the source
