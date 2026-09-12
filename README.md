@@ -424,7 +424,7 @@ For agents that support invokable skills, this repo ships a portable skill under
 ## GitHub Action
 
 ```yaml
-- uses: marshallguillory86/secure-code-agent@v0.11.0
+- uses: marshallguillory86/secure-code-agent@v0.11.1
   with:
     config: secure-code-agent.json
     fail-on-gate: true

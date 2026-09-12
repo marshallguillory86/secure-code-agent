@@ -400,6 +400,19 @@ def _do_audit(args: argparse.Namespace) -> int:
     root_for_tests = target if target.is_dir() else target.parent
 
     def _classify(finding: Finding) -> str:
+        # A dependency advisory is about the dependency, not about the file
+        # that happened to declare it. Classified by category before path,
+        # because the path routing gets it wrong: `requirements.txt` matches
+        # the documentation pattern `**/*.txt`, so every CVE in a pip
+        # manifest was filed under **documentation** — eighteen of them on a
+        # six-file demo tree. A dependency finding is not documentation
+        # whatever the manifest is called.
+        #
+        # Returning "primary" hands it to `split_side_axes` below, which is
+        # what moves it onto the dependencies axis. Neither axis is scored,
+        # so this changes where a finding is *reported*, not the grade.
+        if finding.category is Category.DEPENDENCIES:
+            return "primary"
         if is_test_path(finding.file_path, root_for_tests, cfg.test_patterns):
             return "test tree"
         if is_test_path(finding.file_path, root_for_tests, cfg.docs_patterns):
