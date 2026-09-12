@@ -31,8 +31,8 @@ secure-code-agent \
   --comment-output secure-code-pr-comment.md
 ```
 
-3. `--changed-only` is reserved but not yet safely implemented and exits 2.
-   Use a full audit with `--fail-on-new` for branch / PR work.
+3. `--changed-only REF` scopes the report to files changed since REF and
+   issues no grade. Pair it with `--fail-on-new` for branch / PR work.
 4. Read `secure-code-remediation-prompt.md` before editing — treat it
    as the bounded task brief.
 5. Fix only the reported findings.

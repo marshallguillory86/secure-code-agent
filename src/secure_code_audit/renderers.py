@@ -297,7 +297,17 @@ def _summary_section(
     # No verdict means nobody decided this run could claim a grade, so it
     # cannot. Falling back to a locally-invented condition here is what put a
     # second decision rule in the codebase in the first place.
-    if verdict is None or not verdict.is_verified:
+    if verdict is not None and verdict.untriaged:
+        # An untriaged run leads with the work, on every surface. The terminal
+        # did this from the day it shipped and the Markdown report did not, so
+        # the same audit said two different things depending on where it was
+        # read — and the report is the one a reviewer opens.
+        out.append(f"- **{verdict.headline()}**")
+        out.append(
+            "    - The number is in the JSON and the trend. It is not the first "
+            "thing to say about a repository nobody has triaged yet."
+        )
+    elif verdict is None or not verdict.is_verified:
         if score.overall is None:
             out.append(
                 "- **No score:** nothing measurable was scanned. This is not a "
@@ -541,11 +551,15 @@ def _pr_comment(
     # never caveat on its own terms.
     unverified = verdict is None or not verdict.is_verified
     score_label = "finding score, not a verified grade" if unverified else "verified grade"
-    headline = (
-        "no score — nothing measurable was scanned"
-        if score.overall is None
-        else f"{score_label} **{score.letter}** ({score.overall:.2f}/5.00)"
-    )
+    if verdict is not None and verdict.untriaged:
+        # Same rule as the Markdown report and the terminal. A PR comment is
+        # the most widely read artifact this tool produces, so it is the worst
+        # place for a letter nobody has triaged to be the headline.
+        headline = verdict.headline()
+    elif score.overall is None:
+        headline = "no score — nothing measurable was scanned"
+    else:
+        headline = f"{score_label} **{score.letter}** ({score.overall:.2f}/5.00)"
     out = [
         f"### secure-code-agent {status} — {headline}",
         "",

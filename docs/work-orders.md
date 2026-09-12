@@ -1,6 +1,6 @@
 # Work orders — the first-class output
 
-> Status: **v0.12.0 — 2026-09-11.** Triage tiers and outcome verification.
+> Status: **v0.12.1 — 2026-09-11.** Triage tiers and outcome verification.
 
 The score is second class. It is worth something as a *trend* and very
 little as a number, and the thing that actually improves a repository is a
@@ -75,10 +75,19 @@ Summarised rather than listed, grouped by rule, with a drafted
 > this tool audited itself — past most context windows and useless to a
 > person. The same content is now 111 lines.
 
-§FIX and §REVIEW are capped at 40 blocks each and **say what they left
-out**, with a pointer to the JSON report where everything lives. Capping is
-fine; capping silently is the absence-of-evidence failure this whole project
-exists to prevent.
+**§FIX is capped at 12 patch blocks; §REVIEW is one line per finding, capped
+at 12; the §ACCEPT table lists 8 rules.** Quoted code is trimmed to 3 lines.
+Every cap **says what it left out**, with a pointer to the JSON report where
+everything lives — capping is fine, capping silently is the
+absence-of-evidence failure this whole project exists to prevent.
+
+The caps were 40 per tier, which fixed the 15,390-line number and not the
+principle: Django still produced 1,954 lines and PyGoat 1,602. The bulk was
+not the findings but the context around them — Django's twelve §FIX blocks
+carried **212 lines inside code fences**, because scanners return
+whole-function context and nothing trimmed it. A work order is a prompt
+someone pastes into an agent, not a backlog; ordinary repositories now land
+at 85–145 lines.
 
 ---
 
