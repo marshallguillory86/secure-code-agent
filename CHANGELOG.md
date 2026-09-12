@@ -4,6 +4,69 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.12.0 — 2026-09-11
+
+**Four review objections closed.** The differentiator is measurable, a
+PR-shaped audit exists, an untriaged run stops leading with a letter, and
+there is a chat door.
+
+### Added — scope conformance in `--verify-against`
+
+> *"Only verify is mechanical, and only for silencing and regressions — not
+> for 'did you rewrite the session model.'"*
+
+That is now mechanical. The work order cites files; the repository knows what
+changed. `--verify-against` reports **blast radius**: which changed files were
+never cited, as `scope: conformant` or `scope: EXCEEDED`.
+
+The JSON report records the `commit` it was taken at, which is the input this
+needs. Where it cannot be answered — no commit in the before-report, not a git
+repository — the scope reports itself **unknown**, never conformant. A failed
+measurement must not read as a clean result.
+
+Exit semantics are unchanged: scope is reported, not gated. Changing what
+fails CI inside a reporting change is the defect this project keeps finding in
+other people's tools.
+
+### Added — `--changed-only REF`
+
+> *"A PR-shaped tool that cannot do a PR-shaped audit is missing the run
+> people will actually schedule."*
+
+The **whole tree is still scanned** — scanners read trees, not diffs, and
+Semgrep's cross-file dataflow is the obvious casualty of doing otherwise — and
+the *report* is scoped to files changed since `REF`. **The grade is withheld**,
+because a run that looks at less must not score better. A ref git cannot
+resolve is an error, not an empty diff.
+
+### Added — an MCP server
+
+> *"It is named agent and there is no chat door."*
+
+`pip install 'secure-code-agent[mcp]'`, then `secure-code-agent-mcp`. Tools:
+`audit_repository`, `preflight`, `agent_info`.
+
+It **never audits unasked** — `audit_repository` without `action="run"`
+returns the question. It returns the **work order first**, because the score is
+second class. It drives the CLI by subprocess rather than reimplementing it, so
+there is one answer to "what did you find". No report is written into the
+audited tree; only `.secure-code/history.jsonl` is appended, because that is
+how the trend works.
+
+### Changed — an untriaged run leads with the work, not a letter
+
+> *"A staff engineer who sees Django at F turns the gate off."*
+
+On a first run with findings and no baseline the headline now reads
+`N finding(s), none triaged — a starting position, not a grade`. The number is
+still in the report, the JSON and the trend; it is simply not the first thing
+said about a repository nobody has triaged.
+
+Triage is **decoupled from evidence**: it does not withhold the grade.
+`evidence_reasons` answers *did we look*; triage answers *did you review*.
+Folding them together made a verified grade unreachable on first contact for
+any repository with one finding.
+
 ## 0.11.1 — 2026-09-11
 
 ### Fixed — a vulnerable dependency was filed under "documentation"

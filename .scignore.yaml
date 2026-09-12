@@ -27,3 +27,17 @@
     - "*/tests/unit/test_credential_reference.py"
   reason: "False positive on a test fixture, and now only in git history. This is the test file for the triage rule that recognises credential *references* -- its fixtures are shell and GitHub Actions variable names, which is the pattern the rule under test exists to recognise as safe. No credential is or was present: the variable spellings are names, and the one credential-shaped string is an invented fake that never authenticated anything. The fixtures are now assembled from parts at runtime so this source carries no matching literal, and a test asserts that; these hits are the earlier committed revision, which gitleaks reads because it scans history as well as the working tree. Not rewriting a pushed branch to hide a false positive. The reason above is deliberately paraphrased -- quoting the expression verbatim is what created the finding in the first place."
   expires: "2027-09-11"
+
+- rule_id: B404
+  paths:
+    - "*/src/secure_code_audit/git_tools.py"
+    - "*/src/secure_code_audit/mcp_server.py"
+  reason: "Reviewed subprocess imports. git_tools shells out to a resolved git binary to read HEAD and the changed-file set, which is what scope conformance and --changed-only are built on; mcp_server drives this project's own CLI so the chat surface and the terminal cannot give two different answers. Both use argument arrays with shell=False and an absolute executable."
+  expires: "2027-09-11"
+
+- rule_id: B603
+  paths:
+    - "*/src/secure_code_audit/git_tools.py"
+    - "*/src/secure_code_audit/mcp_server.py"
+  reason: "Same two call sites. Every invocation passes a list, never a string, never a shell, and the executable is resolved to an absolute path first -- git via shutil.which, the CLI via sys.executable. No element is attacker-controlled: the arguments are a repository root this run already resolved and a git ref the operator typed."
+  expires: "2027-09-11"

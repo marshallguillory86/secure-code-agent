@@ -22,6 +22,7 @@ from secure_code_audit import (
     sarif,
     scanners,
     suppressions,
+    triage,
 )
 from secure_code_audit import baseline as baseline_mod
 from secure_code_audit import config as config_mod
@@ -111,7 +112,16 @@ def _parser() -> argparse.ArgumentParser:
         "--fail-on-new", action="store_true", help="Exit nonzero on findings not in baseline."
     )
 
-    p.add_argument("--changed-only", help="Audit only files changed since REF (e.g. main...HEAD).")
+    p.add_argument(
+        "--changed-only",
+        metavar="REF",
+        help=(
+            "Report only findings in files changed since REF (e.g. main...HEAD). "
+            "The whole tree is still scanned — scanners read trees, not diffs — "
+            "and the grade is WITHHELD, because a run that looks at less must "
+            "not score better."
+        ),
+    )
     p.add_argument("--skip-scanners", help="Comma-separated scanner names to skip.")
     p.add_argument("--only-scanners", help="Comma-separated scanner names — only these run.")
     p.add_argument(
@@ -431,6 +441,11 @@ def _do_audit(args: argparse.Namespace) -> int:
     #   * the baseline. `baseline.write` recorded only the primary set, so
     #     every side-axis finding was absent from it and `fail_on_new`
     #     re-flagged the same test-tree secret as new on every run, forever.
+    if args.changed_only:
+        all_findings, changed_note = _restrict_to_changed(all_findings, root, args.changed_only)
+    else:
+        changed_note = None
+
     primary_findings, path_axes = partition_by_path(all_findings, _classify)
     test_findings = path_axes.get("test tree", [])
     docs_findings = path_axes.get("documentation", [])
@@ -493,7 +508,27 @@ def _do_audit(args: argparse.Namespace) -> int:
     gate = evaluate_gates(
         gated, score, {**cfg.gates, "_baseline_state": baseline_state.value}, coverage
     )
-    verdict = build_verdict(score, cfg.gates, coverage)
+    # A first run has triaged nothing: no baseline exists, so no finding has
+    # been accepted, deferred or dismissed by anyone. Counted from the
+    # actionable set (§FIX and §REVIEW), not the raw total — §ACCEPT is the
+    # test tree and documentation, which the work order explicitly says not
+    # to patch, and counting those would make every repository look untriaged
+    # forever.
+    untriaged = 0
+    if baseline_state is baseline_mod.State.ABSENT:
+        tiers = triage.partition(all_findings, lambda f: renderers.axis_of(f, axes))
+        untriaged = len(tiers[triage.Tier.FIX]) + len(tiers[triage.Tier.REVIEW])
+    verdict = build_verdict(score, cfg.gates, coverage, untriaged)
+    if changed_note is not None:
+        # A scoped run has no denominator it can defend: the LOC is the whole
+        # tree and the findings are a slice of it, so any number would be
+        # flattering by construction. Withhold the grade and say why. The
+        # findings, the work order and the gate are all still real.
+        verdict = replace(
+            verdict,
+            verified_grade=None,
+            reasons=(*verdict.reasons, changed_note),
+        )
 
     # ----- write outputs -----
     # The pillar artifact is what maintainability-agent ingests (D3). Built
@@ -541,13 +576,14 @@ def _do_audit(args: argparse.Namespace) -> int:
 
     # ----- did the work order actually improve anything? -----
     if args.verify_against:
-        return _do_verify(args, all_findings, root, axes)
+        return _do_verify(args, all_findings, root, axes, own_artifacts)
 
     # ----- terminal output -----
     if args.json:
         sys.stdout.write(
             json.dumps(
-                renderers.to_json(all_findings, score, gate, coverage, verdict, axes), indent=2
+                renderers.to_json(all_findings, score, gate, coverage, verdict, axes, root),
+                indent=2,
             )
         )
         sys.stdout.write("\n")
@@ -561,10 +597,11 @@ def _prepare_audit(
     args: argparse.Namespace,
 ) -> tuple[config_mod.Config, Path, Path]:
     """Load config and resolve the single scan root, or refuse."""
-    if args.changed_only:
-        raise ValueError(
-            "--changed-only is not implemented safely; refusing to claim a scoped audit"
-        )
+    # `--changed-only` used to refuse outright, because a scoped audit that
+    # produced a score would let looking at less score better — the
+    # absence-as-value defect, arriving through a convenience flag. It is
+    # implemented now, and the refusal is replaced by the property that made
+    # it unsafe: a scoped run reports findings and **never a grade**.
     if len(args.paths) > 1:
         raise ValueError("multiple scan roots are not supported; provide one repository root")
     # The target is resolved first because the default config belongs to it.
@@ -869,7 +906,7 @@ def _write_outputs(
             findings, score, gate, paths.markdown, ran, unavailable, coverage, verdict, axes
         )
     if paths.json_out is not None:
-        renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict, axes)
+        renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict, axes, root)
     if paths.sarif is not None:
         sarif.write(findings, paths.sarif, coverage, lambda f: renderers.axis_of(f, axes))
     if paths.comment is not None:
@@ -1069,7 +1106,7 @@ def _print_summary(
         status = "PASS"
     else:
         status = "NOT CONFIGURED"
-    print(f"secure-code-agent  ·  score {verdict.headline()}  ·  gate {status}")
+    print(f"secure-code-agent  ·  {verdict.headline()}  ·  gate {status}")
     for reason in verdict.reasons:
         print(f"  ! grade withheld: {reason}")
     print(f"  scanned LOC: {score.loc_scanned:,}")
@@ -1171,15 +1208,34 @@ def _findings_from_report(path: Path) -> list[Finding]:
     return restored
 
 
-def _do_verify(args: argparse.Namespace, after: list[Finding], root: Path, axes=()) -> int:
+def _do_verify(
+    args: argparse.Namespace,
+    after: list[Finding],
+    root: Path,
+    axes=(),
+    own_artifacts: frozenset[Path] = frozenset(),
+) -> int:
     """Compare this run against the one that produced the work order.
 
     Exits nonzero unless the run passes, because a verification step that
     always passes verifies nothing. "Improved" is deliberately
     strict: something fixed, nothing introduced, nothing merely silenced.
     """
-    before = _findings_from_report(_under_root(root, args.verify_against))
+    report_path = _under_root(root, args.verify_against)
+    before = _findings_from_report(report_path)
     result = verify_mod.compare(before, after, root, lambda f: renderers.axis_of(f, axes))
+    # Blast radius: what changed that the order never cited. Reads the commit
+    # the before-report was taken at; unknown rather than conformant when the
+    # report predates that field or the tree is not a git repository.
+    result = replace(
+        result,
+        scope=verify_mod.measure_scope(
+            before,
+            root,
+            _commit_of_report(report_path),
+            ours={*own_artifacts, report_path},
+        ),
+    )
 
     if args.json:
         sys.stdout.write(json.dumps(verify_mod.to_dict(result), indent=2) + "\n")
@@ -1207,10 +1263,60 @@ def _do_verify(args: argparse.Namespace, after: list[Finding], root: Path, axes=
                 f"  ({len(result.deferred)} finding(s) in the test tree and documentation "
                 f"are reported but not required — see §ACCEPT)"
             )
+        print(f"  {result.scope.headline()}")
+        for path in sorted(result.scope.collateral)[:10]:
+            print(f"    collateral {path}")
         for note in result.notes:
             print(f"  ! {note}")
 
     return 0 if result.passed else 1
+
+
+def _restrict_to_changed(
+    findings: list[Finding], root: Path, ref: str
+) -> tuple[list[Finding], str]:
+    """Keep only findings in files changed since `ref`.
+
+    The whole tree is still scanned. Scanners read trees rather than diffs,
+    and asking one to look at a subset changes what it can see — Semgrep's
+    cross-file dataflow being the obvious case. So the *scan* is complete and
+    the *report* is scoped, which is the only ordering that does not quietly
+    trade coverage for speed.
+
+    A ref git cannot resolve is an error rather than an empty diff. "Nothing
+    changed" and "your ref is wrong" produce the same finding count and only
+    one of them should exit 0.
+    """
+    from secure_code_audit.git_tools import changed_files
+
+    paths, reason = changed_files(root, ref)
+    if paths is None:
+        raise ValueError(f"--changed-only {ref}: {reason}")
+
+    absolute = {(root / path).resolve() for path in paths}
+
+    def touched(finding: Finding) -> bool:
+        try:
+            return finding.file_path.resolve() in absolute
+        except OSError:
+            return False
+
+    kept = [f for f in findings if f.severity is Severity.INFORMATIONAL or touched(f)]
+    note = (
+        f"scoped to files changed since {ref} — a grade needs the whole tree, "
+        f"and this run reports a slice of it"
+    )
+    return kept, note
+
+
+def _commit_of_report(path: Path) -> str | None:
+    """The commit a saved report was taken at, if it recorded one."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    commit = payload.get("commit")
+    return commit if isinstance(commit, str) and commit else None
 
 
 if __name__ == "__main__":
