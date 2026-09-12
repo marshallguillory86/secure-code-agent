@@ -4,6 +4,22 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.11.1 — 2026-09-11
+
+### Fixed — a vulnerable dependency was filed under "documentation"
+
+`requirements.txt` matches the documentation pattern `**/*.txt`, and the axis
+split read the path before the category — so every CVE in a pip manifest was
+reported on the **documentation** axis. Eighteen of them on a six-file tree.
+
+Classification now reads the category first, so a dependency advisory reaches
+the dependencies axis wherever the manifest lives, including under `docs/` and
+`tests/`. Neither axis is scored, so no grade moves; what moves is the label,
+and the label is the product.
+
+Found by building the `--demo` fixture in 0.11.0, shipped as a known defect in
+that release rather than fixed mid-flight.
+
 ## 0.11.0 — 2026-09-11
 
 **The first five minutes, and a work order that is a prompt again.**
