@@ -13,7 +13,13 @@ from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 
-from secure_code_audit.config import Config, is_within, scanner_cfg, target_executables_allowed
+from secure_code_audit.config import (
+    Config,
+    containment_root,
+    is_within,
+    scanner_cfg,
+    target_executables_allowed,
+)
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanner_status import ScannerOutcome, ScanResult
 from secure_code_audit.standards import StandardsEntry, is_top25, lookup, owasp_for_cwe
@@ -45,10 +51,18 @@ class Scanner(ABC):
     # ----- availability ----------------------------------------------------
 
     def configure(self, target: Path, config: Config) -> None:
-        """Resolve the command once so probing and execution use the same tool."""
+        """Resolve the command once so probing and execution use the same tool.
+
+        The containment root is computed **first** and used for every
+        decision below it. It was computed last, on the line after the two
+        calls that needed it, so both of those compared against the raw
+        target — and for a single-file audit nothing lives beneath a regular
+        file, so both inverted to "allowed".
+        """
+        root = containment_root(target)
         self._allow_target_executables = target_executables_allowed(config, target)
-        self._resolved_command = self._resolve_command(target, self.cfg(config))
-        self._target_root = target if target.is_dir() else target.parent
+        self._resolved_command = self._resolve_command(root, self.cfg(config))
+        self._target_root = root
 
     @property
     def command(self) -> tuple[str, ...]:
@@ -58,8 +72,9 @@ class Scanner(ABC):
         found = shutil.which(self.binary) if self.binary else None
         return (found,) if found else ()
 
-    def _resolve_command(self, target: Path, config: ScannerConfig) -> tuple[str, ...]:
-        resolved = self._resolve_candidate(target, config)
+    def _resolve_command(self, root: Path, config: ScannerConfig) -> tuple[str, ...]:
+        """`root` is the containment root — a directory, never a file target."""
+        resolved = self._resolve_candidate(root, config)
         if not resolved:
             return ()
         # One containment check for every resolution route, not just the
@@ -67,18 +82,22 @@ class Scanner(ABC):
         # checking only the explicit-path branch would leave the same door open
         # a step to the left.
         if not getattr(self, "_allow_target_executables", False) and is_within(
-            Path(resolved[0]), target
+            Path(resolved[0]), root
         ):
             return ()
         return resolved
 
-    def _resolve_candidate(self, target: Path, config: ScannerConfig) -> tuple[str, ...]:
+    def _resolve_candidate(self, root: Path, config: ScannerConfig) -> tuple[str, ...]:
         if config.command:
             executable, *arguments = config.command
             candidate = Path(executable).expanduser()
             if candidate.is_absolute() or "/" in executable or "\\" in executable:
                 if not candidate.is_absolute():
-                    candidate = target / candidate
+                    # Against the containment root. Joining onto a file target
+                    # produced `app.py/scanner`, which resolves to nothing and
+                    # quietly returned "no command" for a reason unrelated to
+                    # the guard that should have refused it.
+                    candidate = root / candidate
                 candidate = candidate.resolve()
                 if candidate.is_file() and os.access(candidate, os.X_OK):
                     return (str(candidate), *arguments)
