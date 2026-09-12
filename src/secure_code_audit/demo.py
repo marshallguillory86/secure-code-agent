@@ -101,11 +101,11 @@ def build(destination: Path | None = None) -> Path:
     (root / "README.md").write_text(README, encoding="utf-8")
     # No dependency manifest. A pinned-vulnerable `requirements.txt` was here
     # and it made the demo worse, not better: eighteen pip-audit CVEs drowned
-    # the seven code defects the demo exists to show. It also surfaced a
-    # separate defect worth its own fix — those CVEs were filed on the
-    # **documentation** axis, because the manifest is a `.txt` file and the
-    # axis split reads the extension. A dependency finding is not
-    # documentation whatever the manifest is called.
+    # the seven code defects the demo exists to show.
+    #
+    # It also surfaced a real defect, since fixed: those CVEs were filed on
+    # the **documentation** axis, because the manifest is a `.txt` file and
+    # the axis split read the extension before the category.
     return root
 
 
