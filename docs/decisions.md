@@ -15,7 +15,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | --- | --- | --- | --- |
 | D1 | The line is at executing what the tree supplies, not at distrusting repositories | 2026-09-08 | Accepted |
 | D2 | Unknown configuration keys are rejected, not ignored | 2026-09-08 | Accepted |
-| D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | Accepted — [built](ma-integration.md) |
+| D3 | The MA Security pillar is fed by an artifact, not by MA executing this tool | 2026-09-08 | **Amended 2026-09-13** — MA runs this tool; the artifact contract is unchanged; no package dependency |
 | D4 | A failing security audit fails MA's CI | 2026-09-08 | Accepted |
 | D5 | The condition scale must be calibrated against a corpus before it is trusted | 2026-09-08 | **Closed** by D16 and D17 |
 | D6 | Scanner licences are judged by mechanism, not by name | 2026-09-08 | Accepted |
@@ -135,6 +135,36 @@ access and tool acquisition opt-in. Shelling out would put a network-capable
 scanner orchestrator inside MA's deterministic core and import this tool's
 trust boundary — including D1 — into MA's. Artifact ingestion matches MA's
 existing adapter rule: *ingest tool output, preserve provenance.*
+
+**Amended 2026-09-13 — MA runs this tool.** Decided by Marshall with MA's
+[D177](https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/defect-register-chat-surface.md).
+The artifact path left the pillar measured only where some other process had
+written the document first. CI did; nothing else did, and an audit through
+MA's chat door never could — so the pillar was unmeasured everywhere a person
+asked for it. From MA 3.7.0 every MA audit runs `secure-code-agent`. What this
+decision protected, and what holds now:
+
+- **The contract is unchanged.** MA still reads `security-pillar.json`,
+  schema v2, and still trusts none of its own numbers over it.
+- **No dependency edge.** MA 3.7.0 did add one, pinned below this tool's
+  current release, and within the day it downgraded a machine's install and put
+  this project's `mcp<2` extra beside MA's `mcp>=2`. MA 3.7.2 removed it: MA
+  runs whichever release is installed within a supported range and reports a
+  missing or out-of-range one. Both tools stay independently releasable, which
+  is the property the paragraph above named.
+- **This tool's trust boundary stays its own.** MA runs it as a child through
+  MA's single runner, passes no configuration of its own — an outside config is
+  trusted to name executables in the tree (D1) — and redirects every
+  report out of the audited tree. The one write it cannot redirect,
+  `.secure-code/history.jsonl`, is declared in MA's MCP write boundary.
+- **Network.** The scanners this tool orchestrates may reach the network; MA's
+  P1 already states that it does not police child analyzers' sockets and does
+  not transmit the audited source. That is the trade accepted here, stated
+  rather than assumed.
+- **`--security-pillar` is still supported** for pipelines that run this tool
+  as its own gated step, as MA's CI does; MA then uses that document and does
+  not run the tool again. A document sitting in the audited tree is no longer
+  read on its own authority.
 
 ## D4 — A failing security audit fails MA's CI
 

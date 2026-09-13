@@ -4,6 +4,18 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## Unreleased
+
+### Documentation — D3 amended: maintainability-agent runs this tool
+
+Decided 2026-09-13. maintainability-agent 3.7.0+ runs `secure-code-agent` on every audit
+instead of only reading a `security-pillar.json` something else wrote, because nothing
+outside CI ever wrote one. The `security-pillar.json` contract is unchanged, there is no
+package dependency between the tools (MA 3.7.2), and `--security-pillar` still hands MA
+a document from a pipeline that runs this tool itself. `docs/decisions.md` D3 and
+`docs/ma-integration.md` say so. This project's `[mcp]` extra pins `mcp<2` and must not
+share an environment with MA's MCP server.
+
 ## 0.12.1 — 2026-09-12
 
 **One contract, not two.** 0.12.0 shipped `--changed-only` and left six
