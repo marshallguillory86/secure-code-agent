@@ -7,10 +7,16 @@
 as `NotApplicable` so that a reader never mistakes silence for safety. This
 document is the other half: the artifact that makes that entry unnecessary.
 
-Settled in [D3](decisions.md): **this tool writes the artifact, MA reads it.**
-MA does not execute `secure-code-agent`. That keeps MA's analysis free of
-network access and tool acquisition, and keeps this tool's trust boundary —
-including [D1](decisions.md) — out of MA's.
+[D3](decisions.md), **amended 2026-09-13**: this tool writes the artifact, and
+**MA runs this tool to get it** on every audit (MA 3.7.0+). The contract below
+is unchanged. There is no package dependency between the two: MA runs the
+release installed beside it, within the range it supports, and reports a
+missing or unsupported one as the pillar's reason. MA passes no configuration
+of its own and redirects every report out of the audited tree; the one file
+this tool still writes there is its `.secure-code/history.jsonl` trend.
+
+Do not install this project's `[mcp]` extra into MA's environment: it pins
+`mcp<2`, and MA's MCP server needs `mcp>=2`.
 
 ## Producing it
 
@@ -25,8 +31,17 @@ other output is identical.
 
 ## Consuming it
 
+Every MA audit runs this tool itself — no flag needed:
+
 ```bash
-maintainability-agent . --security-pillar security-pillar.json
+maintainability-agent --root .
+```
+
+A pipeline that already runs this tool as its own gated step hands MA the
+document instead, and MA does not run the tool a second time:
+
+```bash
+maintainability-agent --root . --security-pillar security-pillar.json
 ```
 
 ## The contract
