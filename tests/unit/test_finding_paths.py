@@ -1,11 +1,11 @@
-"""A finding's path must be anchored to the tree that was audited.
+"""A finding's path must be anchored to the repository that was audited.
 
 Adapters disagree about what to report and always will: Bandit, Semgrep,
 RuboCop and the rest emit absolute paths, gitleaks emits paths relative to the
 repository it scanned. Neither is wrong and neither is ours to change.
 
 What *was* wrong is letting the difference through. Every consumer that asks
-"where is this?" — `is_excluded`, `is_test_path`, the axis split — resolves a
+"where is this?" — `is_excluded`, `is_test_path`, the axis split — resolved a
 relative path against the process working directory, so `relative_to(root)`
 raised and the answer came back "no". Silently, and fail-open:
 
@@ -15,11 +15,14 @@ raised and the answer came back "no". Silently, and fail-open:
     `requests` and six documentation examples in `flask` were scored as
     production secrets. Both repositories sat at F on that alone.
 
-The audit that found this ships the lint, per the standing rule: fixing the
-two adapters that happened to be wrong today would not stop the seventeenth
-adapter from being wrong tomorrow. `Scanner._make_finding` is the one
-constructor every adapter passes through, so the invariant is asserted there
-and against the registry as a whole.
+The first fix (D5) made every path absolute inside `Scanner._make_finding`.
+That anchored it, and chose the wrong convention: the adapters that build
+through SARIF ingest never passed through it, and an absolute path is no
+identity for anything compared across machines — a `paths:` suppression never
+matched, and a fingerprint changed with the checkout directory. The invariant
+is now repository-relative, set once by `findings.anchor` on everything the
+CLI collects. The end-to-end half, over every registered scanner, is
+`tests/integration/test_finding_paths_are_repository_relative.py`.
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ import pytest
 
 from secure_code_audit import scanners as registry
 from secure_code_audit.config import Config
+from secure_code_audit.findings import Finding, anchor, repository_path
 from secure_code_audit.git_tools import is_excluded, is_test_path
 from secure_code_audit.scanners.base import Scanner
 
@@ -66,19 +70,25 @@ def _finding(probe: _Probe, file_path: str):
 # ---------------------------------------------------------------------------
 
 
-def test_a_relative_path_is_anchored_to_the_audited_tree(tmp_path):
-    """gitleaks' shape. This is the case that was broken."""
-    finding = _finding(_probe(tmp_path), "tests/certs/server.key")
-
-    assert finding.file_path.is_absolute()
-    assert finding.file_path == tmp_path / "tests" / "certs" / "server.key"
+def _located(reported: str | Path, root: Path, scanned: Path | None = None) -> Path:
+    return repository_path(Path(reported), scanned=scanned or root, root=root)
 
 
-def test_an_absolute_path_inside_the_tree_is_left_alone(tmp_path):
-    """Bandit's shape. Rooting an already-rooted path must be a no-op."""
-    inside = tmp_path / "src" / "app.py"
+def test_a_relative_path_is_taken_relative_to_the_scanned_tree(tmp_path):
+    """gitleaks' `git` pass and SARIF ingest. The case D5 found broken."""
+    assert _located("tests/certs/server.key", tmp_path) == Path("tests/certs/server.key")
 
-    assert _finding(_probe(tmp_path), str(inside)).file_path == inside
+
+def test_an_absolute_path_inside_the_tree_becomes_repository_relative(tmp_path):
+    """Bandit's shape, and gitleaks' `dir` pass given an absolute root."""
+    assert _located(tmp_path / "src" / "app.py", tmp_path) == Path("src/app.py")
+
+
+def test_a_file_uri_is_a_path(tmp_path):
+    """An imported SARIF may spell its location as a URI."""
+    uri = (tmp_path / "src" / "my app.py").as_uri()
+
+    assert _located(uri, tmp_path) == Path("src/my app.py")
 
 
 def test_an_absolute_path_outside_the_tree_is_not_dragged_inside(tmp_path):
@@ -90,26 +100,55 @@ def test_an_absolute_path_outside_the_tree_is_not_dragged_inside(tmp_path):
     """
     elsewhere = Path("/somewhere/else/app.py")
 
-    assert _finding(_probe(tmp_path), str(elsewhere)).file_path == elsewhere
+    assert _located(elsewhere, tmp_path) == elsewhere
+
+
+def test_a_subdirectory_audit_is_relative_to_the_repository_root(tmp_path):
+    """`.scignore.yaml`, the baseline and `--changed-only` all live at the root."""
+    scanned = tmp_path / "api"
+
+    assert _located("handlers.py", tmp_path, scanned) == Path("api/handlers.py")
+    assert _located(scanned / "handlers.py", tmp_path) == Path("api/handlers.py")
 
 
 def test_a_file_target_anchors_to_its_directory(tmp_path):
     """Auditing one file still gives paths a directory to be relative to."""
-    single = tmp_path / "app.py"
-    single.write_text("x = 1\n", encoding="utf-8")
-    probe = _Probe()
-    probe.configure(single, Config())
-
-    assert _finding(probe, "helpers.py").file_path == tmp_path / "helpers.py"
+    assert _located("helpers.py", tmp_path, scanned=tmp_path) == Path("helpers.py")
 
 
-def test_an_unconfigured_adapter_does_not_invent_a_root(tmp_path):
-    """`configure()` is called by the CLI, not by the dataclass.
+def test_an_adapter_keeps_the_path_it_was_given(tmp_path):
+    """Anchoring is the CLI's job, once, not the constructor's.
 
-    A directly-constructed adapter has no target, and guessing one from the
+    A directly-constructed adapter has no root, and guessing one from the
     process working directory is the bug this module exists to prevent.
     """
+    assert _finding(_probe(tmp_path), "a/b.py").file_path == Path("a/b.py")
     assert _finding(_Probe(), "a/b.py").file_path == Path("a/b.py")
+
+
+def test_anchoring_recomputes_a_path_derived_fingerprint(tmp_path):
+    reported = _finding(_probe(tmp_path), str(tmp_path / "src" / "app.py"))
+
+    (anchored,) = anchor([reported], scanned=tmp_path, root=tmp_path)
+
+    assert anchored.file_path == Path("src/app.py")
+    assert anchored.fingerprint == Finding.make_fingerprint(
+        canonical_cwe=reported.canonical_cwe,
+        rule_id=reported.rule_id,
+        file_path=Path("src/app.py"),
+        code_snippet=reported.code_snippet,
+    )
+    assert anchored.legacy_fingerprint(tmp_path) == reported.fingerprint
+
+
+def test_anchoring_keeps_an_id_that_was_not_derived_from_the_path(tmp_path):
+    """Control findings carry ids such as `unavailable.bandit`."""
+    control = _Probe()._unavailable_finding(tmp_path)
+
+    (anchored,) = anchor([control], scanned=tmp_path, root=tmp_path)
+
+    assert anchored.file_path == Path(".")
+    assert anchored.fingerprint == control.fingerprint
 
 
 # ---------------------------------------------------------------------------
@@ -153,13 +192,13 @@ def test_double_star_includes_depth_zero(tmp_path, relative, pattern):
 # ---------------------------------------------------------------------------
 
 
-def test_every_registered_adapter_builds_findings_through_the_rooting_constructor():
+def test_every_registered_adapter_builds_findings_through_the_shared_constructor():
     """No adapter may construct a `Finding` directly.
 
-    `_make_finding` is where the standards mapping, the fingerprint and now
-    the path anchoring all happen. An adapter that bypasses it silently opts
-    out of all three, which is how a `Finding(...)` call in one adapter could
-    reintroduce this whole class of bug without failing a single test above.
+    `_make_finding` is where the standards mapping and the fingerprint happen.
+    An adapter that bypasses it silently opts out of both. Path anchoring is
+    no longer here — `findings.anchor` covers adapters and SARIF imports alike
+    — and the end-to-end test over the registry is what holds that.
     """
     import inspect
 
@@ -171,8 +210,8 @@ def test_every_registered_adapter_builds_findings_through_the_rooting_constructo
 
     assert offenders == [], (
         f"{offenders} construct Finding() directly instead of going through "
-        f"Scanner._make_finding(), so their paths are never anchored to the "
-        f"audited tree"
+        f"Scanner._make_finding(), so they skip the standards mapping and the "
+        f"shared fingerprint"
     )
 
 

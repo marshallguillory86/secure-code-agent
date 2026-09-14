@@ -35,6 +35,7 @@ from secure_code_audit.findings import (
     Confidence,
     Finding,
     Severity,
+    anchor,
     merge_corroborating,
 )
 from secure_code_audit.git_tools import find_repo_root, is_excluded, is_test_path, loc_under
@@ -349,9 +350,16 @@ def _do_audit(args: argparse.Namespace) -> int:
     all_findings.extend(imported)
     executions.extend(imported_executions)
 
+    # ----- one path convention, before anything reads a path -----
+    # Repository-relative from here on, whichever tool reported the finding.
+    # Suppressions, the baseline and every written output compare or publish
+    # this path, and none of them may depend on where the checkout lives.
+    scanned = target if target.is_dir() else target.parent
+    all_findings = anchor(all_findings, scanned=scanned, root=root)
+
     # ----- scan scope, enforced once -----
     own_artifacts = _own_artifacts(paths, cfg, root)
-    all_findings = _drop_excluded(all_findings, target, cfg, own_artifacts)
+    all_findings = _drop_excluded(all_findings, target, cfg, own_artifacts, root)
 
     # ----- one weakness, one finding -----
     # Before overrides and suppressions, so an operator writing either one
@@ -384,8 +392,14 @@ def _do_audit(args: argparse.Namespace) -> int:
             "report results that silently ignore it.\n"
         )
         return 1
-    all_findings = suppressions.apply(all_findings, sup_rules)
-    all_findings.extend(suppressions.expired_findings(sup_rules, suppression_path))
+    all_findings = suppressions.apply(all_findings, sup_rules, root)
+    all_findings.extend(
+        anchor(
+            suppressions.expired_findings(sup_rules, suppression_path),
+            scanned=scanned,
+            root=root,
+        )
+    )
 
     # ----- severity threshold filter -----
     threshold = Severity.from_string(args.severity_threshold)
@@ -395,7 +409,7 @@ def _do_audit(args: argparse.Namespace) -> int:
     baseline_path = _under_root(root, args.baseline or cfg.outputs["baseline_path"])
     baseline = baseline_mod.load(baseline_path)
     baseline_state = baseline_mod.state(baseline_path)
-    all_findings = baseline_mod.mark_new(all_findings, baseline)
+    all_findings = baseline_mod.mark_new(all_findings, baseline, root)
 
     # ----- scoring -----
     # The test tree is reported, not scored. A project graded on its test
@@ -423,9 +437,13 @@ def _do_audit(args: argparse.Namespace) -> int:
         # so this changes where a finding is *reported*, not the grade.
         if finding.category is Category.DEPENDENCIES:
             return "primary"
-        if is_test_path(finding.file_path, root_for_tests, cfg.test_patterns):
+        # Joined onto the repository root: the patterns are relative to the
+        # scan target, which is not the repository root for a subdirectory
+        # audit.
+        located = root / finding.file_path
+        if is_test_path(located, root_for_tests, cfg.test_patterns):
             return "test tree"
-        if is_test_path(finding.file_path, root_for_tests, cfg.docs_patterns):
+        if is_test_path(located, root_for_tests, cfg.docs_patterns):
             return "documentation"
         return "primary"
 
@@ -516,7 +534,7 @@ def _do_audit(args: argparse.Namespace) -> int:
     # forever.
     untriaged = 0
     if baseline_state is baseline_mod.State.ABSENT:
-        tiers = triage.partition(all_findings, lambda f: renderers.axis_of(f, axes))
+        tiers = triage.partition(all_findings, lambda f: renderers.axis_of(f, axes), root)
         untriaged = len(tiers[triage.Tier.FIX]) + len(tiers[triage.Tier.REVIEW])
     verdict = build_verdict(score, cfg.gates, coverage, untriaged)
     if changed_note is not None:
@@ -549,7 +567,7 @@ def _do_audit(args: argparse.Namespace) -> int:
         root,
     )
     if args.bump_baseline:
-        baseline_mod.write(baseline_path, all_findings, baseline)
+        baseline_mod.write(baseline_path, all_findings, baseline, root)
 
     # ----- trend -----
     # Appended before the verification branch returns, so a verify run is
@@ -798,6 +816,7 @@ def _drop_excluded(
     target: Path,
     cfg: config_mod.Config,
     own_artifacts: frozenset[Path] = frozenset(),
+    repository: Path | None = None,
 ) -> list[Finding]:
     """Enforce `paths.exclude_patterns` on findings, not just on file discovery.
 
@@ -820,14 +839,19 @@ def _drop_excluded(
     dropping "bandit could not run" because the root matched a pattern would
     turn a failed scanner back into a silent one — the defect this whole
     project exists to prevent.
+
+    Finding paths are repository-relative (`findings.anchor`), so each is
+    joined onto `repository` before it is compared with anything on disk.
+    Resolving it bare would anchor it to the process working directory.
     """
     if not cfg.exclude_patterns and not own_artifacts:
         return findings
 
     root = target if target.is_dir() else target.parent
+    repository = repository or root
     kept: list[Finding] = []
     for finding in findings:
-        path = finding.file_path
+        path = repository / finding.file_path
         is_control = path in (target, root)
         if is_control:
             kept.append(finding)
@@ -1297,7 +1321,7 @@ def _restrict_to_changed(
 
     def touched(finding: Finding) -> bool:
         try:
-            return finding.file_path.resolve() in absolute
+            return (root / finding.file_path).resolve() in absolute
         except OSError:
             return False
 

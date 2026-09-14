@@ -4,7 +4,66 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
-## Unreleased
+## 0.12.2 — 2026-09-14
+
+**A reviewed suppression suppresses.** `paths:` entries in `.scignore.yaml` never
+matched Bandit, gitleaks, Semgrep or any other adapter-built finding, so findings an
+operator had reviewed reported as live — five criticals on `maintainability-agent`.
+The defect was not in any one scanner: `Finding.file_path` had no single convention.
+D20 gives it one.
+
+### Fixed — finding paths are repository-relative, set in one place (D20)
+
+`Scanner._rooted` made adapter-built paths absolute, while Checkov, Trivy and
+`--sarif-import` findings stayed relative. `findings.anchor` now converts every
+finding once, as the CLI collects it: a POSIX path relative to the repository root, or
+absolute for a location outside it. `_rooted` is gone.
+
+What that fixes, consumer by consumer:
+
+- **Suppressions.** A repository-relative `paths:` glob matches, whatever form the
+  scan root was given in (`/abs/repo` or `.`).
+- **Fingerprints and baselines.** The fingerprint hashed the absolute path, so the
+  same tree at two locations gave different ids for every finding, and a baseline
+  recorded on one machine matched nothing in CI. The id no longer depends on where the
+  checkout lives.
+- **Outputs.** JSON `file_path`, SARIF `artifactLocation.uri`, the Markdown report,
+  the work order and the baseline no longer publish a machine's directory layout.
+- **`--changed-only`, own-artifact exclusion, `--verify-against` scope.** These
+  resolved Checkov's and Trivy's relative paths against the process working
+  directory. They join onto the root now.
+- **Subdirectory audits.** Test and documentation patterns are relative to the scan
+  target, and a finding is classified against it.
+
+Tested over every registered scanner, through the real CLI pipeline, in both path
+shapes; plus real Bandit and gitleaks runs against an absolute and a `.` target. Each
+compatibility rule and each root join was mutated and caught.
+
+### Migration — nothing to do, and one thing worth doing
+
+**Fingerprint values change** for every finding whose path used to be absolute:
+every adapter that builds findings through `Scanner._make_finding` — Bandit, gitleaks,
+Semgrep, RuboCop, njsscan, gosec, hadolint, OSV-Scanner, pip-audit, npm audit,
+TruffleHog, Scorecard and the built-in rules. Findings that were already relative to
+the scan root keep their ids; Checkov's were, as observed on `maintainability-agent`.
+JSON reports, SARIF and the Markdown report show the new ids and relative paths. What
+was already recorded keeps working:
+
+- **Baselines** written by 0.12.1 or earlier still match. The old id is accepted
+  alongside the new one. Run `--bump-baseline` once to rewrite entries under the
+  portable id, which keeps each entry's `first_seen`, so the baseline also matches
+  on other machines and in CI.
+- **`fingerprint:` pins** copied from an older report still match. New pins should
+  come from a 0.12.2 report.
+- **`paths:` globs written with a leading `*/`** to absorb the absolute prefix
+  still match. Plain repository-relative globs now work too, and are the form to
+  write.
+- **`file:` entries**, relative or absolute, still match.
+
+Two things do not carry over. A `--verify-against` before-report written by 0.12.1
+or earlier compares fingerprints, so re-run the before audit on 0.12.2. And a glob
+that relied on the checkout's own directory names, such as `*/my-clone/src/*`, no
+longer matches — it only ever matched on that one machine.
 
 ### Documentation — D3 amended: maintainability-agent runs this tool
 

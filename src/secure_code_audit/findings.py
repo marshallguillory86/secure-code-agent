@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import enum
 import hashlib
+import os
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 
 class Severity(str, enum.Enum):
@@ -166,7 +168,9 @@ class Finding:
         Inputs:
           - canonical_cwe falls back to rule_id when no CWE is mapped (so
             unmapped findings still remain distinct per rule).
-          - file_path is POSIX-normalized for cross-platform stability.
+          - file_path is POSIX-normalized for cross-platform stability, and
+            repository-relative once `anchor` has run, so the id does not
+            depend on where the checkout lives.
           - code_snippet is normalized (whitespace collapsed, max 512 chars)
             so a reformat-only edit doesn't break the fingerprint.
         """
@@ -175,6 +179,105 @@ class Finding:
         snippet_norm = " ".join((code_snippet or "").split())[:512]
         material = f"{key}|{path}|{snippet_norm}".encode()
         return hashlib.sha256(material).hexdigest()[:16]
+
+    def legacy_fingerprint(self, root: Path) -> str:
+        """The id 0.12.1 and earlier gave this finding, when paths were absolute.
+
+        Those releases fingerprinted the absolute path, so a baseline or a
+        `fingerprint:` suppression written by one of them holds this value.
+        Read, never written: accepting it keeps an existing baseline matching
+        where it matched before, and `--bump-baseline` rewrites it in the
+        portable form.
+        """
+        return Finding.make_fingerprint(
+            canonical_cwe=self.canonical_cwe,
+            rule_id=self.rule_id,
+            file_path=root / self.file_path,
+            code_snippet=self.code_snippet,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Location
+# ---------------------------------------------------------------------------
+
+
+def repository_path(path: Path, *, scanned: Path, root: Path) -> Path:
+    """Where a scanner-reported path is, relative to the repository root.
+
+    Scanners do not agree. Bandit, Semgrep and gitleaks' `dir` pass report
+    absolute paths; gitleaks' `git` pass and the SARIF-ingesting adapters
+    report paths relative to the tree they were given; an imported SARIF may
+    spell a location as a `file://` URI. A relative report is taken as
+    relative to `scanned`, the directory the scanner was pointed at.
+
+    A location outside `root` keeps its absolute path. An imported SARIF may
+    legitimately name another machine's checkout, and inventing a relative
+    path for it would place a finding at a file that is not there.
+    """
+    text = str(path)
+    if text.startswith("file:"):
+        path = Path(unquote(urlparse(text).path))
+    absolute = path if path.is_absolute() else scanned / path
+    for base, candidate in (
+        (root, Path(os.path.normpath(absolute))),
+        (root.resolve(), absolute.resolve()),
+    ):
+        try:
+            return Path(candidate.relative_to(base).as_posix())
+        except ValueError:
+            continue
+    return absolute
+
+
+def anchor(findings: Iterable[Finding], *, scanned: Path, root: Path) -> list[Finding]:
+    """Make every finding's path repository-relative. The one place that does.
+
+    **The invariant:** after this, `Finding.file_path` is a POSIX path
+    relative to the repository root, or an absolute path for a location
+    outside it. A consumer that reads the file joins it back onto the root;
+    nothing resolves it against the process working directory.
+
+    It used to be absolute, set by `Scanner._rooted` inside the adapter
+    constructor (D5), because consumers resolved relative paths against the
+    working directory. That left two defects. The adapters that build
+    findings through SARIF ingest never passed through `_rooted`, so
+    `file_path` had two conventions depending on the tool. And an absolute
+    path is the wrong identity for anything compared across machines:
+    `SuppressionRule.matches` ran a repository-relative `paths:` glob against
+    `/Users/.../.github/workflows/x.yml`, which cannot match, so reviewed
+    suppressions were silently ignored; and the fingerprint hashed the same
+    absolute path, so a baseline made on a laptop matched nothing in CI.
+
+    Called by the CLI on everything scanners and SARIF imports return, before
+    any consumer sees it. The fingerprint is recomputed only when it was
+    derived from the path being replaced; control findings carry ids of their
+    own, such as `unavailable.bandit`, and keep them.
+    """
+    out: list[Finding] = []
+    for finding in findings:
+        located = repository_path(finding.file_path, scanned=scanned, root=root)
+        if located == finding.file_path:
+            out.append(finding)
+            continue
+        derived = finding.fingerprint == Finding.make_fingerprint(
+            canonical_cwe=finding.canonical_cwe,
+            rule_id=finding.rule_id,
+            file_path=finding.file_path,
+            code_snippet=finding.code_snippet,
+        )
+        fingerprint = (
+            Finding.make_fingerprint(
+                canonical_cwe=finding.canonical_cwe,
+                rule_id=finding.rule_id,
+                file_path=located,
+                code_snippet=finding.code_snippet,
+            )
+            if derived
+            else finding.fingerprint
+        )
+        out.append(replace(finding, file_path=located, fingerprint=fingerprint))
+    return out
 
 
 # ---------------------------------------------------------------------------

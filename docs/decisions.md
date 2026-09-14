@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.1 — 2026-09-11.** The decision register. D1–D19.
+> Status: **v0.12.2 — 2026-09-14.** The decision register. D1–D20.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -32,6 +32,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D17 | Calibrated against both populations; `secrets` is a count, and three bands are unmeasurable | 2026-09-11 | Accepted — closes D5 |
 | D18 | Our output is never our input; a variable reference is not a credential | 2026-09-11 | Accepted |
 | D19 | `scoring_model`: the instrument says when it changed, and a digest holds it honest | 2026-09-11 | Accepted — schema v2 |
+| D20 | A finding's path is repository-relative, set in one place | 2026-09-14 | Accepted — replaces D5's absolute-path convention |
 
 ---
 
@@ -214,7 +215,9 @@ every gitleaks finding scored as primary-tree wherever it lived — four
 `tests/certs/*.key` files held `requests` at F, six documentation examples held
 `flask` at F. Separately, `**/` did not match at depth zero, so `**/*_test.go`
 never matched a root-level `context_test.go` and three of Gin's four
-"production" secrets were test fixtures. Gin: **F → A+**.
+"production" secrets were test fixtures. Gin: **F → A+**. (The fix made every
+path absolute. D20 replaces that with repository-relative paths, set once,
+after absolute paths turned out to break suppressions and baseline identity.)
 
 **The inputs are now all answered.** The primary tree is scored; the test tree
 and documentation are reported beside it and gated where the operator names
@@ -1219,3 +1222,97 @@ still governs any future bump where a consumer cannot fall back.
 The v1→v2 transition itself breaks the series once, because the key changes
 shape. That break is honest: it is the boundary where the instrument's
 self-description changed, and it happens once.
+
+---
+
+## D20 — A finding's path is repository-relative, set in one place
+
+**Status:** Accepted · 2026-09-14 · replaces the absolute-path convention D5 adopted · reported from `maintainability-agent`
+
+**Context.** `maintainability-agent` runs this tool with an absolute scan
+root. Its `.scignore.yaml` held a reviewed `gitleaks.curl-auth-user` entry
+scoped by `paths:` to two workflow files, and all five findings came back
+`suppressed: false` — live criticals behind a suppression someone had
+reviewed. Bandit findings did the same. Checkov findings on the same run
+matched their `paths:` entries.
+
+The cause was not gitleaks. `Finding.file_path` had no single convention. D5
+fixed a fail-open exclusion by making paths absolute in
+`Scanner._rooted`, inside the adapter constructor. The two adapters that
+build findings through SARIF ingest — Checkov and Trivy — never passed
+through it and stayed relative, and so did `--sarif-import`. Consumers then
+disagreed about what they were holding:
+
+- `SuppressionRule.matches` ran a repository-relative `paths:` glob against
+  `/Users/.../.github/workflows/x.yml`. It cannot match. This repository's own
+  `.scignore.yaml` shows the workaround that grew around it: every glob opened
+  with `*/` to swallow the checkout prefix.
+- `Finding.make_fingerprint` hashed the absolute path. An identical tree at two
+  locations produced different fingerprints for every finding, so a baseline or
+  a `fingerprint:` suppression recorded on one machine matched nothing on
+  another, or in CI.
+- SARIF `artifactLocation.uri`, the Markdown report and the baseline's
+  `file_path` published one machine's directory layout.
+- `--changed-only`, the own-artifact exclusion and `--verify-against` scope
+  resolved relative paths — Checkov's and Trivy's — against the process working
+  directory, which is D5's defect arriving by the other door.
+
+**Decision.** After intake, `Finding.file_path` is a POSIX path relative to the
+repository root (`find_repo_root(target)`, the root `.scignore.yaml`, the
+baseline and `--changed-only` already use), or an absolute path for a location
+outside it. `findings.anchor` sets it, once, on everything scanners and SARIF
+imports return, before any consumer runs. A relative report is taken as
+relative to the directory the scanner was pointed at; a `file://` URI is a
+path. The fingerprint is recomputed only when it was derived from the path
+being replaced, so control ids such as `unavailable.bandit` survive.
+`Scanner._rooted` is removed: a second place doing path work is how two
+conventions came to coexist.
+
+Every consumer that reads the disk joins the path onto the root: the D18
+line read-back, the exclusion and own-artifact check, the test and
+documentation classifier (whose patterns are relative to the *target*, not the
+root), `--changed-only`, and `--verify-against` scope.
+
+**Nothing users recorded stops meaning what it meant.**
+
+- A `paths:` glob is also tried against the path with a leading `/`, so
+  `*/src/app.py` matches `src/app.py`. That keeps every `*/` entry working
+  without making a match depend on where the checkout lives — which matching
+  against the absolute path would have done, letting `*/tests/*` suppress an
+  entire repository cloned under a directory called `tests`.
+- An absolute `file:` still matches the file it names.
+- A baseline entry or a `fingerprint:` pin recorded under the absolute-path id
+  is accepted through `Finding.legacy_fingerprint(root)`. That id only ever
+  matched a checkout at the same path, so accepting it matches nothing it did
+  not match before. It is read and never written: `--bump-baseline` rewrites
+  entries under the portable id and keeps their `first_seen`.
+
+**Rejected: keep paths absolute and relativize at each boundary.** That is
+the fingerprint, suppressions, JSON, SARIF, Markdown, the baseline and the
+work order — seven places to pass a root through, and the next output added is
+the eighth that forgets. One conversion at intake makes the portable form the
+only one downstream code can see.
+
+**Rejected: normalize per adapter.** It is what D5 did, and two adapters were
+outside it within the same release. The test population is every registered
+scanner, through the real CLI pipeline, reporting both path shapes; mutating
+`anchor` to cover gitleaks alone fails it.
+
+**Rejected: break old baselines and document it.** An upgrade that reports
+every acknowledged finding as new trips `fail_on_new` on a tree nobody
+changed. That is a gate failing for a reason that is not the repository, and a
+migration note does not make it one.
+
+**Not a `scoring_model` change (D19).** No weight, normalizer, band or rule
+changed, and `test_scoring_drift.py` holds its digest. Condition moves only
+where an operator's configuration now takes the effect it always claimed — a
+suppression that matches, a test pattern that classifies a subdirectory audit
+correctly — and where a Checkov or Trivy finding and another scanner's finding
+at one line with one CWE now corroborate instead of counting twice, because
+their paths finally compare equal.
+
+**Not included.** `paths: ["tests/"]`, the form README, `design.md` and the
+skill all document, has never matched anything: `fnmatch` gives a trailing
+slash no directory meaning. `exclude_patterns` does, through
+`git_tools._matches`. Sharing that matcher would widen what an existing entry
+suppresses, so it is a separate decision rather than a side effect of this one.

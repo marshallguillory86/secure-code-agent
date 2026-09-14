@@ -17,7 +17,7 @@ Entry schema (.scignore.yaml)::
         ...
       expires: 2027-08-01                  # required; max 365 days out
       file: api/tests/x.py                 # optional path (suffix match)
-      paths: ["api/**"]                    # optional fnmatch patterns
+      paths: ["api/**"]                    # optional fnmatch patterns, repository-relative
       fingerprint: 0aaa689f8a967d8c        # optional; 16 hex chars, from the report
       line: 18                             # optional; positive integer
 
@@ -66,17 +66,36 @@ class SuppressionRule:
     fingerprint: str | None = None
     line: int | None = None
 
-    def matches(self, finding: Finding) -> bool:
+    def matches(self, finding: Finding, root: Path | None = None) -> bool:
+        """Does this entry cover `finding`?
+
+        `finding.file_path` is repository-relative (`findings.anchor`), which is
+        what an entry names. Through 0.12.1 it was absolute for most scanners, so
+        a `paths:` glob written relative never matched and entries grew a `*/`
+        prefix to swallow the checkout directory. Those entries keep working
+        without depending on where the checkout lives: a glob is also tried
+        against the path with a leading `/`, and `*/src/app.py` matches
+        `/src/app.py`. `root` lets an absolute `file:` and a fingerprint
+        recorded by an earlier release keep matching the finding they named.
+        """
         if self.rule_id != "*" and self.rule_id != finding.rule_id:
             return False
         rel = finding.file_path.as_posix()
-        if self.file is not None and self.file != rel and not rel.endswith(self.file):
+        if self.file is not None and not self._names_file(rel, finding, root):
             return False
-        if self.fingerprint is not None and self.fingerprint != finding.fingerprint:
+        if self.fingerprint is not None and self.fingerprint not in _identities(finding, root):
             return False
         if self.line is not None and self.line != finding.line_start:
             return False
-        return not self.paths or any(fnmatch.fnmatch(rel, p) for p in self.paths)
+        return not self.paths or any(
+            fnmatch.fnmatch(rel, p) or fnmatch.fnmatch(f"/{rel}", p) for p in self.paths
+        )
+
+    def _names_file(self, rel: str, finding: Finding, root: Path | None) -> bool:
+        if self.file == rel or rel.endswith(self.file):
+            return True
+        named = Path(self.file)
+        return root is not None and named.is_absolute() and named == root / finding.file_path
 
     @property
     def expired(self) -> bool:
@@ -182,15 +201,26 @@ def load(path: Path) -> tuple[list[SuppressionRule], list[str]]:
     return rules, errors
 
 
-def apply(findings: list[Finding], rules: list[SuppressionRule]) -> list[Finding]:
+def _identities(finding: Finding, root: Path | None) -> set[str]:
+    """The fingerprint, plus the one 0.12.1 and earlier recorded for it."""
+    if root is None:
+        return {finding.fingerprint}
+    return {finding.fingerprint, finding.legacy_fingerprint(root)}
+
+
+def apply(
+    findings: list[Finding], rules: list[SuppressionRule], root: Path | None = None
+) -> list[Finding]:
     """Mark matching findings as suppressed (set suppressed=True + note).
     Expired rules do NOT suppress — but generate their own findings via
-    `expired_findings()`. Returns a new list (frozen dataclass replace)."""
+    `expired_findings()`. Returns a new list (frozen dataclass replace).
+
+    `root` is the repository root the finding paths are relative to."""
     from dataclasses import replace
 
     out: list[Finding] = []
     for f in findings:
-        active = next((r for r in rules if not r.expired and r.matches(f)), None)
+        active = next((r for r in rules if not r.expired and r.matches(f, root)), None)
         if active is not None:
             out.append(
                 replace(

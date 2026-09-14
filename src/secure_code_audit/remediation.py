@@ -181,7 +181,7 @@ def generate(
     name-match the same billing, so an agent working top-to-bottom spent its
     care on noise. See `triage.py` for what lands where and why.
     """
-    tiers = triage.partition(findings, axis_of)
+    tiers = triage.partition(findings, axis_of, root)
     if not any(tiers.values()):
         return (
             "# Security remediation — no actionable findings\n\n"
@@ -229,7 +229,8 @@ def generate(
         listed = review[:_MAX_REVIEW_LINES]
         parts.append(
             "\n".join(
-                _review_line(i, f, root, triage.reason_for(f)) for i, f in enumerate(listed, 1)
+                _review_line(i, f, root, triage.reason_for(f, root))
+                for i, f in enumerate(listed, 1)
             )
             + "\n"
         )
@@ -307,11 +308,11 @@ def _footer() -> str:
 def _display_path(path: Path, root: Path | None) -> str:
     """Repository-relative, because a work order gets pasted somewhere else.
 
-    Finding paths are absolute by design — every consumer that asks "where
-    is this?" needs them anchored to the audited tree. But an absolute path
-    is the wrong thing to hand a person or an agent: it names one machine's
-    checkout, and `/private/tmp/.../scratchpad/wo/src/app.py:13` is not a
-    location anyone can act on.
+    Finding paths are repository-relative already (`findings.anchor`), and
+    pass straight through. An absolute one is relativized where it can be:
+    an absolute path is the wrong thing to hand a person or an agent, since
+    `/private/tmp/.../scratchpad/wo/src/app.py:13` names one machine's
+    checkout rather than a location anyone can act on.
     """
     if root is None or not path.is_absolute():
         return path.as_posix()

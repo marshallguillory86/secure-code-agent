@@ -28,6 +28,7 @@ from __future__ import annotations
 import enum
 import re
 from collections.abc import Iterable
+from pathlib import Path
 
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 
@@ -156,7 +157,7 @@ def _contains_a_literal_credential(text: str) -> bool:
     return False
 
 
-def _line_of(finding: Finding) -> str | None:
+def _line_of(finding: Finding, root: Path | None = None) -> str | None:
     """Read back the source line a secrets finding points at.
 
     Gitleaks is run with `--redact`, so the matched text never reaches the
@@ -168,10 +169,14 @@ def _line_of(finding: Finding) -> str | None:
     is gone, the path is a directory, the line number is out of range, or the
     finding came out of git history and the working tree has moved on. Every
     one of those must leave the finding where it was.
+
+    `root` is the repository root the finding's path is relative to. Without
+    it a relative path would be read from the process working directory, and
+    the demotion would depend on where the CLI was invoked.
     """
-    path = finding.file_path
-    if path is None or finding.line_start is None or finding.line_start < 1:
+    if finding.file_path is None or finding.line_start is None or finding.line_start < 1:
         return None
+    path = root / finding.file_path if root is not None else finding.file_path
     try:
         if not path.is_file():
             return None
@@ -186,7 +191,7 @@ def _line_of(finding: Finding) -> str | None:
     return None
 
 
-def _is_a_reference_not_a_value(finding: Finding) -> bool:
+def _is_a_reference_not_a_value(finding: Finding, root: Path | None = None) -> bool:
     """Is the flagged credential a variable name rather than a credential?
 
     `gitleaks.curl-auth-user` fires CRITICAL on
@@ -210,7 +215,7 @@ def _is_a_reference_not_a_value(finding: Finding) -> bool:
     """
     if finding.category is not Category.SECRETS:
         return False
-    line = _line_of(finding)
+    line = _line_of(finding, root)
     if line is None:
         return False
     if not _VARIABLE_REFERENCE.search(line):
@@ -221,7 +226,7 @@ def _is_a_reference_not_a_value(finding: Finding) -> bool:
     return not _contains_a_literal_credential(without_references)
 
 
-def tier_of(finding: Finding, axis: str = "primary") -> Tier:
+def tier_of(finding: Finding, axis: str = "primary", root: Path | None = None) -> Tier:
     """Classify one finding.
 
     Order matters. Where a finding *lives* outweighs what rule found it: a
@@ -235,19 +240,19 @@ def tier_of(finding: Finding, axis: str = "primary") -> Tier:
         if _looks_like_a_credential(finding.message):
             return Tier.FIX
         return Tier.REVIEW
-    if _is_a_reference_not_a_value(finding):
+    if _is_a_reference_not_a_value(finding, root):
         return Tier.REVIEW
     if finding.confidence is Confidence.LOW:
         return Tier.REVIEW
     return Tier.FIX
 
 
-def reason_for(finding: Finding) -> str | None:
+def reason_for(finding: Finding, root: Path | None = None) -> str | None:
     """Why a finding was demoted, in words the reader can check."""
     measured = LOW_PRECISION.get(finding.rule_id)
     if measured:
         return measured
-    if _is_a_reference_not_a_value(finding):
+    if _is_a_reference_not_a_value(finding, root):
         return (
             "The line holds a variable reference, not a credential — a name "
             "standing in for a value kept elsewhere, which is the recommended "
@@ -265,7 +270,7 @@ def reason_for(finding: Finding) -> str | None:
 
 
 def partition(
-    findings: Iterable[Finding], axis_of=lambda _f: "primary"
+    findings: Iterable[Finding], axis_of=lambda _f: "primary", root: Path | None = None
 ) -> dict[Tier, list[Finding]]:
     """Group actionable findings by tier, worst-first within each.
 
@@ -277,7 +282,7 @@ def partition(
     for finding in findings:
         if finding.suppressed or finding.severity is Severity.INFORMATIONAL:
             continue
-        out[tier_of(finding, axis_of(finding))].append(finding)
+        out[tier_of(finding, axis_of(finding), root)].append(finding)
     for group in out.values():
         group.sort(key=lambda f: (-f.severity.rank, f.file_path.as_posix(), f.line_start))
     return out

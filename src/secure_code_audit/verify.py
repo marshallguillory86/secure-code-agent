@@ -114,8 +114,14 @@ def measure_scope(
 
     cited: set[str] = set()
     for finding in before:
+        # Joined onto the root first. A repository-relative path resolved bare
+        # is anchored to the working directory, which names the wrong file
+        # whenever the CLI runs from a subdirectory. A before-report from
+        # 0.12.1 or earlier holds absolute paths, and joining leaves those as
+        # they are.
         try:
-            cited.add(finding.file_path.resolve().relative_to(root.resolve()).as_posix())
+            located = (root / finding.file_path).resolve()
+            cited.add(located.relative_to(root.resolve()).as_posix())
         except (ValueError, OSError):
             cited.add(finding.file_path.as_posix())
 
@@ -323,7 +329,7 @@ def compare(
     suppressed_now |= silenced_inline
 
     def _asked_about(finding: Finding) -> bool:
-        return triage.tier_of(finding, axis_of(finding)) is not triage.Tier.ACCEPT
+        return triage.tier_of(finding, axis_of(finding), root) is not triage.Tier.ACCEPT
 
     fixed = [f for fp, f in old.items() if fp not in new and fp not in suppressed_now]
     still_open = [f for fp, f in old.items() if fp in new]
