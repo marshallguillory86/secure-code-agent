@@ -1404,6 +1404,23 @@ Nothing is hidden. The record, the JSON report, the Markdown report and the work
 order all still carry every finding. What changes is which of them becomes
 someone's alert.
 
+**What the build fails on stays in the upload.** A secret on the test-tree or
+documentation axis is marked suppressed in the record, and the gate still
+escalates it from any axis (`scoring.GATED_FROM_ANY_AXIS`). Omitting it would
+fail a build on a finding the Security tab does not show. The upload therefore
+leaves out a side-axis result only when its category is not escalated, and keeps
+an escalated one without the suppression marker. An operator's reviewed
+`.scignore.yaml` entry is left out whatever its category: it carries a reason and
+an expiry, and returns as a live critical finding when it lapses. Found by asking
+the question of the first version of this decision, which omitted them; verified
+with gitleaks against a committed secret under `tests/`.
+
+**What this does not settle.** Which files count as test tree or documentation
+is `test_patterns` and `docs_patterns`, and their defaults are broad —
+`examples/`, `**/*.txt`. A finding filed there by mistake was already unscored
+and tiered §ACCEPT; now it is also not an alert. The classification is the thing
+to fix if it is wrong, and this decision does not change it.
+
 **The existing alerts close themselves.** Code scanning closes an alert when the
 next analysis in its category no longer contains it, so the first upload of the
 code-scanning file on the default branch retires the test-tree alerts rather than

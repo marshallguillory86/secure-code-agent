@@ -19,6 +19,10 @@ scanning opens an alert for every uploaded result and does not act on that field
 
 - New `--code-scanning-sarif-output PATH` (`outputs.code_scanning_sarif_path`): the same
   SARIF without results that carry `suppressions`. Off unless asked for.
+- **Except what fails the build.** A secret in the test tree or documentation is still
+  uploaded, because the gate escalates secrets from any axis and a failing build must show
+  the finding that failed it. Reviewed `.scignore.yaml` entries are left out whatever the
+  category; they return as live critical findings when they expire.
 - The GitHub Action uploads `secure-code.code-scanning.sarif` instead of the full SARIF, and
   exposes it as the `code-scanning-sarif-path` output. The full SARIF is still written to
   `sarif-output` and kept in the report artifact.
