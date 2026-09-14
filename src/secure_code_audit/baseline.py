@@ -85,9 +85,18 @@ def load(path: Path) -> dict[str, BaselineEntry]:
     return entries
 
 
-def write(path: Path, findings: Iterable[Finding], existing: dict[str, BaselineEntry]) -> None:
+def write(
+    path: Path,
+    findings: Iterable[Finding],
+    existing: dict[str, BaselineEntry],
+    root: Path | None = None,
+) -> None:
     """Rewrite the baseline file. Existing entries' first_seen + bumped_by
-    are preserved so a baseline bump only mutates net-new entries."""
+    are preserved so a baseline bump only mutates net-new entries.
+
+    Entries are written under the repository-relative fingerprint. An entry
+    an earlier release recorded under the absolute-path fingerprint keeps its
+    history and is rewritten in the portable form."""
     now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     operator = _git_user_email()
 
@@ -95,7 +104,7 @@ def write(path: Path, findings: Iterable[Finding], existing: dict[str, BaselineE
     for f in findings:
         if f.suppressed:
             continue
-        prev = existing.get(f.fingerprint)
+        prev = _entry_for(f, existing, root)
         entries[f.fingerprint] = {
             "rule_id": f.rule_id,
             "severity": f.severity.value,
@@ -121,16 +130,34 @@ def write(path: Path, findings: Iterable[Finding], existing: dict[str, BaselineE
     )
 
 
-def mark_new(findings: list[Finding], baseline: dict[str, BaselineEntry]) -> list[Finding]:
+def mark_new(
+    findings: list[Finding], baseline: dict[str, BaselineEntry], root: Path | None = None
+) -> list[Finding]:
     """Set is_new=True on findings whose fingerprint is not in the baseline.
     Returns a new list with mutated Finding objects (frozen dataclass →
-    replace)."""
+    replace).
+
+    **A baseline from 0.12.1 or earlier still matches.** Those releases
+    fingerprinted absolute paths, and an upgrade must not report every
+    acknowledged finding as new and trip `fail_on_new` on a tree nobody
+    changed. With `root`, the fingerprint those releases would have recorded
+    is accepted too. It only ever matched a checkout at that same path, so it
+    matches nothing it did not match before."""
     from dataclasses import replace
 
     out: list[Finding] = []
     for f in findings:
-        out.append(replace(f, is_new=f.fingerprint not in baseline))
+        out.append(replace(f, is_new=_entry_for(f, baseline, root) is None))
     return out
+
+
+def _entry_for(
+    finding: Finding, baseline: dict[str, BaselineEntry], root: Path | None
+) -> BaselineEntry | None:
+    entry = baseline.get(finding.fingerprint)
+    if entry is None and root is not None:
+        entry = baseline.get(finding.legacy_fingerprint(root))
+    return entry
 
 
 def _git_user_email() -> str:
