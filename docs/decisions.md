@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.2 — 2026-09-14.** The decision register. D1–D20.
+> Status: **v0.12.3 — 2026-09-14.** The decision register. D1–D21.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -33,6 +33,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D18 | Our output is never our input; a variable reference is not a credential | 2026-09-11 | Accepted |
 | D19 | `scoring_model`: the instrument says when it changed, and a digest holds it honest | 2026-09-11 | Accepted — schema v2 |
 | D20 | A finding's path is repository-relative, set in one place | 2026-09-14 | Accepted — replaces D5's absolute-path convention |
+| D21 | A suppression glob means what an exclude pattern means | 2026-09-14 | Accepted |
 
 ---
 
@@ -1316,3 +1317,54 @@ skill all document, has never matched anything: `fnmatch` gives a trailing
 slash no directory meaning. `exclude_patterns` does, through
 `git_tools._matches`. Sharing that matcher would widen what an existing entry
 suppresses, so it is a separate decision rather than a side effect of this one.
+It was taken the same day as D21.
+
+---
+
+## D21 — A suppression glob means what an exclude pattern means
+
+**Status:** Accepted · 2026-09-14 · closes the item D20 left out
+
+**Context.** One configuration had two path-pattern languages. `exclude_patterns`,
+`test_patterns` and `docs_patterns` go through `git_tools._matches`, where a
+trailing `/` means "this directory, at any depth", a bare name matches at any
+depth, `**/` includes the root, and directory components glob — each of those
+found inert once and fixed (`test_exclude_patterns_are_live.py`).
+`.scignore.yaml` `paths:` used bare `fnmatch`, which has none of them.
+
+The cost was the documented example. README, `design.md` and the shipped skill
+all show `paths: ["tests/"]` for Bandit's `B101`, and it matched no finding
+under either path convention: `fnmatch` read `tests/` as a file literally named
+`tests/`. Every operator who copied it kept their test tree's `assert`s live. It
+is the defect D5 and D20 each closed a layer at a time: a setting that reads as
+intent, never errors, and hides nothing.
+
+**Decision.** `paths:` globs are matched by `git_tools.matches_pattern`, the
+single public entry to the exclude matcher. D20's leading-slash rule stays, so
+`*/src/app.py` entries keep matching; it is the one place a suppression may
+match where an exclude would not, and only for an entry already written that
+way.
+
+**What widens, measured rather than asserted.** A trailing-slash entry now
+matches its directory at any depth, and a bare-name entry such as
+`conftest.py` matches that file name at any depth. Every `paths:` entry in this
+repository's `.scignore.yaml` and in `maintainability-agent`'s selects exactly
+the tracked files it selected before — all of them name one file. The change
+reaches entries that did not work.
+
+**Rejected: a suppression-only syntax that is stricter.** Anchoring patterns
+to the root would keep `tests/` from reaching `src/tests/`. It would also make a
+string mean one thing under `exclude_patterns` and another under `paths:` in the
+same repository, which is the defect. An operator who wants the root only
+writes the path they mean.
+
+**Rejected: fix the documentation instead.** Rewriting the example as
+`tests/*` would make the docs true and leave the language split, and the next
+example would find it again.
+
+**Held by** `tests/unit/test_suppression_globs_mean_what_excludes_mean.py`: a
+suppression and an exclusion must agree on every case the exclude matcher is
+pinned to, every shipped default at three depths, and every `paths:` pattern
+the documentation shows — which must also suppress what it names. The
+documented entry runs end to end with the real Bandit in
+`tests/integration/test_the_documented_suppression_suppresses.py`.

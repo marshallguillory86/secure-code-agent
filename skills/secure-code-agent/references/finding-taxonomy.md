@@ -91,5 +91,9 @@ Never:
   expires: "2027-05-13"
 ```
 
+`paths` entries are repository-relative and use the `exclude_patterns` syntax:
+a trailing `/` means that directory at any depth, and a bare name matches at
+any depth.
+
 Wildcard rule (`rule_id: "*"`) **requires** a `file` or `paths` scope. You
 cannot disable a rule globally.

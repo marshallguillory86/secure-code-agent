@@ -48,6 +48,17 @@ def is_excluded(path: Path, root: Path, patterns: Iterable[str]) -> bool:
     return any(_matches(rel, path.name, pat) for pat in patterns)
 
 
+def matches_pattern(rel: str, pattern: str) -> bool:
+    """One configured path pattern against one repository-relative POSIX path.
+
+    The pattern language every path setting shares: `exclude_patterns`,
+    `test_patterns`, `docs_patterns`, and `.scignore.yaml` `paths:`. There is
+    one of it so the same string cannot mean two things in one configuration
+    (D21).
+    """
+    return _matches(rel, rel.rsplit("/", 1)[-1], pattern)
+
+
 def _matches(rel: str, name: str, pat: str) -> bool:
     """One glob against one path, already made relative to the root.
 
