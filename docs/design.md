@@ -1,6 +1,6 @@
 # secure-code-agent — Design Spec
 
-> Status: **v0.12.2 — shipped; this records the design as built.**
+> Status: **v0.12.3 — shipped; this records the design as built.**
 > Companion docs: [`product-intent.md`](product-intent.md) (why this exists), [`architecture.md`](architecture.md) (the system as built), [`standards.md`](standards.md), [`scoring.md`](scoring.md), [`scanners.md`](scanners.md), [`remediation.md`](remediation.md), [`threat-model.md`](threat-model.md).
 
 ## 1. Problem
@@ -221,6 +221,10 @@ fingerprint deliberately excludes the line so reformatting cannot break baseline
 gitleaks reports REDACTED evidence — so two different secrets in one file share a fingerprint and
 only `line` separates them. Unknown fields and malformed values are rejected, never ignored: a
 typo must not silently widen a suppression back to file+rule.
+
+`paths` globs are repository-relative and are matched by `git_tools.matches_pattern`, the matcher
+`exclude_patterns`, `test_patterns` and `docs_patterns` use: a trailing `/` means that directory at
+any depth, a bare name matches at any depth, and `**/` includes the root (D21).
 
 `expires` is required. Past-expiry suppressions become CRITICAL findings on their own — you can't ship `reason: "we'll fix it later"` forever.
 

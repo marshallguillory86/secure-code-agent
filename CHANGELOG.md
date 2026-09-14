@@ -4,6 +4,37 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.12.3 — 2026-09-14
+
+**The documented suppression works.** `paths: ["tests/"]` is the example README,
+`docs/design.md` and the skill show for Bandit's `B101`, and it has never suppressed a
+single finding.
+
+### Fixed — a `paths:` glob means what an exclude pattern means (D21)
+
+`.scignore.yaml` `paths:` globs were matched with bare `fnmatch`, while
+`exclude_patterns`, `test_patterns` and `docs_patterns` use this tool's own matcher.
+Under `fnmatch` a trailing `/` means nothing, so `tests/` matched a file literally named
+`tests/` and no finding anywhere. `paths:` now uses the same matcher:
+
+- `tests/` matches that directory at any depth: `tests/test_app.py` and
+  `src/tests/test_app.py`.
+- A bare name such as `conftest.py` matches that file name at any depth.
+- `**/` includes the repository root, and directory patterns glob (`*.egg-info/`,
+  `src/*/generated/`).
+- `*/`-prefixed entries written for 0.12.1's absolute paths still match (D20).
+
+**What widens.** Entries that name a directory with a trailing `/`, or a bare file name,
+now cover what they appear to name. Entries that give a full path, which is the common
+form, are unchanged. Every `paths:` entry in this repository's `.scignore.yaml` and in
+`maintainability-agent`'s selects exactly the files it selected before. A bare-name entry
+such as `conftest.py` now also covers `pkg/conftest.py`. To mean the root only, write a
+leading slash: `/conftest.py`.
+
+A suppression and an exclusion are now tested to agree on every case the exclude matcher
+is pinned to, every shipped default, and every `paths:` example in the documentation.
+The README entry runs end to end against the real Bandit.
+
 ## 0.12.2 — 2026-09-14
 
 **A reviewed suppression suppresses.** `paths:` entries in `.scignore.yaml` never

@@ -17,7 +17,7 @@ Entry schema (.scignore.yaml)::
         ...
       expires: 2027-08-01                  # required; max 365 days out
       file: api/tests/x.py                 # optional path (suffix match)
-      paths: ["api/**"]                    # optional fnmatch patterns, repository-relative
+      paths: ["api/"]                      # optional; exclude_patterns syntax, repository-relative
       fingerprint: 0aaa689f8a967d8c        # optional; 16 hex chars, from the report
       line: 18                             # optional; positive integer
 
@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.git_tools import matches_pattern
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MAX_TTL_DAYS = 365
@@ -77,6 +78,13 @@ class SuppressionRule:
         against the path with a leading `/`, and `*/src/app.py` matches
         `/src/app.py`. `root` lets an absolute `file:` and a fingerprint
         recorded by an earlier release keep matching the finding they named.
+
+        **A `paths:` glob is an exclude pattern (D21).** It is matched by
+        `git_tools.matches_pattern`, the matcher `exclude_patterns` uses, so a
+        trailing slash means "this directory, at any depth" and a bare name
+        matches at any depth. Through 0.12.2 it was bare `fnmatch`, under which
+        `paths: ["tests/"]` — the example README, `design.md` and the skill all
+        show — matched nothing.
         """
         if self.rule_id != "*" and self.rule_id != finding.rule_id:
             return False
@@ -88,7 +96,7 @@ class SuppressionRule:
         if self.line is not None and self.line != finding.line_start:
             return False
         return not self.paths or any(
-            fnmatch.fnmatch(rel, p) or fnmatch.fnmatch(f"/{rel}", p) for p in self.paths
+            matches_pattern(rel, p) or fnmatch.fnmatch(f"/{rel}", p) for p in self.paths
         )
 
     def _names_file(self, rel: str, finding: Finding, root: Path | None) -> bool:
