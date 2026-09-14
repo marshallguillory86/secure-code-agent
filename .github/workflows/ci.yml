@@ -144,6 +144,7 @@ jobs:
           --output secure-code-report.md
           --json-output secure-code-report.json
           --sarif-output secure-code.sarif
+          --code-scanning-sarif-output secure-code.code-scanning.sarif
           --prompt-output secure-code-remediation-prompt.md
           --comment-output secure-code-pr-comment.md
 
@@ -153,15 +154,20 @@ jobs:
       # success(), which skipped the upload precisely then and left the
       # Security tab showing an older clean result. The parentheses matter —
       # && binds tighter than ||, so without them a fork PR would upload.
+      #
+      # The code-scanning file, not secure-code.sarif: code scanning opens an
+      # alert for every uploaded result and ignores SARIF `suppressions`, so the
+      # record raised a review thread for each test-tree `assert` once paths
+      # became placeable on a pull request (D22). The record is still kept below.
       - name: Upload SARIF to code scanning
         if: >-
           !cancelled() &&
-          hashFiles('secure-code.sarif') != '' &&
+          hashFiles('secure-code.code-scanning.sarif') != '' &&
           (github.event_name != 'pull_request' ||
           github.event.pull_request.head.repo.full_name == github.repository)
         uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
-          sarif_file: secure-code.sarif
+          sarif_file: secure-code.code-scanning.sarif
           category: secure-code-agent-self-audit
 
       - name: Upload audit evidence
@@ -174,5 +180,6 @@ jobs:
             secure-code-report.md
             secure-code-report.json
             secure-code.sarif
+            secure-code.code-scanning.sarif
             secure-code-remediation-prompt.md
             secure-code-pr-comment.md

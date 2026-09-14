@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.3 — 2026-09-14.** The decision register. D1–D21.
+> Status: **v0.12.4 — 2026-09-14.** The decision register. D1–D22.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -34,6 +34,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D19 | `scoring_model`: the instrument says when it changed, and a digest holds it honest | 2026-09-11 | Accepted — schema v2 |
 | D20 | A finding's path is repository-relative, set in one place | 2026-09-14 | Accepted — replaces D5's absolute-path convention |
 | D21 | A suppression glob means what an exclude pattern means | 2026-09-14 | Accepted |
+| D22 | What reaches code scanning is what should become an alert | 2026-09-14 | Accepted |
 
 ---
 
@@ -1368,3 +1369,77 @@ pinned to, every shipped default at three depths, and every `paths:` pattern
 the documentation shows — which must also suppress what it names. The
 documented entry runs end to end with the real Bandit in
 `tests/integration/test_the_documented_suppression_suppresses.py`.
+
+---
+
+## D22 — What reaches code scanning is what should become an alert
+
+**Status:** Accepted · 2026-09-14 · narrows the SARIF-suppression decision in `sarif._suppressions` to the file a person reads
+
+**Context.** `sarif._suppressions` marks every test-tree and documentation
+finding, and every `.scignore.yaml` suppression, with the SARIF-standard
+`suppressions` array, on the reasoning that it is "the field they honour". For
+GitHub code scanning it is not. An upload opens an alert for every result,
+suppressed or not, and GitHub's own `advanced-security/dismiss-alerts` action
+exists only to dismiss them afterwards.
+
+It went unseen while finding paths were absolute, because GitHub could not
+place those results on a pull request's lines. D20 made paths relative. The next
+pull request here added two test files and carried fourteen code-scanning review
+threads, twelve for `assert` in pytest, and branch protection required every one
+resolved before merge. The repository's default branch held over a hundred open
+alerts, all under `tests/`. Every repository using this project's action with
+SARIF upload gets the same.
+
+**Decision.** Two SARIF files with two readers.
+
+- `--sarif-output` is unchanged: every result, a suppressed one carrying its
+  `suppressions` entry and reason. Suppressed, not omitted, in the record.
+- `--code-scanning-sarif-output` (`outputs.code_scanning_sarif_path`) is the
+  same document without the results that carry `suppressions`, and without rules
+  no remaining result uses. The action and this repository's CI upload it; both
+  still keep the record as an artifact.
+
+Nothing is hidden. The record, the JSON report, the Markdown report and the work
+order all still carry every finding. What changes is which of them becomes
+someone's alert.
+
+**What the build fails on stays in the upload.** A secret on the test-tree or
+documentation axis is marked suppressed in the record, and the gate still
+escalates it from any axis (`scoring.GATED_FROM_ANY_AXIS`). Omitting it would
+fail a build on a finding the Security tab does not show. The upload therefore
+leaves out a side-axis result only when its category is not escalated, and keeps
+an escalated one without the suppression marker. An operator's reviewed
+`.scignore.yaml` entry is left out whatever its category: it carries a reason and
+an expiry, and returns as a live critical finding when it lapses. Found by asking
+the question of the first version of this decision, which omitted them; verified
+with gitleaks against a committed secret under `tests/`.
+
+**What this does not settle.** Which files count as test tree or documentation
+is `test_patterns` and `docs_patterns`, and their defaults are broad —
+`examples/`, `**/*.txt`. A finding filed there by mistake was already unscored
+and tiered §ACCEPT; now it is also not an alert. The classification is the thing
+to fix if it is wrong, and this decision does not change it.
+
+**The existing alerts close themselves.** Code scanning closes an alert when the
+next analysis in its category no longer contains it, so the first upload of the
+code-scanning file on the default branch retires the test-tree alerts rather than
+leaving them to be dismissed by hand.
+
+**Rejected: dismiss alerts after upload** with `advanced-security/dismiss-alerts`.
+The review threads are posted when the upload is processed, before any later step
+runs, so pull requests would still block on them, and a second action would need
+`security-events: write` to rewrite alert state.
+
+**Rejected: stop marking side-axis findings suppressed.** The field is correct
+SARIF and right for the record, and other consumers do read it.
+
+**Rejected: turn off required conversation resolution.** It is how a real
+finding's thread stays unmerged, and it would give that up to silence noise.
+
+**Held by** `tests/unit/test_code_scanning_sarif_raises_only_alerts.py`: every
+reason `_suppressions` suppresses is omitted from the upload and every live
+result is kept, through `emit`, through the CLI with the real Bandit, and in
+every upload step the project ships. The upload path is also held to be one of
+the run's own artifacts, with every other output, by
+`test_every_output_the_cli_writes_is_one_of_its_own_artifacts`.

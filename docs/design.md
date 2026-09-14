@@ -1,6 +1,6 @@
 # secure-code-agent — Design Spec
 
-> Status: **v0.12.3 — shipped; this records the design as built.**
+> Status: **v0.12.4 — shipped; this records the design as built.**
 > Companion docs: [`product-intent.md`](product-intent.md) (why this exists), [`architecture.md`](architecture.md) (the system as built), [`standards.md`](standards.md), [`scoring.md`](scoring.md), [`scanners.md`](scanners.md), [`remediation.md`](remediation.md), [`threat-model.md`](threat-model.md).
 
 ## 1. Problem
@@ -250,7 +250,8 @@ The prompt also injects the standards mapping for each finding so the agent can 
 |---------------------------------------|------------------------------------------------------------------|
 | `secure-code-report.md`               | Operator-readable findings with code snippets, sorted by severity|
 | `secure-code-report.json`             | Machine-readable canonical findings                              |
-| `secure-code.sarif`                   | SARIF 2.1.0 for GitHub Code Scanning / IDE ingestion             |
+| `secure-code.sarif`                   | SARIF 2.1.0, every result, suppressed ones marked with `suppressions` |
+| `secure-code.code-scanning.sarif`     | SARIF for upload to code scanning: no suppressed results (D22)   |
 | `secure-code-pr-comment.md`           | Short body for `gh pr comment`                                   |
 | `secure-code-remediation-prompt.md`   | Bounded prompt for the AI agent                                  |
 | `secure-code-baseline.json`           | Fingerprint snapshot for incremental adoption                    |
@@ -264,6 +265,7 @@ secure-code-agent [path]
   --output FILE                  Markdown report path
   --json-output FILE             Canonical JSON path
   --sarif-output FILE            SARIF 2.1.0 path
+  --code-scanning-sarif-output FILE  SARIF for code-scanning upload, without suppressed results
   --comment-output FILE          PR-comment markdown path
   --prompt-output FILE           Remediation prompt path
   --baseline FILE                Read existing baseline
