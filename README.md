@@ -465,7 +465,7 @@ For agents that support invokable skills, this repo ships a portable skill under
 ## GitHub Action
 
 ```yaml
-- uses: marshallguillory86/secure-code-agent@v0.12.3
+- uses: marshallguillory86/secure-code-agent@v0.12.4
   with:
     config: secure-code-agent.json
     fail-on-gate: true
@@ -475,7 +475,15 @@ The action installs the exact source bundled with the referenced action plus
 the pinned `required-scanners` extra (Bandit and pip-audit),
 emits Markdown, JSON, SARIF, PR-comment, and remediation artifacts, and uploads
 SARIF by default. The calling workflow must grant `security-events: write` for
-SARIF upload. Pin production usage to a full commit SHA; the version tag above
+SARIF upload.
+
+What it uploads is `secure-code.code-scanning.sarif`, not the full SARIF. Code
+scanning opens an alert for every uploaded result and does not act on SARIF
+`suppressions`, so uploading the full file raises an alert, and a review thread
+on pull requests, for every test-tree and documentation finding and every
+reviewed `.scignore.yaml` entry. The upload file leaves those out; the full SARIF,
+with each suppression and its reason, is kept as an artifact. Outside the action,
+`--code-scanning-sarif-output PATH` writes the same file. Pin production usage to a full commit SHA; the version tag above
 is shown for readability. See [`action.yml`](action.yml) and
 [`examples/github-actions/`](examples/github-actions/) for full workflows.
 

@@ -42,8 +42,11 @@ inputs:
 
 outputs:
   sarif-path:
-    description: 'Path to the emitted SARIF file.'
+    description: 'Path to the emitted SARIF file, every result included.'
     value:       ${{ steps.run.outputs.sarif-path }}
+  code-scanning-sarif-path:
+    description: 'Path to the SARIF uploaded to code scanning: sarif-path without suppressed results, which code scanning would turn into alerts regardless.'
+    value:       ${{ steps.run.outputs.code-scanning-sarif-path }}
   passed:
     description: 'Whether all gates passed.'
     value:       ${{ steps.run.outputs.passed }}
@@ -81,6 +84,7 @@ runs:
           ARGS+=(--fail-on-new)
         fi
         ARGS+=(--sarif-output "$SCA_SARIF_OUTPUT")
+        ARGS+=(--code-scanning-sarif-output secure-code.code-scanning.sarif)
         ARGS+=(--output secure-code-report.md)
         ARGS+=(--json-output secure-code-report.json)
         ARGS+=(--prompt-output secure-code-remediation-prompt.md)
@@ -93,6 +97,7 @@ runs:
         set -e
 
         echo "sarif-path=$SCA_SARIF_OUTPUT" >> "$GITHUB_OUTPUT"
+        echo "code-scanning-sarif-path=secure-code.code-scanning.sarif" >> "$GITHUB_OUTPUT"
         if [ "$EC" -eq 0 ]; then
           echo "passed=true"  >> "$GITHUB_OUTPUT"
         else
@@ -100,11 +105,15 @@ runs:
           exit "$EC"
         fi
 
+    # The code-scanning file, not the record: code scanning opens an alert for
+    # every uploaded result and does not act on SARIF `suppressions`, so the
+    # record would raise one for each test-tree and documentation finding and
+    # each reviewed .scignore.yaml entry (D22).
     - name: Upload SARIF
-      if: ${{ always() && inputs.upload-sarif == 'true' && hashFiles(inputs.sarif-output) != '' }}
+      if: ${{ always() && inputs.upload-sarif == 'true' && hashFiles('secure-code.code-scanning.sarif') != '' }}
       uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
       with:
-        sarif_file: ${{ inputs.sarif-output }}
+        sarif_file: secure-code.code-scanning.sarif
         category:   secure-code-agent
 
     - name: Upload report artifact
@@ -118,4 +127,5 @@ runs:
           secure-code-pr-comment.md
           secure-code-remediation-prompt.md
           ${{ inputs.sarif-output }}
+          secure-code.code-scanning.sarif
         if-no-files-found: ignore

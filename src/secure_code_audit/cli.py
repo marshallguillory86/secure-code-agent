@@ -82,6 +82,15 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--output", help="Markdown report output path.")
     p.add_argument("--json-output", help="Canonical JSON output path.")
     p.add_argument("--sarif-output", help="SARIF 2.1.0 output path.")
+    p.add_argument(
+        "--code-scanning-sarif-output",
+        help=(
+            "SARIF for upload to GitHub code scanning: the --sarif-output results "
+            "without the suppressed ones (test tree, documentation, .scignore.yaml). "
+            "Code scanning opens an alert for every uploaded result and ignores "
+            "SARIF suppressions, so upload this file, not the record."
+        ),
+    )
     p.add_argument("--comment-output", help="PR-comment markdown output path.")
     p.add_argument("--prompt-output", help="Remediation prompt output path.")
     p.add_argument(
@@ -795,6 +804,7 @@ def _own_artifacts(paths: _OutputPaths, cfg: config_mod.Config, root: Path) -> f
         paths.markdown,
         paths.json_out,
         paths.sarif,
+        paths.code_scanning_sarif,
         paths.comment,
         paths.prompt,
         paths.security_pillar,
@@ -933,6 +943,14 @@ def _write_outputs(
         renderers.write_json(findings, score, gate, paths.json_out, coverage, verdict, axes, root)
     if paths.sarif is not None:
         sarif.write(findings, paths.sarif, coverage, lambda f: renderers.axis_of(f, axes))
+    if paths.code_scanning_sarif is not None:
+        sarif.write(
+            findings,
+            paths.code_scanning_sarif,
+            coverage,
+            lambda f: renderers.axis_of(f, axes),
+            alerts_only=True,
+        )
     if paths.comment is not None:
         renderers.write_pr_comment(findings, score, gate, paths.comment, coverage, verdict)
     if paths.prompt is not None:
@@ -970,6 +988,7 @@ class _OutputPaths:
     comment: Path | None
     prompt: Path | None
     security_pillar: Path | None
+    code_scanning_sarif: Path | None = None
 
 
 def _resolve_outputs(args: argparse.Namespace, cfg: config_mod.Config, root: Path) -> _OutputPaths:
@@ -1014,6 +1033,7 @@ def _resolve_outputs(args: argparse.Namespace, cfg: config_mod.Config, root: Pat
         comment=_p(args.comment_output, "comment_path"),
         prompt=_p(args.prompt_output, "prompt_path"),
         security_pillar=_p(args.security_pillar, "security_pillar_path"),
+        code_scanning_sarif=_p(args.code_scanning_sarif_output, "code_scanning_sarif_path"),
     )
 
 
@@ -1027,6 +1047,7 @@ _WRITE_KEYS = (
     "markdown_path",
     "json_path",
     "sarif_path",
+    "code_scanning_sarif_path",
     "comment_path",
     "prompt_path",
     "security_pillar_path",
@@ -1169,6 +1190,7 @@ def _print_summary(
             paths.markdown,
             paths.json_out,
             paths.sarif,
+            paths.code_scanning_sarif,
             paths.comment,
             paths.prompt,
             paths.security_pillar,

@@ -4,6 +4,37 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.12.4 — 2026-09-14
+
+**Code scanning gets alerts, not the whole record.** Since 0.12.2 made finding paths
+relative, GitHub has been able to place this tool's SARIF results on pull-request lines.
+Every test-tree `assert` became a review thread, and repositories that require resolved
+conversations could not merge.
+
+### Fixed — the uploaded SARIF leaves out suppressed results (D22)
+
+The SARIF this tool writes marks test-tree and documentation findings, and
+`.scignore.yaml` suppressions, with the standard `suppressions` field. GitHub code
+scanning opens an alert for every uploaded result and does not act on that field.
+
+- New `--code-scanning-sarif-output PATH` (`outputs.code_scanning_sarif_path`): the same
+  SARIF without results that carry `suppressions`. Off unless asked for.
+- **Except what fails the build.** A secret in the test tree or documentation is still
+  uploaded, because the gate escalates secrets from any axis and a failing build must show
+  the finding that failed it. Reviewed `.scignore.yaml` entries are left out whatever the
+  category; they return as live critical findings when they expire.
+- The GitHub Action uploads `secure-code.code-scanning.sarif` instead of the full SARIF, and
+  exposes it as the `code-scanning-sarif-path` output. The full SARIF is still written to
+  `sarif-output` and kept in the report artifact.
+- `--sarif-output` is unchanged. Every finding still appears in it, and in the JSON report,
+  the Markdown report and the work order.
+
+**What you will see.** On the first upload from your default branch after upgrading, code
+scanning closes the alerts for test-tree findings, documentation findings and reviewed
+suppressions, because the new upload no longer contains them. Alerts for live findings in
+shipped source are unaffected. If you upload this tool's SARIF with your own workflow step,
+point it at the new output.
+
 ## 0.12.3 — 2026-09-14
 
 **The documented suppression works.** `paths: ["tests/"]` is the example README,

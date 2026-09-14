@@ -18,6 +18,7 @@ from secure_code_audit.scanner_status import (
     ScannerExecution,
     ScannerOutcome,
 )
+from secure_code_audit.scoring import GATED_FROM_ANY_AXIS
 from secure_code_audit.standards import cwe_url
 
 _SARIF_LEVEL = {
@@ -33,8 +34,25 @@ def emit(
     findings: Iterable[Finding],
     coverage: CoverageReport | None = None,
     axis_of=lambda _f: "primary",
+    *,
+    alerts_only: bool = False,
 ) -> dict:
-    """Build a SARIF 2.1.0 document from canonical findings."""
+    """Build a SARIF 2.1.0 document from canonical findings.
+
+    `alerts_only` builds the document for upload to a code-scanning platform:
+    results carrying `suppressions` are left out, rather than kept with the
+    field. GitHub code scanning opens an alert for every uploaded result and
+    does not act on `suppressions`, so the standard form turned each
+    test-tree `assert` into a pull-request review thread once D20 made paths
+    placeable (D22). The default keeps every result, as the record.
+
+    **Except what the build fails on.** A side-axis finding in a category the
+    gate escalates from any axis — a secret in a test fixture — is marked
+    suppressed in the record and still uploaded, without the marker, so the
+    Security tab shows the finding that failed the build. An operator's
+    reviewed suppression is left out whatever its category; it returns as a
+    live critical finding when it expires.
+    """
     findings = list(findings)
 
     # Build the rules array per-canonical-rule (rule_id is local; dedupe).
@@ -42,10 +60,15 @@ def emit(
     results: list[dict] = []
 
     for f in findings:
+        result = _result(f, axis_of(f))
+        if alerts_only and result.get("suppressions"):
+            if f.suppressed or f.category not in GATED_FROM_ANY_AXIS:
+                continue
+            del result["suppressions"]
         rid = f.rule_id
         if rid not in rule_meta:
             rule_meta[rid] = _rule(f)
-        results.append(_result(f, axis_of(f)))
+        results.append(result)
 
     run = {
         "tool": {
@@ -144,8 +167,13 @@ def _suppressions(f: Finding, axis: str) -> list[dict] | None:
     the shipped source.
 
     Suppressed, not omitted. The finding stays in the file with its
-    location and justification, so nothing is hidden from a reader — it
-    simply does not become someone's ticket.
+    location and justification, so nothing is hidden from a reader.
+
+    **GitHub code scanning does not honour it (D22).** It opens an alert for
+    every uploaded result regardless, which this function's premise assumed
+    it would not. So this is right for the record, and not enough for the
+    upload: `emit(..., alerts_only=True)` leaves these results out of the
+    file that goes to code scanning.
     """
     if f.suppressed:
         return [
@@ -206,8 +234,11 @@ def write(
     output: Path,
     coverage: CoverageReport | None = None,
     axis_of=lambda _f: "primary",
+    *,
+    alerts_only: bool = False,
 ) -> None:
-    output.write_text(json.dumps(emit(findings, coverage, axis_of), indent=2), encoding="utf-8")
+    document = emit(findings, coverage, axis_of, alerts_only=alerts_only)
+    output.write_text(json.dumps(document, indent=2), encoding="utf-8")
 
 
 # ----- ingest -------------------------------------------------------------

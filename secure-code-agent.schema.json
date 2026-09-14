@@ -224,6 +224,14 @@
           ],
           "default": "secure-code-baseline.json"
         },
+        "code_scanning_sarif_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": "secure-code.code-scanning.sarif",
+          "description": "SARIF for upload to code scanning: sarif_path without results carrying suppressions, which GitHub code scanning turns into alerts regardless. Off unless declared."
+        },
         "comment_path": {
           "type": [
             "string",

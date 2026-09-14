@@ -131,6 +131,29 @@ def test_a_source_file_that_merely_mentions_a_report_is_not_excluded(tmp_path):
     assert not is_excluded(path, tmp_path, DEFAULT_EXCLUDES)
 
 
+def test_every_output_the_cli_writes_is_one_of_its_own_artifacts(tmp_path):
+    """A path given on the command line is not a default name, so only
+    `cli._own_artifacts` keeps it out of the next scan.
+
+    Derived from the fields of `_OutputPaths`, because the list in
+    `_own_artifacts` is hand-kept, and the code-scanning SARIF (D22) was the
+    first output added to one and not proven in the other.
+    """
+    from dataclasses import fields
+
+    from secure_code_audit.cli import _OutputPaths, _own_artifacts
+    from secure_code_audit.config import Config
+
+    names = [field.name for field in fields(_OutputPaths)]
+    assert names, "no output fields found; the check would be vacuous"
+    paths = _OutputPaths(**{name: tmp_path / "out" / f"{name}.custom" for name in names})
+
+    own = _own_artifacts(paths, Config(), tmp_path)
+
+    missing = [name for name in names if (tmp_path / "out" / f"{name}.custom").resolve() not in own]
+    assert not missing, f"written but readable by the next run: {missing}"
+
+
 # ---------------------------------------------------------------------------
 # An operator can still say otherwise
 # ---------------------------------------------------------------------------

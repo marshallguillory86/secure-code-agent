@@ -136,6 +136,10 @@ DEFAULT_OUTPUTS: dict[str, str] = {
     "markdown_path": "secure-code-report.md",
     "json_path": "secure-code-report.json",
     "sarif_path": "secure-code.sarif",
+    # For upload to code scanning: the SARIF above without results that carry
+    # `suppressions`, which GitHub turns into alerts regardless (D22). Off
+    # unless declared, like sarif_path.
+    "code_scanning_sarif_path": "secure-code.code-scanning.sarif",
     "comment_path": "secure-code-pr-comment.md",
     "prompt_path": "secure-code-remediation-prompt.md",
     "baseline_path": "secure-code-baseline.json",
