@@ -1,6 +1,6 @@
 # secure-code-agent — Design Spec
 
-> Status: **v0.12.1 — shipped; this records the design as built.**
+> Status: **v0.12.2 — shipped; this records the design as built.**
 > Companion docs: [`product-intent.md`](product-intent.md) (why this exists), [`architecture.md`](architecture.md) (the system as built), [`standards.md`](standards.md), [`scoring.md`](scoring.md), [`scanners.md`](scanners.md), [`remediation.md`](remediation.md), [`threat-model.md`](threat-model.md).
 
 ## 1. Problem
@@ -117,7 +117,7 @@ class Finding:
     severity:         Severity        # CRITICAL/HIGH/MEDIUM/LOW/INFO
     confidence:       Confidence      # HIGH/MEDIUM/LOW (per-scanner)
     message:          str
-    file_path:        Path
+    file_path:        Path            # POSIX, repository-relative (D20)
     line_start:       int
     line_end:         int | None
     code_snippet:     str | None
@@ -127,7 +127,7 @@ class Finding:
     suppression_note: str | None
 ```
 
-`fingerprint` is `sha256((canonical_cwe or rule_id) + file_path + normalized_code)[:16]` — stable across whitespace-only edits and distinct across files. It supports baseline identity; the current scorer does not deduplicate findings.
+`fingerprint` is `sha256((canonical_cwe or rule_id) + file_path + normalized_code)[:16]` — stable across whitespace-only edits, distinct across files, and independent of where the checkout lives, because `file_path` is repository-relative by the time it is computed (`findings.anchor`, D20). It supports baseline identity; the current scorer does not deduplicate findings.
 
 ## 5. Standards taxonomy
 
