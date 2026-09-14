@@ -400,6 +400,8 @@ for repositories whose `pyproject.toml` is their authoritative audit input.
   expires: "2027-05-13"
 ```
 
+`paths` entries are repository-relative and use the same pattern syntax as `exclude_patterns`: a trailing `/` means that directory at any depth, a bare name matches at any depth, and `**/` includes the root.
+
 Wildcard rule (`rule_id: "*"`) requires a `file` or `paths` scope — you cannot disable a rule globally.
 
 ## Baseline + incremental adoption
@@ -463,7 +465,7 @@ For agents that support invokable skills, this repo ships a portable skill under
 ## GitHub Action
 
 ```yaml
-- uses: marshallguillory86/secure-code-agent@v0.12.2
+- uses: marshallguillory86/secure-code-agent@v0.12.3
   with:
     config: secure-code-agent.json
     fail-on-gate: true
