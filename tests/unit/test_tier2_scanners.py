@@ -271,6 +271,49 @@ def test_osv_parses_vulnerabilities(tmp_path, monkeypatch):
     assert captured[:3] == [OsvScanner.binary, "scan", "source"]
 
 
+def test_osv_finding_no_package_sources_does_not_degrade_coverage(tmp_path, monkeypatch):
+    """Exit 128 is "No package sources found", not an internal error (D23).
+
+    A repository with no lockfile, manifest or SBOM gave osv-scanner nothing to
+    read. That was mapped to FAILED, so every such repository — this project
+    among them — was held at PARTIAL coverage for good and could never be
+    graded on its security posture.
+    """
+    _mock_available(monkeypatch, OsvScanner)
+    monkeypatch.setattr(
+        OsvScanner,
+        "_exec",
+        lambda self, args, cwd, timeout_seconds, allowed_exits=(0,): _proc(
+            stderr="No package sources found, --help for usage information.", code=128
+        ),
+    )
+
+    result = OsvScanner().scan(tmp_path, Config())
+    assert result.outcome is ScannerOutcome.NOT_APPLICABLE
+    assert "no package sources" in (result.reason or "").lower()
+
+    coverage = evaluate_coverage([execution_from_result("osv_scanner", result)], required=())
+    assert coverage.status is CoverageStatus.COMPLETE
+
+
+def test_osv_reports_a_genuine_failure_as_a_failure(tmp_path, monkeypatch):
+    """The 128 carve-out is one code, not "anything nonzero is fine"."""
+    _mock_available(monkeypatch, OsvScanner)
+    monkeypatch.setattr(
+        OsvScanner,
+        "_exec",
+        lambda self, args, cwd, timeout_seconds, allowed_exits=(0,): _proc(
+            stderr="unknown flag: --nope", code=127
+        ),
+    )
+
+    result = OsvScanner().scan(tmp_path, Config())
+    assert result.outcome is ScannerOutcome.FAILED
+
+    coverage = evaluate_coverage([execution_from_result("osv_scanner", result)], required=())
+    assert coverage.status is CoverageStatus.PARTIAL
+
+
 # --- TruffleHog -----------------------------------------------------------
 
 

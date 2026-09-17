@@ -4,6 +4,29 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.12.5 — 2026-09-17
+
+**A repository with no lockfile can be graded again.** osv-scanner reports "no package
+sources found" with exit code 128. The adapter's comment called that an internal error and
+the code treated it as a scanner failure, which held coverage at `partial` forever for any
+repository that declares its dependencies nowhere osv-scanner reads — this one included.
+
+### Fixed — nothing to scan is not a failure to scan (D23)
+
+- Exit 128 is now `not_applicable` with a reason naming what was absent, instead of
+  `failed`. `NOT_APPLICABLE` was already excluded from what degrades coverage, so coverage
+  reaches `complete` with no change to the coverage model.
+- 127 and every other non-zero exit are unchanged: still `failed`, still `partial`.
+- Naming `osv_scanner` in `gates.require_scanners` still fails for a repository with no
+  package sources. Requiring dependency scanning where no dependencies are declared is an
+  assertion an operator should hear about.
+- An integration test now runs the installed osv-scanner against a lockfile-less tree. The
+  defect was a wrong belief about the tool, and a mocked exit code is written from the same
+  belief as the code it checks.
+
+**For maintainability-agent users.** A security posture of `unverified` on a repository
+with no lockfile was most likely this. Upgrade and re-run.
+
 ## 0.12.4 — 2026-09-14
 
 **Code scanning gets alerts, not the whole record.** Since 0.12.2 made finding paths
