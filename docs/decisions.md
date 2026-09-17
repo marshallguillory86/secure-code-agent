@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.4 — 2026-09-14.** The decision register. D1–D22.
+> Status: **v0.12.5 — 2026-09-17.** The decision register. D1–D23.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -35,6 +35,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D20 | A finding's path is repository-relative, set in one place | 2026-09-14 | Accepted — replaces D5's absolute-path convention |
 | D21 | A suppression glob means what an exclude pattern means | 2026-09-14 | Accepted |
 | D22 | What reaches code scanning is what should become an alert | 2026-09-14 | Accepted |
+| D23 | Nothing to scan is not a failure to scan | 2026-09-17 | Accepted |
 
 ---
 
@@ -1443,3 +1444,67 @@ result is kept, through `emit`, through the CLI with the real Bandit, and in
 every upload step the project ships. The upload path is also held to be one of
 the run's own artifacts, with every other output, by
 `test_every_output_the_cli_writes_is_one_of_its_own_artifacts`.
+
+---
+
+## D23 — Nothing to scan is not a failure to scan
+
+**Status:** Accepted · 2026-09-17 · corrects the osv-scanner adapter's reading of its own exit codes
+
+**Context.** The osv-scanner adapter carried this comment:
+
+```text
+# osv-scanner exits 1 on findings, 0 on clean, 127 on bad usage,
+# 128 on internal error.
+```
+
+and was written to it: anything outside `(0, 1)` became `failed()`. 128 is not
+an internal error. It is `No package sources found, --help for usage
+information.` — osv-scanner walked the tree and found no lockfile, manifest or
+SBOM to resolve. A repository of pure source with its dependencies declared
+nowhere osv-scanner reads produces it on every run.
+
+`FAILED` is not a covering outcome, so `evaluate_coverage` held every such
+repository at `PARTIAL` permanently, and a partial coverage report is why the
+consuming maintainability-agent reported a security posture of `unverified`
+rather than a grade. This project is one of those repositories: it has no
+lockfile, so it could never grade its own security posture, and neither could
+any other repository shaped like it. The failure was silent in the sense that
+mattered — the run completed, the report was produced, and the one field that
+would have said why was a status nobody reads as an error.
+
+**Decision.** Exit 128 maps to `not_applicable()`, with the reason stating what
+was absent. `NOT_APPLICABLE` already means "nothing here for this scanner to
+read" and is already excluded from what degrades coverage to `PARTIAL`, so no
+change to the coverage model was needed — only an adapter that reports the
+outcome the model already has. 127 and every other non-zero code remain
+`FAILED`.
+
+**A required scanner is still required.** `NOT_APPLICABLE` is not in
+`COVERING_OUTCOMES`, so naming `osv_scanner` in `gates.require_scanners` for a
+repository with no package sources still fails the gate. That is correct and
+deliberate: an operator who requires dependency scanning of a repository that
+declares no dependencies has asserted something the repository does not
+support, and should hear about it. What changes is that a repository which
+never made that assertion is no longer punished for it.
+
+**Rejected: `--allow-no-lockfiles`.** osv-scanner ships a flag that turns this
+case into exit 0. That would report `COMPLETED` over a run that read nothing,
+which is the same false assurance in the opposite direction — a clean
+dependency scan that scanned no dependencies. An outcome that names the absence
+is worth more than one that hides it.
+
+**Rejected: matching on the stderr text.** The message is stable today, but
+keying behaviour to a sentence a tool prints makes a cosmetic upstream change
+into a silent regression. The exit code is the documented contract; the reason
+this adapter reports is its own words.
+
+**Held by** `test_osv_finding_no_package_sources_does_not_degrade_coverage`
+(exit 128 is `NOT_APPLICABLE` and coverage stays `COMPLETE`) and
+`test_osv_reports_a_genuine_failure_as_a_failure` (127 is still `FAILED` and
+still `PARTIAL`), and by
+`tests/integration/test_osv_without_package_sources_is_not_applicable.py`,
+which runs the installed osv-scanner against a tree with no lockfile. The
+integration test exists because the defect was a belief about the tool that no
+mock could contradict: a mocked exit code is written from the same assumption
+as the code it checks.
