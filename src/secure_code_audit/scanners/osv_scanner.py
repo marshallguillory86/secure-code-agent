@@ -20,6 +20,13 @@ from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
+#: osv-scanner's exit code for "No package sources found" — no lockfile,
+#: manifest or SBOM anywhere under the target. Nothing to read is not a
+#: failure to read, so it becomes NOT_APPLICABLE (D23). The tool's own
+#: `--allow-no-lockfiles` would turn this into exit 0 instead, which would
+#: report a completed run over nothing; an outcome that says so is better.
+_NO_PACKAGE_SOURCES = 128
+
 _OSV_SEVERITY: dict[str, Severity] = {
     "CRITICAL": Severity.CRITICAL,
     "HIGH": Severity.HIGH,
@@ -53,13 +60,18 @@ class OsvScanner(Scanner):
         ]
         args.extend(sc_cfg.extra_args)
 
-        # osv-scanner exits 1 on findings, 0 on clean, 127 on bad usage,
-        # 128 on internal error.
+        # osv-scanner exits 0 on clean, 1 on findings, 127 on general failure,
+        # and 128 when it found nothing to read. 128 was documented here as an
+        # internal error and mapped to FAILED — see D23.
         r = self._exec(
             args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
         )
         if r.returncode == 124:
             return self.timed_out(target, f"osv-scanner timed out: {r.stderr[:200]}")
+        if r.returncode == _NO_PACKAGE_SOURCES:
+            return self.not_applicable(
+                target, "osv-scanner found no package sources (lockfile, manifest or SBOM) to scan"
+            )
         if r.returncode not in (0, 1):
             return self.failed(target, f"osv-scanner failed: {r.stderr[:300]}")
         if not r.stdout.strip():
