@@ -204,6 +204,23 @@ here.
    claim cannot be substantiated it is removed, not hedged. *Consequence:*
    release notes will sometimes read as retractions, and that is correct.
 
+9. **Standalone first, delegate second.** This tool is designed to be run on
+   its own. Feeding `maintainability-agent`'s Security pillar is one thing it
+   does ([D3](decisions.md)), not what it is for: a repository that has never
+   heard of that project installs this one, runs it, and gets the whole
+   product. *Consequence:* it owns its own environment. Its dependency
+   constraints are chosen for a tool standing alone, and it is never obliged to
+   share an interpreter, a virtualenv, or a resolved dependency set with
+   anything it integrates with — including its sibling.
+
+   The concrete case, so the consequence is not abstract: this project's `mcp`
+   extra requires `mcp>=1.0,<2` and `maintainability-agent` requires `mcp>=2`.
+   Those cannot both be satisfied in one environment, and that is not a defect
+   in either. Two independent products pin independently. The integration
+   between them is a **file** — `security-pillar.json` — precisely so that it
+   never becomes a shared dependency graph. An environment that needs both
+   installs both, separately.
+
 ## 6. Scope boundaries
 
 **In scope.** Static analysis orchestration; dependency and supply-chain
@@ -257,6 +274,12 @@ It is the security sibling of
 [`maintainability-agent`](https://github.com/marshallguillory86/maintainability-agent):
 same shape — deterministic CI gate, plain-file outputs, per-host skill bundle —
 different concern.
+
+**Sibling, not component.** That sentence describes a family resemblance, not a
+dependency. This tool is not the security half of that one: it installs, runs,
+gates and reports with that project absent, and most of its users will never
+install it. Where the two are used together, one writes a file and the other
+reads it — see principle 9 in §5 and [D3](decisions.md).
 
 ## 8. Open product questions
 
