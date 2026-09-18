@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.5 — 2026-09-17.** The decision register. D1–D23.
+> Status: **v0.12.6 — 2026-09-18.** The decision register. D1–D24.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -36,6 +36,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D21 | A suppression glob means what an exclude pattern means | 2026-09-14 | Accepted |
 | D22 | What reaches code scanning is what should become an alert | 2026-09-14 | Accepted |
 | D23 | Nothing to scan is not a failure to scan | 2026-09-17 | Accepted |
+| D24 | A project may declare what it is, and be reported rather than scored | 2026-09-18 | Accepted |
 
 ---
 
@@ -1508,3 +1509,106 @@ which runs the installed osv-scanner against a tree with no lockfile. The
 integration test exists because the defect was a belief about the tool that no
 mock could contradict: a mocked exit code is written from the same assumption
 as the code it checks.
+
+---
+
+## D24 — A project may declare what it is, and be reported rather than scored
+
+**Status:** Accepted · 2026-09-18 · adds `capabilities` to the configuration
+
+**Context.** A tool that runs external analyzers imports `subprocess` and
+spawns them. Bandit reports that — B404, B603, B607 — and the report is
+correct. It is also permanent: every run, forever, on a project whose entire
+purpose is to invoke other programs. maintainability-agent carried 62 such
+findings on its primary axis, which held its security condition at 3.76 (B+)
+and tripped `fail_on_new` with no baseline.
+
+Nothing in this tool could express "yes, that is what this is".
+
+- `exclude_patterns` stops the scan and leaves no trace in the report.
+- `scanners.bandit.extra_args: ["--skip", "B404"]` turns the check off, also
+  silently.
+- `.scignore.yaml` states a reason, which is better, but a suppression
+  **expires**. An architectural fact does not stop being true in a year, and
+  renewing it annually teaches people to renew rituals. It is also per-finding:
+  a subprocess call written next month is a new finding needing a new entry.
+
+The first two are the silence this project counts as a defect when it finds
+`NOSONAR` in someone else's tree (`_conformance`). The third is a treadmill.
+
+**Decision.** The configuration may declare what the project does:
+
+```json
+"capabilities": {
+  "spawns_processes": "Runs the analyzer pool as subprocesses. ADR 006."
+}
+```
+
+A finding whose rule *is* that capability being exercised is routed to its own
+axis — `declared: spawns_processes` — where it is **counted, listed, and not
+scored**. Nothing is hidden, nothing expires, and next month's subprocess call
+is already accounted for.
+
+**Declared, never inferred.** The tool does not decide that a project looks
+like it spawns processes. It is told, in a file a reviewer reads, and the
+report names the declaration beside the findings it accounts for. Inference
+would make the grade depend on a guess about the codebase, which is a property
+this rubric has nowhere else.
+
+**The registry is enumerated and narrow.** `CAPABILITY_RULES` maps a capability
+to explicit rule ids, so a reader can see exactly which observations a
+declaration accounts for. **B602 (`shell=True`) is deliberately outside every
+capability**: spawning a process is architecture, handing a string to a shell
+is a decision, and a project that declares the former has not excused the
+latter.
+
+**Path axes win.** The declaration is checked *after* the test-tree and
+documentation routing. The first cut checked it first, on the reasoning that a
+declaration is about what code does rather than where it lives, and it moved
+492 test-tree findings onto the declaration — inflating what the declaration
+appeared to account for from 62 to 554 while emptying the tree's own axis. A
+subprocess call in the test tree is test tree; it was already unscored.
+
+**Declared axes still gate.** They are passed to `gate_set` with the path axes,
+so `GATED_FROM_ANY_AXIS` still escalates. Declaring that this project spawns
+processes does not excuse a credential sitting next to one.
+
+**A declaration is falsifiable, and its cost is disclosed.** Two guards, because
+a mechanism that moves a grade has to be auditable:
+
+- a declaration matching no finding is reported as `unexercised`, so a config
+  cannot be padded against findings that have not arrived;
+- the summary prints the score the same tree earns **with the declarations
+  disregarded**: `without declarations 3.76 (B+)`. A project that declares its
+  way up a band has to show that on its own report.
+
+That second guard is the answer to the obvious objection. Declarations move
+grades — maintainability-agent's moved a full band. So does `exclude_patterns`,
+further, and it has always been able to do so while leaving nothing behind to
+read. The difference this decision holds is not that the grade cannot move; it
+is that the movement is stated.
+
+**What this does not do.** A declaration asserts an architecture, not its
+correctness. `parses_untrusted_xml` says the project reads XML it did not
+write; it does not say the parser is hardened, and this tool cannot check that.
+The findings stay in the report for exactly that reason.
+
+**Rejected: inferring capabilities from the tree.** Counting subprocess calls
+and deciding a project "is a process-spawning tool" would remove the
+configuration step and the audit trail with it, and would make the grade a
+function of a heuristic.
+
+**Rejected: a `severity_overrides` entry per rule.** It changes what the
+finding is called rather than what it is about, and leaves no statement of why.
+
+**Held by** `tests/unit/test_declared_capabilities.py`: the rules a declaration
+claims and the ones it does not, `shell=True` outside every capability, an
+unexercised declaration named, a misspelled capability refused rather than
+silently declaring nothing, and an empty reason refused.
+
+*Mutation:* checking the declaration before the path axes passes every
+rule-level test and moves 492 test-tree findings onto the declaration;
+admitting B602 into `spawns_processes` passes the routing tests and excuses the
+one subprocess finding that is a decision; dropping the `unknown_capabilities`
+check makes a typo declare nothing, route nothing, and score the findings the
+operator believed were accounted for, with no error anywhere.

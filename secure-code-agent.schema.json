@@ -307,6 +307,33 @@
         "value",
         "reason"
       ]
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What this project declares it does, as name -> reason (D24). Declared, never inferred: findings that are a declared capability being exercised are counted and listed in the report, and left off the score. A declaration that matches no finding is reported as unexercised.",
+      "properties": {
+        "fetches_remote_urls": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this project exercises fetches_remote_urls."
+        },
+        "parses_untrusted_xml": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this project exercises parses_untrusted_xml."
+        },
+        "spawns_processes": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this project exercises spawns_processes."
+        },
+        "uses_nondeterministic_randomness": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this project exercises uses_nondeterministic_randomness."
+        }
+      }
     }
   }
 }

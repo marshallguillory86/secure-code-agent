@@ -30,6 +30,11 @@ from secure_code_audit import history as history_mod
 from secure_code_audit import pillar as pillar_mod
 from secure_code_audit import practice as practice_mod
 from secure_code_audit import verify as verify_mod
+from secure_code_audit.capabilities import (
+    AXIS_PREFIX,
+    capability_for,
+    summarize_declarations,
+)
 from secure_code_audit.findings import (
     Category,
     Confidence,
@@ -454,6 +459,16 @@ def _do_audit(args: argparse.Namespace) -> int:
             return "test tree"
         if is_test_path(located, root_for_tests, cfg.docs_patterns):
             return "documentation"
+        # A finding that *is* a declared capability being exercised (D24),
+        # checked **after** the path axes. A subprocess call in the test tree
+        # is test tree: it is already unscored, and routing it to the
+        # declaration instead moved 492 findings off the tree's own axis and
+        # made the declaration look like it accounted for work it did not.
+        # The declaration is for the shipped source, which is the only place
+        # the path axes leave on the primary axis.
+        declared_as = capability_for(finding, cfg.capabilities)
+        if declared_as is not None:
+            return AXIS_PREFIX + declared_as
         return "primary"
 
     # `all_findings` keeps meaning *all* of them. Rebinding it to the primary
@@ -504,13 +519,49 @@ def _do_audit(args: argparse.Namespace) -> int:
     # named — a secret matters wherever it lives, a test fixture's HIGH code
     # smell does not, and feeding a deliberately-vulnerable fixture tree to
     # `fail_on_severity` would fail every build in the corpus.
-    gated = gate_set(primary_findings, (test_findings, docs_findings), cfg.gates)
+    # Every axis whose name carries the declaration prefix, in the order the
+    # operator declared them so the report is stable across runs.
+    declared_axes = {
+        AXIS_PREFIX + name: path_axes.get(AXIS_PREFIX + name, []) for name in cfg.capabilities
+    }
+    # Declared axes gate on the same terms as the path axes: a secret is a
+    # secret wherever it is found, and declaring that this project spawns
+    # processes does not excuse a credential sitting next to one.
+    gated = gate_set(
+        primary_findings,
+        (test_findings, docs_findings, *declared_axes.values()),
+        cfg.gates,
+    )
     measurable = _measurable_categories(executions, scored_findings)
+    # Counted over what was actually *routed*, not over every finding whose
+    # rule id matches. A subprocess call in the test tree is test tree, and
+    # counting it here made the disclosure claim 554 findings while the axis
+    # beside it showed 62 — two numbers about the same thing, in the same
+    # report, disagreeing by an order of magnitude.
+    declarations = summarize_declarations(
+        cfg.capabilities,
+        [f for found in declared_axes.values() for f in found],
+    )
     score = score_findings(scored_findings, loc, measurable)
+    # What the declarations bought, stated as a number rather than left for a
+    # reader to reconstruct (D24). A declaration moves the grade — that is its
+    # purpose, and `exclude_patterns` has always been able to move it further
+    # while leaving no trace at all. The difference is disclosure: this reports
+    # the score the same tree earns when the declarations are disregarded, so a
+    # project that declares its way up a band has to show that on its own
+    # report. Computed only when something was actually accounted for, so an
+    # undeclared repository's output is unchanged.
+    undeclared_score = None
+    if declarations.total_accounted:
+        undeclared_findings = list(scored_findings) + [
+            f for found in declared_axes.values() for f in found if not f.suppressed
+        ]
+        undeclared_score = score_findings(undeclared_findings, loc, measurable)
     axes = (
         summarize_axis("test tree", test_findings, test_loc),
         summarize_axis("documentation", docs_findings, docs_loc or None),
         summarize_axis("dependencies", dependency_findings),
+        *(summarize_axis(name, found) for name, found in declared_axes.items()),
     )
     # Naming an import on the command line asserts that it contributes coverage,
     # so a broken one fails the gate even if no config requires that scanner.
@@ -615,7 +666,18 @@ def _do_audit(args: argparse.Namespace) -> int:
         )
         sys.stdout.write("\n")
     else:
-        _print_summary(verdict, score, gate, ran, unavailable, coverage, paths, axes, trend_line)
+        _print_summary(
+            verdict,
+            score,
+            gate,
+            ran,
+            unavailable,
+            coverage,
+            paths,
+            axes,
+            trend_line,
+            _declaration_delta(score, undeclared_score, declarations),
+        )
 
     return _exit_code(args, gate, all_findings)
 
@@ -1139,8 +1201,42 @@ def _print_install_guidance(unavailable: list[str]) -> None:
     print("    (or --preflight to check the whole floor before a run)")
 
 
+def _declaration_delta(score, undeclared_score, declarations) -> str | None:
+    """One line naming what the declarations accounted for, and what it cost.
+
+    `exclude_patterns` can move a grade further than this and says nothing at
+    all. The difference this mechanism is meant to hold is disclosure, so the
+    number a reader would otherwise have to reconstruct is printed for them.
+    """
+    if undeclared_score is None or not declarations.total_accounted:
+        return None
+    named = ", ".join(
+        f"{name} ({count})" for name, count in sorted(declarations.accounted.items()) if count
+    )
+    line = (
+        f"declared: {declarations.total_accounted} finding(s) accounted for by "
+        f"{named}; without declarations "
+        f"{undeclared_score.overall:.2f} ({undeclared_score.letter})"
+    )
+    if declarations.unexercised:
+        # A declaration that matched nothing describes something this project
+        # does not do. Named rather than dropped, so a config cannot be padded
+        # against findings that have not arrived yet.
+        line += f"; unexercised: {', '.join(declarations.unexercised)}"
+    return line
+
+
 def _print_summary(
-    verdict, score, gate, ran, unavailable, coverage, paths, axes=(), trend=None
+    verdict,
+    score,
+    gate,
+    ran,
+    unavailable,
+    coverage,
+    paths,
+    axes=(),
+    trend=None,
+    declaration_delta=None,
 ) -> None:
     # "PASS" is a claim that something was checked. With no gate configured
     # nothing was, and saying so is the difference between a report and a
@@ -1162,6 +1258,13 @@ def _print_summary(
     for axis in axes or ():
         if axis.count or axis.loc:
             print(f"  {axis.headline()}")
+    # What the declarations bought, next to the axes that show what they
+    # accounted for. Printed only when they accounted for something, and
+    # printed even when the two scores land in the same band — "no change"
+    # is the reassuring case and is exactly what a reader should be able to
+    # see without recomputing it.
+    if declaration_delta:
+        print(f"  {declaration_delta}")
     print(f"  scanners run: {', '.join(ran) if ran else '(none)'}")
     coverage_line = f"  coverage: {coverage.status.value.upper()}"
     if coverage.unverified:
