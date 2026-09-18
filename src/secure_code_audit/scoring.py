@@ -554,6 +554,17 @@ class AxisReport:
     #: advisories are counted against a lockfile, not a line count, so this is
     #: None for them rather than a misleading zero.
     loc: int | None = None
+    #: Why this axis sits outside the score, in the report's own words. Empty
+    #: for the fixed axes, whose notes the renderer holds because they are the
+    #: same sentence for every project.
+    #:
+    #: A declared axis is the case this field exists for. Its justification is
+    #: not a constant the tool can write: it is the reason *this* project
+    #: stated in its configuration. 0.12.6 shipped the declaration reaching the
+    #: routing and never reaching the page, so a reader saw
+    #: `## Declared: spawns_processes` with counts under it and no statement of
+    #: why — which is the disclosure the whole mechanism rests on (D25).
+    note: str = ""
 
     @property
     def count(self) -> int:
@@ -580,7 +591,12 @@ class AxisReport:
         )
 
 
-def summarize_axis(name: str, findings: Iterable[Finding], loc: int | None = None) -> AxisReport:
+def summarize_axis(
+    name: str,
+    findings: Iterable[Finding],
+    loc: int | None = None,
+    note: str = "",
+) -> AxisReport:
     """Count an axis without scoring it.
 
     Not named `test_*` anything: pytest collects any callable whose name begins
@@ -601,6 +617,7 @@ def summarize_axis(name: str, findings: Iterable[Finding], loc: int | None = Non
     return AxisReport(
         name=name,
         loc=loc,
+        note=note,
         findings=findings,
         per_severity_count=per_severity,
         per_category_count=per_category,

@@ -561,7 +561,18 @@ def _do_audit(args: argparse.Namespace) -> int:
         summarize_axis("test tree", test_findings, test_loc),
         summarize_axis("documentation", docs_findings, docs_loc or None),
         summarize_axis("dependencies", dependency_findings),
-        *(summarize_axis(name, found) for name, found in declared_axes.items()),
+        # The note is the reason the project wrote, carried verbatim. A
+        # declared axis whose page shows counts and no statement of why is a
+        # grade moved in silence — the one thing this mechanism exists not to
+        # be (D25).
+        *(
+            summarize_axis(
+                name,
+                found,
+                note=cfg.capabilities[name.removeprefix(AXIS_PREFIX)],
+            )
+            for name, found in declared_axes.items()
+        ),
     )
     # Naming an import on the command line asserts that it contributes coverage,
     # so a broken one fails the gate even if no config requires that scanner.
