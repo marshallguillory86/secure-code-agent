@@ -15,8 +15,18 @@ missing or unsupported one as the pillar's reason. MA passes no configuration
 of its own and redirects every report out of the audited tree; the one file
 this tool still writes there is its `.secure-code/history.jsonl` trend.
 
-Do not install this project's `[mcp]` extra into MA's environment: it pins
-`mcp<2`, and MA's MCP server needs `mcp>=2`.
+**Two products, two environments.** This tool is designed to be run on its
+own ([product-intent.md](product-intent.md) §5 principle 9), so it pins for a
+tool standing alone and is never obliged to resolve against MA's dependencies.
+The two pin incompatibly today and that is not a defect in either: this
+project's `[mcp]` extra requires `mcp<2`, and MA's MCP server requires
+`mcp>=2`. Do not install this project's `[mcp]` extra into MA's environment.
+
+What MA does need beside it is this tool itself, because it runs it in its own
+interpreter and reads its installed version — so `secure-code-agent` goes in
+MA's environment, and this project's *own* MCP server, if wanted, goes in its
+own. The integration is a file for exactly this reason: one document crossing
+between two dependency graphs that never have to agree.
 
 ## Producing it
 

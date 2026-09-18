@@ -7,7 +7,9 @@
 
 LLM coding agents (Claude Code, Codex, Copilot, Cursor, Windsurf, custom SDK agents) ship code at human-review-saturating speed. When you point them at a security finding, they routinely overcorrect: swap crypto libraries, rewrite authentication flows, weaken validation to make tests green, disable a "noisy" rule, or stage a 600-line refactor for a one-line CWE-89. Existing scanners (Semgrep, Bandit, CodeQL, Snyk, Trivy) emit findings — none of them ship a **bounded prompt back to the agent** that says *"fix only these specific findings, do not touch crypto/auth/validation/logging, preserve behavior."*
 
-That gap is what this tool fills. It is the security sibling of [`maintainability-agent`](https://github.com/marshallguillory86/maintainability-agent): a deterministic CI gate that orchestrates best-in-class scanners, normalizes their output across CWE / OWASP / NIST taxonomies, scores the repo, and — most importantly — generates a remediation prompt scoped to the actual findings with explicit guardrails against the failure modes above.
+That gap is what this tool fills, as a product that stands on its own: a deterministic CI gate that orchestrates best-in-class scanners, normalizes their output across CWE / OWASP / NIST taxonomies, scores the repo, and — most importantly — generates a remediation prompt scoped to the actual findings with explicit guardrails against the failure modes above. A repository that has never heard of any sibling project installs this one and gets all of it.
+
+It is *also* the security sibling of [`maintainability-agent`](https://github.com/marshallguillory86/maintainability-agent), and can feed that tool's Security pillar by writing one file. That is an integration between two independent products, not a decomposition of one — see [product-intent.md](product-intent.md) §5 principle 9.
 
 ## 2. Goals
 

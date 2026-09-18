@@ -12,7 +12,9 @@ secure-code-agent --fail-on-gate \
     --sarif-output secure-code.sarif
 ```
 
-The sibling of [`maintainability-agent`](https://github.com/marshallguillory86/maintainability-agent). Same shape: deterministic CI gate · plain-file outputs · per-host skill bundle. Different concern: security, not maintainability.
+**Runs on its own.** Install it, point it at a repository, get the gate, the report and the work order. Nothing else is required, and most people who use it will use only this.
+
+It is also the sibling of [`maintainability-agent`](https://github.com/marshallguillory86/maintainability-agent) — same shape (deterministic CI gate · plain-file outputs · per-host skill bundle), different concern — and can feed that tool's Security pillar through [one file](docs/ma-integration.md). That is an integration, not a dependency: a family resemblance, not a component relationship. The two are separate products, installed separately, with their own dependency pins.
 
 ---
 
@@ -564,4 +566,4 @@ MIT — see [`LICENSE`](LICENSE).
 
 ---
 
-Built by [Marshall Guillory](https://github.com/marshallguillory86). The companion to [`maintainability-agent`](https://github.com/marshallguillory86/maintainability-agent) — both tools encode a single thesis: *AI agents need deterministic boundaries, not best-effort guardrails.*
+Built by [Marshall Guillory](https://github.com/marshallguillory86), who also builds [`maintainability-agent`](https://github.com/marshallguillory86/maintainability-agent). Two independent tools, released and installed separately, encoding one thesis: *AI agents need deterministic boundaries, not best-effort guardrails.*

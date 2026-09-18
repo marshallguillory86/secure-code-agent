@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.7 — 2026-09-18.** The decision register. D1–D25.
+> Status: **v0.12.7 — 2026-09-18.** The decision register. D1–D26.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -38,6 +38,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D23 | Nothing to scan is not a failure to scan | 2026-09-17 | Accepted |
 | D24 | A project may declare what it is, and be reported rather than scored | 2026-09-18 | Accepted |
 | D25 | A declared axis states its reason on the page, or it is not a disclosure | 2026-09-18 | Accepted |
+| D26 | This tool stands alone; feeding the sibling is an integration, not a purpose | 2026-09-18 | Accepted |
 
 ---
 
@@ -1663,3 +1664,48 @@ That is how 0.12.6 shipped: the renderer could print a note, the axis could
 hold one, and nothing put the project's reason into the axis. The end-to-end
 test is the only one that fails, and it asserts the routing worked first, so
 an empty axis cannot pass it by accident.
+
+## D26 — This tool stands alone; feeding the sibling is an integration, not a purpose
+
+**Status:** Accepted · 2026-09-18 · records stated product intent
+
+**Context.** The relationship to `maintainability-agent` was written down in
+several places and the independence behind it was not. The README's second
+paragraph opened *"The sibling of maintainability-agent"*, `design.md` defined
+the tool as *"the security sibling of"* that project, and `product-intent.md`
+closed its positioning section the same way. Each sentence is true and none of
+them says the thing a reader most needs first: this is a product you install
+and run by itself.
+
+The gap surfaced as a dependency question. This project's `[mcp]` extra
+requires `mcp>=1.0,<2`; MA's MCP server requires `mcp>=2`. Read as one system
+with two halves, that is an unresolvable conflict and a defect. Read as two
+products, it is neither — it is two independent things pinning independently,
+which is what independent things do. `ma-integration.md` already carried the
+operational warning; nothing stated the principle it follows from, so the
+warning looked like a workaround.
+
+**Decision.** Stated as product intent: **this tool is designed to be run on
+its own.** Feeding MA's Security pillar is one thing it does ([D3](decisions.md)),
+not what it is for.
+
+The consequence that settles the dependency question: it owns its environment.
+Its constraints are chosen for a tool standing alone, and it is never obliged
+to share an interpreter, a virtualenv or a resolved dependency set with
+anything it integrates with — including its sibling. The integration is a
+**file**, `security-pillar.json`, precisely so that it never becomes a shared
+dependency graph.
+
+The asymmetry is worth stating plainly, because it is not symmetric. MA runs
+this tool in its own interpreter and reads its installed version, so
+`secure-code-agent` does belong in MA's environment. This project's *own* MCP
+server does not; it belongs in this project's. One document crosses between two
+dependency graphs that never have to agree.
+
+**Recorded in** `product-intent.md` §5 principle 9 and §7 ("Sibling, not
+component"), `README.md` (lead and footer), `design.md` §1, and
+`ma-integration.md` ("Two products, two environments").
+
+**Not a code change.** Nothing here alters behaviour, so nothing here is held
+by a falsifier. It is a statement of intent, and the honest place for it is the
+register that records intent rather than a test asserting a sentence exists.
