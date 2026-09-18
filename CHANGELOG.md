@@ -4,6 +4,24 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.12.7 — 2026-09-18
+
+**The declaration now says why on the page.** 0.12.6 shipped `capabilities`
+with the disclosure missing from the artifact the disclosure lives in.
+
+### Fixed — a declared axis prints the reason the project stated (D25)
+
+- The report showed `## Declared: spawns_processes`, a count, and nothing
+  else. The reason from the configuration reached the routing and stopped
+  there, so a grade moved with no statement of why — the shape D24 exists to
+  be the opposite of.
+- The JSON carried `"note": ""` on declared axes, indistinguishable from an
+  axis whose note the tool had forgotten.
+- `AxisReport` now carries its own `note`, and the CLI fills a declared axis
+  with `cfg.capabilities[name]` verbatim. Markdown and JSON both print it.
+- The fixed axes — test tree, documentation, dependencies — are unchanged.
+  Their sentences are the same for every project and stay with the renderer.
+
 ## 0.12.6 — 2026-09-18
 
 **A project can say what it is.** A tool that runs external analyzers imports

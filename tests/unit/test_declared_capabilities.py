@@ -16,18 +16,23 @@ next to the one it earns with them.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
+from secure_code_audit import renderers
 from secure_code_audit.capabilities import (
+    AXIS_PREFIX,
     CAPABILITY_RULES,
     capability_for,
     summarize_declarations,
     unknown_capabilities,
 )
+from secure_code_audit.cli import main
 from secure_code_audit.config import load
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.scoring import summarize_axis
 
 
 def _finding(rule_id: str, path: str = "src/runner.py") -> Finding:
@@ -137,3 +142,111 @@ def test_no_declaration_is_the_default(tmp_path):
     cfg = _write(tmp_path, '{"version": 1}')
     assert cfg.capabilities == {}
     assert unknown_capabilities(cfg.capabilities) == ()
+
+
+# ---------------------------------------------------------------------------
+# D25 — the declared reason reaches the page
+# ---------------------------------------------------------------------------
+
+
+def test_a_declared_axis_carries_the_reason_the_project_stated() -> None:
+    """The note is the configured sentence, not a constant the tool wrote.
+
+    0.12.6 routed the declaration and never printed it. A reader got
+    `## Declared: spawns_processes`, a count, and no statement of why — the
+    disclosure the mechanism rests on, missing from the artifact it rests in.
+    """
+    axis = summarize_axis(
+        AXIS_PREFIX + "spawns_processes",
+        [_finding("B404")],
+        note="Runs the analyzer pool as subprocesses.",
+    )
+
+    assert axis.note == "Runs the analyzer pool as subprocesses."
+
+
+def test_the_markdown_report_prints_the_declared_reason() -> None:
+    """Present in the rendered section, not merely on the object."""
+    axis = summarize_axis(
+        AXIS_PREFIX + "spawns_processes",
+        [_finding("B404")],
+        note="Runs the analyzer pool as subprocesses. ADR 006.",
+    )
+
+    section = renderers._axis_section(axis)
+
+    assert "Runs the analyzer pool as subprocesses. ADR 006." in section
+
+
+def test_the_json_report_carries_the_declared_reason() -> None:
+    """A consumer reading the machine artifact gets the reason too."""
+    axis = summarize_axis(
+        AXIS_PREFIX + "spawns_processes",
+        [_finding("B404")],
+        note="Runs the analyzer pool as subprocesses.",
+    )
+
+    blocks = renderers._axes_to_dict([axis])
+
+    assert blocks[renderers._axis_key(AXIS_PREFIX + "spawns_processes")]["note"] == (
+        "Runs the analyzer pool as subprocesses."
+    )
+
+
+def test_a_fixed_axis_keeps_the_note_the_tool_holds() -> None:
+    """The test tree's sentence is the same for every project, so it stays put.
+
+    Carrying a per-axis note must not silence the axes whose justification the
+    tool does own.
+    """
+    axis = summarize_axis("test tree", [_finding("B404", "tests/test_runner.py")], 100)
+
+    assert "graded on the wrong thing" in renderers._axis_section(axis)
+
+
+def test_the_reason_survives_the_whole_run_to_the_report(tmp_path: Path) -> None:
+    """End to end: config sentence in, rendered sentence out.
+
+    The unit tests above hold the renderer and the axis. This holds the wiring
+    between them, which is the half that broke: in 0.12.6 every piece worked
+    and nothing carried the reason from `cfg.capabilities` to the axis, so the
+    feature was correct and invisible.
+    """
+    reason = "Runs its analyzer pool as subprocesses, which is the product."
+    (tmp_path / "runner.py").write_text(
+        "import subprocess\n\n\ndef go():\n    subprocess.run(['ls'], check=False)\n",
+        encoding="utf-8",
+    )
+    config = tmp_path / "secure-code-agent.json"
+    config.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "capabilities": {"spawns_processes": reason},
+                "gates": {"fail_on_severity": ["critical"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    report = tmp_path / "report.md"
+    json_report = tmp_path / "report.json"
+
+    main(
+        [
+            str(tmp_path),
+            "--config",
+            str(config),
+            "--only-scanners",
+            "bandit",
+            "--output",
+            str(report),
+            "--json-output",
+            str(json_report),
+        ]
+    )
+
+    payload = json.loads(json_report.read_text(encoding="utf-8"))
+    axis = payload["reported_not_scored"]["declared:_spawns_processes"]
+    assert axis["count"] >= 1, "the declaration routed nothing; the rest proves nothing"
+    assert axis["note"] == reason
+    assert reason in report.read_text(encoding="utf-8")

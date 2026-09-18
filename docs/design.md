@@ -1,6 +1,6 @@
 # secure-code-agent — Design Spec
 
-> Status: **v0.12.6 — shipped; this records the design as built.**
+> Status: **v0.12.7 — shipped; this records the design as built.**
 > Companion docs: [`product-intent.md`](product-intent.md) (why this exists), [`architecture.md`](architecture.md) (the system as built), [`standards.md`](standards.md), [`scoring.md`](scoring.md), [`scanners.md`](scanners.md), [`remediation.md`](remediation.md), [`threat-model.md`](threat-model.md).
 
 ## 1. Problem
@@ -256,7 +256,12 @@ Four properties keep this from being a quieter `--skip`:
 - **Falsifiable.** A declaration matching no finding is reported as
   `unexercised`; a misspelled name is refused rather than declaring nothing.
 - **Disclosed.** The summary prints the score the tree earns with declarations
-  disregarded, so a project that declares its way up a band shows it.
+  disregarded, so a project that declares its way up a band shows it, and the
+  declared axis prints the reason the configuration gave — Markdown and JSON
+  both. 0.12.6 shipped this last half missing: the reason reached the routing
+  and never the page, leaving a moved grade with no statement of why (D25).
+  A declared axis carries its own note for that reason; the fixed axes' notes
+  are the same sentence for every project and stay with the renderer.
 
 Path axes are checked first — a subprocess call in the test tree is test tree.
 Declared axes gate on the same terms as the path axes: a secret beside a

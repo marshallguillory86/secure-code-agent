@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.6 — 2026-09-18.** The decision register. D1–D24.
+> Status: **v0.12.7 — 2026-09-18.** The decision register. D1–D25.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -37,6 +37,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D22 | What reaches code scanning is what should become an alert | 2026-09-14 | Accepted |
 | D23 | Nothing to scan is not a failure to scan | 2026-09-17 | Accepted |
 | D24 | A project may declare what it is, and be reported rather than scored | 2026-09-18 | Accepted |
+| D25 | A declared axis states its reason on the page, or it is not a disclosure | 2026-09-18 | Accepted |
 
 ---
 
@@ -1612,3 +1613,53 @@ admitting B602 into `spawns_processes` passes the routing tests and excuses the
 one subprocess finding that is a decision; dropping the `unknown_capabilities`
 check makes a typo declare nothing, route nothing, and score the findings the
 operator believed were accounted for, with no error anywhere.
+
+## D25 — A declared axis states its reason on the page, or it is not a disclosure
+
+**Status:** Accepted · 2026-09-18 · fixes D24 as shipped in 0.12.6
+
+**Context.** D24 rests on one claim: a declaration moves a grade *in the open*,
+where `exclude_patterns` moves it further and leaves nothing to read. The
+reason the project wrote is the whole of that openness — it is what a reviewer
+reads to decide the declaration is still true.
+
+0.12.6 never printed it. The reason reached `capability_for`, routed the
+findings correctly, and stopped there. What a reader got was:
+
+```
+## Declared: spawns_processes
+
+- **Findings:** 62 — reported, not scored
+- **By severity:** low: 62
+```
+
+A grade moved, a count shown, and no statement of why — which is the shape D24
+exists to be the opposite of. The JSON was worse: `"note": ""`, an empty string
+in the field every other axis fills, so a consumer could not tell a declared
+axis from one whose note the tool forgot.
+
+The cause is ordinary. `_AXIS_NOTES` is a dict keyed by axis name, holding the
+sentence for `test tree`, `documentation` and `dependencies`. Those sentences
+are constants because they are the same for every project. A declared axis's
+sentence is not a constant — it belongs to the audited project — and a constant
+table has no way to hold it. `_AXIS_NOTES.get("declared: spawns_processes", "")`
+returned the default, exactly as written.
+
+**Decision.** `AxisReport` carries its own `note`. Where an axis has one it
+wins; where it does not, the renderer's table answers as before. The CLI builds
+each declared axis with `cfg.capabilities[name]` verbatim, so the sentence in
+the configuration is the sentence in the report — Markdown and JSON both.
+
+The fixed axes are unchanged. Their justification is the tool's to write and
+stays where the tool keeps it.
+
+**Held by** `tests/unit/test_declared_capabilities.py`: the axis carries the
+note, the Markdown section prints it, the JSON block carries it, a fixed axis
+keeps the sentence the tool holds, and — the one that matters — a full run from
+a config with `capabilities` to a rendered report finds the reason in it.
+
+*Mutation:* every unit-level piece here passes with the CLI wiring removed.
+That is how 0.12.6 shipped: the renderer could print a note, the axis could
+hold one, and nothing put the project's reason into the axis. The end-to-end
+test is the only one that fails, and it asserts the routing worked first, so
+an empty axis cannot pass it by accident.
