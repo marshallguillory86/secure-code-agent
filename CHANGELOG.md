@@ -4,6 +4,47 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.12.6 — 2026-09-18
+
+**A project can say what it is.** A tool that runs external analyzers imports
+`subprocess` and spawns them, and the scanner reports that correctly on every
+run forever. Until now the only ways to stop it were `exclude_patterns` and
+`--skip`, which delete the observation from the report, or a `.scignore.yaml`
+suppression, which states a reason and then expires annually for a fact that
+has not changed.
+
+### Added — `capabilities` (D24)
+
+```json
+"capabilities": {
+  "spawns_processes": "Runs the analyzer pool as subprocesses. ADR 006."
+}
+```
+
+- A finding whose rule **is** that capability being exercised is routed to a
+  `declared: <name>` axis: counted, listed in the report, and not scored.
+- **Declared, never inferred.** The tool is told, in a file a reviewer reads.
+  It does not decide that a project looks like it spawns processes.
+- **The registry is narrow.** `B602` (`shell=True`) is in no capability:
+  spawning a process is architecture, handing a string to a shell is a choice.
+- **Path axes win.** A subprocess call in the test tree stays test tree.
+- **Declared axes still gate.** A secret beside a declared finding still fails
+  the build.
+- **Falsifiable.** A declaration matching nothing is reported as `unexercised`,
+  and a misspelled capability name is refused rather than silently declaring
+  nothing.
+- **The cost is disclosed.** The summary prints the score the same tree earns
+  with declarations disregarded — `without declarations 3.76 (B+)` — so a
+  project that declares its way up a band shows that on its own report.
+
+Known names: `spawns_processes`, `parses_untrusted_xml`, `fetches_remote_urls`,
+`uses_nondeterministic_randomness`.
+
+**A declaration asserts an architecture, not its correctness.**
+`parses_untrusted_xml` says the project reads XML it did not write; it does not
+say the parser is hardened, and this tool cannot check that. The findings stay
+in the report for that reason.
+
 ## 0.12.5 — 2026-09-17
 
 **A repository with no lockfile can be graded again.** osv-scanner reports "no package

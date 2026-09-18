@@ -11,6 +11,11 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from secure_code_audit.capabilities import (
+    CAPABILITY_RULES,
+    unknown_capabilities,
+)
+
 DEFAULT_CONFIG_PATH = Path("secure-code-agent.json")
 
 DEFAULT_EXCLUDES: tuple[str, ...] = (
@@ -245,6 +250,13 @@ class Config:
     #: carries example JWTs that scored as critical secrets and drove it to F.
     #: Reported and gated like the test tree, never scored as code condition.
     docs_patterns: tuple[str, ...] = DEFAULT_DOCS_PATTERNS
+    #: What this project declares it does, as ``name -> reason`` (D24). A
+    #: finding that *is* a declared capability being exercised is reported on
+    #: its own axis rather than scored: a tool that runs analyzers spawns
+    #: processes, and reporting that as a defect on every run forever is the
+    #: observation being true and useless. Declared, never inferred, and
+    #: falsifiable — a declaration nothing matches is reported as unexercised.
+    capabilities: dict[str, str] = field(default_factory=dict)
     scanners: dict[str, ScannerConfig] = field(default_factory=dict)
     severity_overrides: dict[str, str] = field(default_factory=dict)
     category_overrides: dict[str, str] = field(default_factory=dict)
@@ -398,6 +410,7 @@ _KNOWN_KEYS = frozenset(
         "$schema",
         "version",
         "paths",
+        "capabilities",
         "scanners",
         "severity_overrides",
         "category_overrides",
@@ -441,6 +454,31 @@ def _from_dict(raw: dict[str, Any]) -> Config:
         cfg.test_patterns = tuple(_string_list(paths["test_patterns"], "paths.test_patterns"))
     if "docs_patterns" in paths:
         cfg.docs_patterns = tuple(_string_list(paths["docs_patterns"], "paths.docs_patterns"))
+
+    capabilities_raw = raw.get("capabilities", {})
+    if not isinstance(capabilities_raw, dict):
+        raise ValueError("capabilities must be a JSON object of name -> reason")
+    for name, reason in capabilities_raw.items():
+        if not isinstance(name, str) or not name:
+            raise ValueError("capability names must be non-empty strings")
+        if not isinstance(reason, str) or not reason.strip():
+            # A declaration without a reason is the thing this is meant to
+            # replace. The reason is what a reviewer reads to decide whether
+            # the declaration is still true, so an empty one is refused here
+            # rather than rendered as a blank line in the report.
+            raise ValueError(f"capabilities.{name} must state a non-empty reason")
+    unknown = unknown_capabilities(capabilities_raw)
+    if unknown:
+        # A typo would declare nothing, route nothing, and score the findings
+        # the operator believed they had accounted for -- silently, which is
+        # the failure mode this whole mechanism exists to remove.
+        raise ValueError(
+            "unknown capabilities: "
+            + ", ".join(unknown)
+            + "; known names are "
+            + ", ".join(sorted(CAPABILITY_RULES))
+        )
+    cfg.capabilities = dict(capabilities_raw)
 
     scanners_raw = raw.get("scanners", {})
     if not isinstance(scanners_raw, dict):

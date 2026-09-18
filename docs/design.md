@@ -1,6 +1,6 @@
 # secure-code-agent — Design Spec
 
-> Status: **v0.12.5 — shipped; this records the design as built.**
+> Status: **v0.12.6 — shipped; this records the design as built.**
 > Companion docs: [`product-intent.md`](product-intent.md) (why this exists), [`architecture.md`](architecture.md) (the system as built), [`standards.md`](standards.md), [`scoring.md`](scoring.md), [`scanners.md`](scanners.md), [`remediation.md`](remediation.md), [`threat-model.md`](threat-model.md).
 
 ## 1. Problem
@@ -227,6 +227,44 @@ typo must not silently widen a suppression back to file+rule.
 any depth, a bare name matches at any depth, and `**/` includes the root (D21).
 
 `expires` is required. Past-expiry suppressions become CRITICAL findings on their own — you can't ship `reason: "we'll fix it later"` forever.
+
+### 10a. Declared capabilities (D24)
+
+A suppression answers "this finding is not a defect". Some findings need a
+different answer: "this is what this project *is*". A tool that runs external
+analyzers imports `subprocess` and spawns them; the report is correct and will
+be identical on every run forever, and a suppression for it expires annually
+for a fact that has not changed.
+
+```json
+"capabilities": {
+  "spawns_processes": "Runs the analyzer pool as subprocesses. ADR 006.",
+  "parses_untrusted_xml": "Reads analyzer XML produced in the audited tree."
+}
+```
+
+A finding whose rule **is** the declared capability being exercised is routed
+to a `declared: <name>` axis: counted, listed, not scored. Known names and the
+rules each claims are in `capabilities.CAPABILITY_RULES`.
+
+Four properties keep this from being a quieter `--skip`:
+
+- **Declared, never inferred.** The operator states it in a file a reviewer
+  reads. The tool does not decide a project looks like it spawns processes.
+- **Narrow.** `B602` (`shell=True`) belongs to no capability. Spawning a
+  process is architecture; handing a string to a shell is a decision.
+- **Falsifiable.** A declaration matching no finding is reported as
+  `unexercised`; a misspelled name is refused rather than declaring nothing.
+- **Disclosed.** The summary prints the score the tree earns with declarations
+  disregarded, so a project that declares its way up a band shows it.
+
+Path axes are checked first — a subprocess call in the test tree is test tree.
+Declared axes gate on the same terms as the path axes: a secret beside a
+declared finding still fails the build.
+
+A declaration asserts an architecture, **not its correctness**. It says the
+project reads XML it did not write, not that the parser is hardened, which is
+why the findings stay in the report.
 
 ## 11. Remediation prompt (the differentiator)
 
