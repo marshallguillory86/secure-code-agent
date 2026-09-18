@@ -167,7 +167,7 @@ def _axes_to_dict(axes: Iterable[AxisReport]) -> dict:
             "count": axis.count,
             "scored": False,
             "gated": axis.name == "dependencies",
-            "note": _AXIS_NOTES.get(axis.name, ""),
+            "note": _axis_note(axis),
             "per_severity_count": {s.value: n for s, n in axis.per_severity_count.items()},
             "per_category_count": {c.value: n for c, n in axis.per_category_count.items()},
             # Not repeated here: every one of these appears in the top-level
@@ -204,6 +204,17 @@ _AXIS_NOTES = {
         "still fails a build."
     ),
 }
+
+
+def _axis_note(axis: AxisReport) -> str:
+    """Why this axis sits outside the score, in the report's own words.
+
+    An axis that carries its own note wins. Only a declared axis does, and
+    its note is the reason the audited project wrote in its configuration —
+    the tool cannot supply that sentence, and a declared axis printed without
+    it is a grade moved with no statement of why.
+    """
+    return axis.note or _AXIS_NOTES.get(axis.name, "")
 
 
 def write_json(
@@ -361,7 +372,7 @@ def _axis_section(report: AxisReport | None) -> str:
             )
         )
         out.append(f"- **By severity:** {by_severity}")
-    note = _AXIS_NOTES.get(report.name)
+    note = _axis_note(report)
     if note:
         out.append(f"- {note}")
     out.append("")
