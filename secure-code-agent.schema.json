@@ -282,6 +282,14 @@
           ],
           "default": "security-pillar.json",
           "description": "security-pillar.json for maintainability-agent to ingest (D3). null to disable."
+        },
+        "work_order_json_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": "secure-code-work-order.json",
+          "description": "The remediation work order as JSON: the same triage and caps as the prompt, as facts rather than prose, for a tool that renders its own presentation. Off unless declared."
         }
       }
     },

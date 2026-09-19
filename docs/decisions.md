@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.7 — 2026-09-18.** The decision register. D1–D26.
+> Status: **v0.12.8 — 2026-09-18.** The decision register. D1–D27.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -39,6 +39,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D24 | A project may declare what it is, and be reported rather than scored | 2026-09-18 | Accepted |
 | D25 | A declared axis states its reason on the page, or it is not a disclosure | 2026-09-18 | Accepted |
 | D26 | This tool stands alone; feeding the sibling is an integration, not a purpose | 2026-09-18 | Accepted |
+| D27 | The work order is available as facts, not only as prose | 2026-09-19 | Accepted |
 
 ---
 
@@ -1709,3 +1710,66 @@ component"), `README.md` (lead and footer), `design.md` §1, and
 **Not a code change.** Nothing here alters behaviour, so nothing here is held
 by a falsifier. It is a statement of intent, and the honest place for it is the
 register that records intent rather than a test asserting a sentence exists.
+
+## D27 — The work order is available as facts, not only as prose
+
+**Status:** Accepted · 2026-09-19 · adds `--work-order-json` and `outputs.work_order_json_path`
+
+**Context.** `remediation.generate` writes Markdown. That is right for the two
+readers it was built for: the operator, who reads the work order, and the agent,
+which reads the prompt. It is the wrong thing to hand a *tool*.
+
+`maintainability-agent` embeds this work order in its HTML report. It had only
+prose, so it wrapped the text in `<pre>` — and an operator who chose an HTML
+presentation got raw Markdown inside it: `##` headings, asterisks for bold,
+backticks around code, in a page where everything else was rendered. The
+consumer was not at fault. Prose is the one thing it cannot re-present, and
+parsing another tool's Markdown to draw it is worse than the symptom.
+
+**Decision.** The same work order is emitted as data on request.
+
+```
+secure-code-agent . --work-order-json secure-code-work-order.json
+```
+
+**The same triage, not a second opinion.** `as_data` calls
+`triage.partition` exactly as `generate` does, in the same order, with the
+same `_MAX_BLOCKS` and `_MAX_REVIEW_LINES` caps and an `omitted` count
+carrying the number `_overflow` prints. The two renderings cannot describe
+different work, which matters because a consumer's own rule is to reproduce
+this work order rather than re-rank it.
+
+**Facts, not the whole record.** A finding carries what a renderer needs —
+what it is, where it is, what to do, and the citation that makes it
+checkable. The fingerprint, the baseline flag and the suppression note stay
+out: they are this tool's bookkeeping, and publishing them would make every
+internal field a contract a consumer could depend on.
+
+**Off unless declared**, like the code-scanning SARIF, because the prompt is
+the artifact an operator reads and a second copy in JSON is only wanted by a
+consumer. The default *name* is still declared so the file this tool writes
+is excluded from the next scan — the gate that holds that caught the
+omission before release, which is what it is for.
+
+**Markdown is unchanged.** This adds a representation; it replaces nothing.
+
+**Rejected: emitting HTML.** The consumer would embed a second visual
+language in its own report — two stylesheets, two idioms, one page. Data lets
+it draw the work order in its own house style, for every skin it ships.
+
+**Rejected: putting the work order in `security-pillar.json`.** That document
+is the pillar contract, versioned by its own `schema_version` and read for a
+practice level and a code condition. Folding a work order into it would make
+one document answer two questions.
+
+**Held by** `tests/unit/test_work_order_as_data.py`: the tiers match
+`triage.partition`, a finding carries what a renderer needs, bookkeeping is
+withheld, the caps and `omitted` match the prose, a demoted finding carries
+its reason, an empty work order is data rather than an error, and the schema
+version is published.
+
+*Mutation:* building the tiers from a second filter rather than
+`triage.partition` passes every field test and lets the data disagree with the
+prompt an operator is reading; dropping the caps shows a consumer more work
+than the artifact it is reproducing; emitting the whole `Finding` passes the
+renderer tests and publishes the fingerprint as a contract.

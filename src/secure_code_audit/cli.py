@@ -99,6 +99,14 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--comment-output", help="PR-comment markdown output path.")
     p.add_argument("--prompt-output", help="Remediation prompt output path.")
     p.add_argument(
+        "--work-order-json",
+        help=(
+            "The remediation work order as JSON: the same triage and the same "
+            "caps as the prompt, as facts rather than prose, for a tool that "
+            "renders its own presentation."
+        ),
+    )
+    p.add_argument(
         "--security-pillar",
         help=(
             "Write security-pillar.json for maintainability-agent to ingest "
@@ -878,6 +886,10 @@ def _own_artifacts(paths: _OutputPaths, cfg: config_mod.Config, root: Path) -> f
         paths.json_out,
         paths.sarif,
         paths.code_scanning_sarif,
+        # The work order as data (D27). Here for the same reason the prompt
+        # is: it quotes finding text and code snippets, so the next run
+        # would score this tool's own output as source.
+        paths.work_order_json,
         paths.comment,
         paths.prompt,
         paths.security_pillar,
@@ -1030,6 +1042,20 @@ def _write_outputs(
         # The work order needs the axis to tier a finding: a secret in a
         # test fixture is a suppression decision, not a patch target.
         remediation.write(findings, paths.prompt, root, lambda f: renderers.axis_of(f, axes))
+    # The same work order as facts. `maintainability-agent` embeds this one
+    # in an HTML report, and prose is the thing a consumer cannot
+    # re-present: with only Markdown it wrapped the text in `<pre>` and a
+    # reader got `##` headings inside a rendered page (D27).
+    if paths.work_order_json is not None:
+        paths.work_order_json.parent.mkdir(parents=True, exist_ok=True)
+        paths.work_order_json.write_text(
+            json.dumps(
+                remediation.as_data(findings, root, lambda f: renderers.axis_of(f, axes)),
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
     # The artifact maintainability-agent ingests (D3). Written last because it
     # is the only output that carries both axes plus the practice level.
     if paths.security_pillar is not None and pillar is not None:
@@ -1062,6 +1088,8 @@ class _OutputPaths:
     prompt: Path | None
     security_pillar: Path | None
     code_scanning_sarif: Path | None = None
+    #: The work order as data, for a tool that renders its own (D27).
+    work_order_json: Path | None = None
 
 
 def _resolve_outputs(args: argparse.Namespace, cfg: config_mod.Config, root: Path) -> _OutputPaths:
@@ -1107,6 +1135,7 @@ def _resolve_outputs(args: argparse.Namespace, cfg: config_mod.Config, root: Pat
         prompt=_p(args.prompt_output, "prompt_path"),
         security_pillar=_p(args.security_pillar, "security_pillar_path"),
         code_scanning_sarif=_p(args.code_scanning_sarif_output, "code_scanning_sarif_path"),
+        work_order_json=_p(args.work_order_json, "work_order_json_path"),
     )
 
 
