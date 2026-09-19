@@ -4,6 +4,26 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.12.8 — 2026-09-19
+
+**The work order, as facts.** `generate` writes Markdown, which is right for
+the operator and the agent and wrong for a tool. `maintainability-agent`
+embeds this work order in an HTML report, had only prose, and wrapped it in
+`<pre>` — so a reader who chose HTML got raw Markdown inside a rendered page.
+
+### Added — `--work-order-json` / `outputs.work_order_json_path` (D27)
+
+- The same triage, order and caps as the prompt, emitted as JSON, with an
+  `omitted` count carrying the number `_overflow` prints.
+- Tiers come from `triage.partition` exactly as the Markdown's do, so the two
+  renderings cannot describe different work.
+- A finding carries what a renderer needs — what it is, where it is, what to
+  do, and the citation. Fingerprints, baseline flags and suppression notes
+  stay out: bookkeeping is not a published contract.
+- Off unless declared, like the code-scanning SARIF. The default name is
+  declared anyway so the file is excluded from the next scan.
+- Markdown is unchanged. This adds a representation and replaces nothing.
+
 ## 0.12.7 — 2026-09-18
 
 **The declaration now says why on the page.** 0.12.6 shipped `capabilities`

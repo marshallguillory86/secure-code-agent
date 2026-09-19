@@ -147,6 +147,12 @@ DEFAULT_OUTPUTS: dict[str, str] = {
     "code_scanning_sarif_path": "secure-code.code-scanning.sarif",
     "comment_path": "secure-code-pr-comment.md",
     "prompt_path": "secure-code-remediation-prompt.md",
+    # The work order as data, for a tool that renders its own presentation
+    # (D27). Off unless declared, like the code-scanning SARIF: the prompt
+    # is the artifact an operator reads, and a second copy in JSON is only
+    # wanted by a consumer. The name is still declared so this tool never
+    # scans a file it wrote.
+    "work_order_json_path": "secure-code-work-order.json",
     "baseline_path": "secure-code-baseline.json",
     # Append-only trend. The score's one genuine use is movement over time.
     "history_path": ".secure-code/history.jsonl",
