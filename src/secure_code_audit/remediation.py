@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 from secure_code_audit import triage
 from secure_code_audit.findings import Finding
@@ -243,6 +244,93 @@ def generate(
 
     parts.append(_footer())
     return "\n".join(parts)
+
+
+#: The work order's data schema. Bumped when a consumer would have to
+#: change to keep reading it; new optional keys do not bump it.
+WORK_ORDER_SCHEMA_VERSION = 1
+
+
+def _finding_data(f: Finding, root: Path | None, note: str | None = None) -> dict[str, Any]:
+    """One finding, as the facts a renderer needs and nothing more.
+
+    Deliberately not the whole `Finding`. The fingerprint, the baseline
+    flag and the suppression note are this tool's bookkeeping; a consumer
+    drawing a work order needs what it is, where it is, what to do, and
+    the citation that makes it checkable.
+    """
+    return {
+        "rule_id": f.rule_id,
+        "scanner": f.scanner,
+        "title": f.short_desc or f.message,
+        "message": f.message,
+        "fix_hint": f.fix_hint,
+        "severity": f.severity.value,
+        "confidence": f.confidence.value,
+        "category": f.category.value,
+        "path": _display_path(f.file_path, root),
+        "line_start": f.line_start,
+        "line_end": f.line_end,
+        "location": _location(f, root),
+        "code_snippet": f.code_snippet,
+        "standards": {
+            "cwe": f.canonical_cwe,
+            "cwe_top25": f.cwe_top25,
+            "owasp_top10": f.owasp_top10,
+            "asvs_section": f.asvs_section,
+            "nist_ssdf": f.nist_ssdf,
+        },
+        # Only §REVIEW findings carry one: it is why the tier demoted them.
+        "review_note": note,
+    }
+
+
+def as_data(
+    findings: Iterable[Finding],
+    root: Path | None = None,
+    axis_of=lambda _f: "primary",
+) -> dict[str, Any]:
+    """The work order as facts, for a consumer that renders its own.
+
+    `generate` writes Markdown, which is right for the operator and for
+    the agent that reads the prompt. It is the wrong thing to hand a
+    *tool*: `maintainability-agent` embeds this work order in an HTML
+    report and had only prose, so it wrapped it in `<pre>` and a reader
+    got raw Markdown — headings as `##`, bold as asterisks — inside a
+    page where everything else was rendered.
+
+    Prose is the one thing a consumer cannot re-present. This is the same
+    triage, the same order and the same caps, as data: the tiers come from
+    `triage.partition` exactly as the Markdown's do, so the two can never
+    describe different work.
+
+    The caps are kept rather than dropped. A consumer showing more than
+    the prompt shows would disagree with the artifact the operator reads,
+    and `omitted` says how many are not here — the same number
+    `_overflow` prints.
+    """
+    tiers = triage.partition(findings, axis_of, root)
+    fix = tiers[triage.Tier.FIX]
+    review = tiers[triage.Tier.REVIEW]
+    accept = tiers[triage.Tier.ACCEPT]
+    return {
+        "schema_version": WORK_ORDER_SCHEMA_VERSION,
+        "counts": {"fix": len(fix), "review": len(review), "accept": len(accept)},
+        "fix": {
+            "shown": [_finding_data(f, root) for f in fix[:_MAX_BLOCKS]],
+            "omitted": max(0, len(fix) - _MAX_BLOCKS),
+        },
+        "review": {
+            "shown": [
+                _finding_data(f, root, triage.reason_for(f, root))
+                for f in review[:_MAX_REVIEW_LINES]
+            ],
+            "omitted": max(0, len(review) - _MAX_REVIEW_LINES),
+        },
+        # The accept tier is a count and a summary in the Markdown too: it is
+        # the test tree and documentation, which nobody patches one by one.
+        "accept": {"summary": _accept_summary(accept, root) if accept else ""},
+    }
 
 
 def _location(f: Finding, root: Path | None) -> str:
