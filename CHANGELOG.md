@@ -4,6 +4,24 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.12.9 — 2026-09-20
+
+**One tool, two answers.** A run reported `5.00 (A+) — no findings` in the
+pillar and `68 to fix` in the work order, about the same repository in the
+same minute. The 68 were the findings the operator had declared.
+
+### Fixed — declared findings are not patch targets (D28)
+
+- D24 reached the scorer and the renderer and stopped short of triage.
+  `_ACCEPT_AXES` was a hardcoded pair written before declared axes existed,
+  so a declaration moved a finding off the score and left it under
+  **§FIX — patch these**.
+- Every `declared:` axis is now a suppression candidate, for the same reason
+  the test tree is. Fixed at the axis, so a capability added tomorrow is
+  covered without anyone remembering this.
+- The primary axis is unchanged: an undeclared project still gets the finding
+  in §FIX, because it has not said this is what it is.
+
 ## 0.12.8 — 2026-09-19
 
 **The work order, as facts.** `generate` writes Markdown, which is right for

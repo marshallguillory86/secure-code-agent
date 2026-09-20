@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.8 — 2026-09-18.** The decision register. D1–D27.
+> Status: **v0.12.9 — 2026-09-18.** The decision register. D1–D28.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -40,6 +40,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D25 | A declared axis states its reason on the page, or it is not a disclosure | 2026-09-18 | Accepted |
 | D26 | This tool stands alone; feeding the sibling is an integration, not a purpose | 2026-09-18 | Accepted |
 | D27 | The work order is available as facts, not only as prose | 2026-09-19 | Accepted |
+| D28 | A declared capability's findings are not patch targets | 2026-09-20 | Accepted |
 
 ---
 
@@ -1773,3 +1774,57 @@ version is published.
 prompt an operator is reading; dropping the caps shows a consumer more work
 than the artifact it is reproducing; emitting the whole `Finding` passes the
 renderer tests and publishes the fingerprint as a contract.
+
+## D28 — A declared capability's findings are not patch targets
+
+**Status:** Accepted · 2026-09-20 · routes `declared:` axes to §ACCEPT
+
+**Context.** One run of this tool said both of these things about the same
+repository, in the same minute:
+
+```
+security pillar:     5.00 (A+) — "findings: no findings"
+security work order: 68 to fix
+```
+
+The same 68. Every one of them a finding the operator had **declared**:
+`B404`, `B603` and `B607` — `subprocess` imports and calls in a tool whose
+entire purpose is running other programs — plus the XML and URL findings that
+project had also declared.
+
+D24 reached the scorer and the renderer and stopped there. `_ACCEPT_AXES` was
+a hardcoded pair — `test tree`, `documentation` — written before declared axes
+existed, and `tier_of` consulted it before anything else. So a declaration
+moved a finding off the code condition and left it sitting under a heading
+that says **§FIX — patch these**.
+
+Two costs. A reader of `maintainability-agent`'s HTML report sees a green
+pillar beside "68 to fix" and has to decide which half of one tool to believe.
+Worse, an agent handed that work order starts rewriting the architecture the
+operator explicitly declared — the exact outcome D24 exists to prevent,
+arriving through the artifact most likely to be acted on without review.
+
+**Decision.** Every `declared: ` axis is a suppression candidate, for the same
+reason the test tree is: where a finding lives outweighs which rule found it.
+
+Fixed at the axis rather than by adding a third literal to the set. A
+capability added to `CAPABILITY_RULES` tomorrow is covered without anyone
+remembering this, which is the property the hardcoded pair lacked and is why
+it was possible to ship D24 with this hole in it.
+
+**The primary axis is unchanged.** An undeclared project gets the same finding
+in §FIX, correctly: it has not said this is what it is. The declaration is
+what changes the tier, not the rule.
+
+**Held by** `tests/unit/test_declared_findings_are_not_patch_targets.py`: every
+declared capability accepts (parametrised over all four), the same finding on
+the primary axis still fixes, `partition` keeps it out of the fix tier, the
+work order nominates none of them, the pillar and the work order agree as one
+asserted property, and the named axes still accept.
+
+*Mutation:* adding `"declared: spawns_processes"` to `_ACCEPT_AXES` as a
+literal passes every test that names that capability and fails the
+parametrised one the day a fifth capability is declared — which is the shape
+that produced this defect; checking the axis *after* the rule and confidence
+tests sends a declared low-confidence finding to §REVIEW, where it still asks
+an agent to judge architecture the operator already settled.
