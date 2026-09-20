@@ -30,6 +30,7 @@ import re
 from collections.abc import Iterable
 from pathlib import Path
 
+from secure_code_audit.capabilities import AXIS_PREFIX
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 
 
@@ -73,6 +74,24 @@ LOW_PRECISION: dict[str, str] = {
 
 #: Axes whose findings are suppression candidates rather than patch targets.
 _ACCEPT_AXES = frozenset({"test tree", "documentation"})
+
+
+def _is_accepted_axis(axis: str) -> bool:
+    """Is this an axis whose findings are not patch targets?
+
+    The named pair, plus every declared capability. A declaration says the
+    finding is the project's architecture being exercised (D24) — the
+    scorer already routes it off the code condition and the report already
+    lists it as reported-not-scored. Nominating the same finding in §FIX
+    asks an agent to change the thing the operator declared.
+
+    That is what shipped. `capabilities` reached the scorer and the
+    renderer and never reached here, so one run said "no findings" in the
+    pillar and "68 to fix" in the work order — the same 68, all of them
+    `subprocess` calls in a tool whose purpose is running subprocesses
+    (D28).
+    """
+    return axis in _ACCEPT_AXES or axis.startswith(AXIS_PREFIX)
 
 
 #: Bandit quotes the offending value: `Possible hardcoded password: 'x'`.
@@ -233,7 +252,7 @@ def tier_of(finding: Finding, axis: str = "primary", root: Path | None = None) -
     genuine hardcoded key in a test fixture is still deliberate, and a
     high-confidence rule firing there does not make it a patch target.
     """
-    if axis in _ACCEPT_AXES:
+    if _is_accepted_axis(axis):
         return Tier.ACCEPT
     if finding.rule_id in LOW_PRECISION:
         # Unless the value itself gives it away.
