@@ -53,7 +53,7 @@ dependencies = [
 # server drives it by subprocess rather than reimplementing it — so nobody
 # who only wants the gate pays for an MCP dependency.
 mcp = [
-  "mcp>=1.0,<2",
+  "mcp>=1.0,<3",
 ]
 
 # Scanners the default configuration lists in gates.require_scanners. Pinned
