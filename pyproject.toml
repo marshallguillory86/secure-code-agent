@@ -66,7 +66,7 @@ required-scanners = [
   # rules, so a JavaScript repository can be scanned on a host with no Node.
   # Pinned for the same reason as the rest: the floor is a claim about what
   # ran, and an unpinned ruleset makes that claim unreproducible.
-  "njsscan==1.0.0",
+  "njsscan==1.0.1",
 ]
 # The remaining Python-packaged scanners. Bounded rather than pinned because
 # they are optional; the coverage gate does not require them by default.
