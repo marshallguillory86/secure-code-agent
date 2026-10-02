@@ -32,8 +32,19 @@ class SubprocessExecution:
     ) -> subprocess.CompletedProcess:
         """Run a scanner subprocess with sanitized env, no shell.
 
-        Some scanners (npm audit, pip-audit) exit nonzero on findings; pass
-        `allowed_exits` to mark those as success.
+        `allowed_exits` does **not** do what it says, and the next reader
+        should not trust it: both branches below return `r` unchanged, so
+        the parameter has no effect on anything. Every adapter decides for
+        itself what its tool's exit codes mean, and several then declare the
+        same tuple twice — `_exec(..., allowed_exits=(0, 183))` sitting
+        beside `if r.returncode not in (0, 183)`. Bandit declares `(0, 1)`
+        here and then checks no exit code at all, which is the cost of a
+        parameter that looks like a guard.
+
+        Whether exit-code policy belongs in this helper or in each adapter
+        is a design decision, recorded as an open question rather than
+        settled here. Until it is answered the inline check is the one that
+        runs.
 
         `cwd` is coerced to a directory. Auditing a single file is supported
         — the CLI and several adapters carry `target if target.is_dir() else
