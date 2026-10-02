@@ -40,6 +40,7 @@ import statistics
 import subprocess
 import sys
 import time
+from collections.abc import Iterable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -240,16 +241,38 @@ def worst_normalized(findings: list[dict], loc: int) -> float:
     )
 
 
-def variants(reports: Path) -> dict:
+def variants(reports: Path, audited: Iterable[str] | None = None) -> dict:
     """Re-analyze saved reports under each remaining input rule.
 
     No re-scanning: every finding is already in the report, so the expensive
     part is done once and the variants cannot disagree because of a re-scan
     drifting underneath them. `loc_scanned` is the primary-tree count, so the
     denominator matches the numerator in every variant.
+
+    **`audited` names the repositories this run actually audited**, and only
+    their reports are read. It used to glob every `*.json` in the directory,
+    and the harness deliberately leaves reports in place so a re-run is
+    cheap — so a `--only django` run wrote a `results.json` whose `rows`
+    covered Django while its `variants` block was computed over whatever
+    earlier runs had left behind, at whatever ruleset and scanner versions
+    were current then. `median_worst_normalized` and
+    `median_grade_at_current_slope` are the figures D16 chose the grade slope
+    from, so the stale half was not decoration.
+
+    This is the same stale-report class `audit()` already refuses for a
+    single repository — it unlinks its own report before scanning so a failed
+    run cannot be read as a passing one. That guard was put where one
+    repository reads its own report and not where the variants read all of
+    them. Found by the test seat, not by a reading.
+
+    `None` keeps the old behaviour of reading everything present, for a
+    caller that genuinely wants the whole directory.
     """
+    names = None if audited is None else {str(n) for n in audited}
     rows: dict[str, dict[str, float]] = {}
     for path in sorted(reports.glob("*.json")):
+        if names is not None and path.stem not in names:
+            continue
         payload = json.loads(path.read_text(encoding="utf-8"))
         loc = int(payload["score"]["loc_scanned"])
         scored = scored_findings(payload)
@@ -463,7 +486,9 @@ def main() -> int:
         rows.append(row)
 
     summary = summarize(rows)
-    summary["variants"] = variants(reports)
+    # Only the repositories this run audited. Reports from earlier runs are
+    # still on disk by design; they are not this run's evidence.
+    summary["variants"] = variants(reports, [row["name"] for row in rows if "error" not in row])
     Path(args.out).write_text(
         json.dumps(
             {
