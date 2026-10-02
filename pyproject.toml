@@ -53,7 +53,7 @@ dependencies = [
 # server drives it by subprocess rather than reimplementing it — so nobody
 # who only wants the gate pays for an MCP dependency.
 mcp = [
-  "mcp>=1.0,<2",
+  "mcp>=1.0,<3",
 ]
 
 # Scanners the default configuration lists in gates.require_scanners. Pinned
@@ -66,7 +66,7 @@ required-scanners = [
   # rules, so a JavaScript repository can be scanned on a host with no Node.
   # Pinned for the same reason as the rest: the floor is a claim about what
   # ran, and an unpinned ruleset makes that claim unreproducible.
-  "njsscan==1.0.0",
+  "njsscan==1.0.1",
 ]
 # The remaining Python-packaged scanners. Bounded rather than pinned because
 # they are optional; the coverage gate does not require them by default.
@@ -87,7 +87,7 @@ dev = [
   "secure-code-agent[required-scanners]",
   "pytest>=8.0",
   "pytest-cov>=4.0",
-  "ruff==0.16.2",
+  "ruff==0.16.9",
 ]
 
 [project.scripts]
