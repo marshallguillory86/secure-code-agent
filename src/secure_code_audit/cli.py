@@ -306,6 +306,9 @@ def _do_preflight(args: argparse.Namespace) -> int:
                 "command": " ".join(scanner.command) or None,
                 "version": scanner.binary_version() if available else None,
                 "remedy": None if available else scanner.unavailable_fix_hint(),
+                # Disclosed, not silent: the tree asked for a command and was
+                # not given it. `--trust-target-config` grants it.
+                "ignored_command": scanner.ignored_command,
             }
         )
 
@@ -341,6 +344,11 @@ def _print_preflight(rows: list[dict], unselected: list[str], blocking: list[str
         print(f"  {mark} {row['scanner']:<14} {role:<8} {detail}")
         if row["remedy"]:
             print(f"      → {row['remedy']}")
+        if row.get("ignored_command"):
+            print(
+                "      ! the audited tree's config set this command; ignored "
+                "(pass --trust-target-config for a repository you own)"
+            )
     for name in unselected:
         print(f"  ✗ {name:<14} required  not enabled in this configuration")
     # Named, not omitted: a floor tool this run does not evaluate is a stated

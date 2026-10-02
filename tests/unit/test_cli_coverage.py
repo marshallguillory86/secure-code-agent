@@ -30,7 +30,10 @@ def _write_config(tmp_path, *, required: bool):
             {"require_scanners": ["trivy"]} if required else {"fail_on_severity": ["critical"]}
         ),
     }
-    path = tmp_path / "secure-code-agent.json"
+    # Outside the audited tree: an in-tree config no longer chooses a
+    # scanner's command, so "trivy is missing" has to be the operator's
+    # config saying so, not the tree's.
+    path = tmp_path.parent / f"{tmp_path.name}-secure-code-agent.json"
     path.write_text(json.dumps(config), encoding="utf-8")
     # Trivy is only required where it has something to read. Without this the
     # tree is a lone JSON file and the applicability filter — correctly —

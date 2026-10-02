@@ -1,6 +1,6 @@
 # Threat model
 
-> Status: **v0.12.9 — 2026-09-11.** What this tool trusts, and where the lines are.
+> Status: **v0.12.10 — 2026-10-02.** What this tool trusts, and where the lines are.
 
 `secure-code-agent` runs on developer machines and CI runners. The tool reads source files, exec's scanner binaries, emits report artifacts. Threats below are considered in design; the listed mitigation is what we ship in v0.1.
 
@@ -59,6 +59,18 @@ withhold.
 
 The containment check runs on the resolved path from **every** route, not just
 the relative one, because `PATH` may contain `.` or a tree-local directory.
+
+**The line above was drawn at the executable, and the arguments walked past
+it (D29, 2026-10-02).** A config inside the tree could not name an executable
+inside the tree, but it could name any program on `PATH` and give it any
+arguments — and `python -c "<code>"` is any program. Preflight's `--version`
+probe ran it before a single scanner had audited anything, and
+maintainability-agent, which runs preflight before its user has said "run",
+made that a zero-click execution. **An untrusted config no longer chooses a
+scanner's command at all**: the scanner resolves as it would with no config,
+the preflight row carries `ignored_command`, and `--trust-target-config`
+restores the tree's choice for a repository you own. A config outside the
+tree keeps its command, as before.
 
 **A file target's boundary is its parent directory.** Nothing lives beneath a
 regular file, so `secure-code-agent app.py` made every containment test false
