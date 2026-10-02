@@ -40,6 +40,9 @@ jobs:
       - name: Check formatting
         run: python -m ruff format --check .
 
+      # No --cov-fail-under here: a command-line value beats pyproject.toml,
+      # and this one said 85 while the declared floor said 92. The floor is
+      # declared once, in pyproject.toml, and this job reads it from there.
       - name: Test with branch coverage
         run: >-
           python -m pytest
@@ -47,7 +50,6 @@ jobs:
           --cov=secure_code_audit
           --cov-branch
           --cov-report=term-missing
-          --cov-fail-under=85
 
       - name: Build wheel through pip
         run: python -m pip wheel . --no-deps --wheel-dir wheelhouse
