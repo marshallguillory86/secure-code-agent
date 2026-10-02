@@ -2,6 +2,7 @@
 
 import datetime
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -66,11 +67,24 @@ def test_max_ttl_enforced(tmp_path):
 
 
 def test_wildcard_requires_file_or_paths(tmp_path):
+    """An unscoped `rule_id: '*'` suppresses the entire audit.
+
+    This test used to expire in 2099, so the loader rejected it for
+    exceeding the maximum TTL and never reached the wildcard check at all —
+    and the assertion looked for "file" or "paths" *anywhere* in the error,
+    which the TTL message satisfied via the tmp_path in its prefix. It
+    passed against an unguarded wildcard. The expiry below is inside the TTL
+    so the entry gets as far as the rule it is about, and the error is
+    matched by its own words.
+    """
+    near = (datetime.date.today() + datetime.timedelta(days=30)).isoformat()
     p = tmp_path / ".scignore.yaml"
-    _write(p, "- rule_id: '*'\n  reason: 'too broad'\n  expires: '2099-01-01'\n")
-    _, errors = load(p)
-    assert errors
-    assert any("file" in e or "paths" in e for e in errors)
+    _write(p, f"- rule_id: '*'\n  reason: 'too broad'\n  expires: '{near}'\n")
+
+    rules, errors = load(p)
+
+    assert rules == []
+    assert any("requires `file` or `paths`" in e for e in errors), errors
 
 
 def test_apply_suppresses_matching_rule(tmp_path):
@@ -252,3 +266,84 @@ def test_a_well_formed_narrow_entry_loads(tmp_path):
     rules, errors = _load_entry(tmp_path, "fingerprint: 0aaa689f8a967d8c\n  line: 18")
     assert errors == []
     assert rules[0].fingerprint == "0aaa689f8a967d8c" and rules[0].line == 18
+
+
+# ---------------------------------------------------------------------------
+# Malformed at the document level, and in the required fields
+# ---------------------------------------------------------------------------
+#
+# The loader returns `(rules, errors)` and `cli._do_audit` refuses to report
+# when `errors` is non-empty. So a shape that produces neither a rule nor an
+# error is the dangerous one: the file reads as applied, the entries silently
+# do nothing, and the findings the operator reviewed come back as live
+# criticals. Each case below is a document the loader has to *name*.
+
+
+@pytest.mark.parametrize(
+    "document, message",
+    [
+        # A single entry written without the leading `-`. YAML parses it
+        # happily as a mapping, which is the easy version of this mistake.
+        ("rule_id: B608\nreason: r\nexpires: 2099-01-01\n", "top-level must be a list"),
+        ("- just a string\n", "must be a mapping"),
+        ("- reason: r\n  expires: 2027-01-01\n", "'rule_id' is required"),
+        # Matches YYYY-MM-DD, and is not a date. Without the second check the
+        # regex is the whole validation and February gets 30 days.
+        ("- rule_id: B608\n  reason: r\n  expires: '2027-02-30'\n", "not parseable"),
+    ],
+)
+def test_a_malformed_document_is_named_rather_than_skipped(tmp_path, document, message):
+    path = tmp_path / ".scignore.yaml"
+    _write(path, document)
+
+    rules, errors = load(path)
+
+    assert rules == []
+    assert any(message in e for e in errors), errors
+
+
+def test_an_unquoted_impossible_date_is_reported_by_the_loader_not_raised(tmp_path):
+    """PRODUCT BUG — the loader lets a bare ValueError out of `load`.
+
+    `expires: 2027-02-30` unquoted is a YAML *timestamp*, and PyYAML's
+    `construct_yaml_timestamp` raises a plain `ValueError` ("day is out of
+    range for month"). That is not a `yaml.YAMLError`, so the `except
+    yaml.YAMLError` around `safe_load` does not catch it and the exception
+    leaves `load`, which documents itself as returning
+    `(rules, validation_errors)`.
+
+    Through the CLI `main`'s blanket `except ValueError` turns it into
+    `ERROR: day is out of range for month` — no file, no entry number, and
+    none of the fail-closed wording the suppression path uses for every
+    other malformed entry. The quoted spelling of the same mistake is
+    reported properly, so which of two identical typos an operator can
+    diagnose depends on whether they used quotes.
+
+    Left failing deliberately: the fix belongs in `suppressions.load`
+    (catch `ValueError` alongside `yaml.YAMLError`), which is product code.
+    """
+    path = tmp_path / ".scignore.yaml"
+    _write(path, "- rule_id: B608\n  reason: r\n  expires: 2027-02-30\n")
+
+    rules, errors = load(path)
+
+    assert rules == []
+    assert any(str(path) in e for e in errors), errors
+
+
+def test_a_suppression_file_without_pyyaml_is_an_error_not_an_empty_ruleset(tmp_path, monkeypatch):
+    """The original incident, at the loader.
+
+    PyYAML was missing, `load` swallowed the ImportError, and an entire
+    `.scignore.yaml` became a no-op while the run still exited 0 and
+    reported every suppressed finding as live. Returning no rules *and* no
+    errors is what made that silent, so the error is the thing under test.
+    """
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    path = tmp_path / ".scignore.yaml"
+    _write(path, "- rule_id: B608\n  reason: r\n  expires: 2027-01-01\n")
+
+    rules, errors = load(path)
+
+    assert rules == []
+    assert any("pyyaml not installed" in e for e in errors), errors

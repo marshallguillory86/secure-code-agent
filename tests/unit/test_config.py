@@ -25,6 +25,25 @@ from secure_code_audit.config import load
         ({"gates": {"fail_on_category": ["authentication"]}}, "invalid gates"),
         ({"gates": {"max_unsuppressed": {"urgent": 0}}}, "invalid gates"),
         ({"asvs_level": 3}, "not an implemented gate"),
+        # Each of the following had no test, so the loader could have started
+        # accepting the value — and an accepted-but-unread setting is the
+        # defect this whole table exists for: it reads as a decision that was
+        # made and changes nothing.
+        ({"gates": []}, "gates must be a JSON object"),
+        ({"gates": {"fail_on_severity": ["urgent"]}}, "invalid gates.fail_on_severity"),
+        # A string is truthy, so `fail_on_new: "false"` would turn the ratchet
+        # *on* for an operator who wrote it to turn the ratchet off.
+        ({"gates": {"fail_on_new": "false"}}, "fail_on_new must be a boolean"),
+        ({"gates": {"max_unsuppressed": {"high": -1}}}, "non-negative integers"),
+        ({"scanners": {"": {}}}, "scanner names must be non-empty"),
+        ({"scanners": {"bandit": {"online": "yes"}}}, "online must be a boolean"),
+        ({"scanners": {"bandit": {"mode": 2}}}, "mode must be a string"),
+        ({"capabilities": {"": "a reason"}}, "capability names must be non-empty"),
+        ({"category_overrides": {"B101": "authentication"}}, "invalid category override"),
+        ({"severity_overrides": {"B101": 7}}, "severity_overrides must map"),
+        ({"suppressions_file": ""}, "suppressions_file must be a non-empty string"),
+        ({"loc_for_scoring": []}, "loc_for_scoring must be a JSON object"),
+        ({"loc_for_scoring": {"value": 0, "reason": "r"}}, "value must be a positive integer"),
     ],
 )
 def test_invalid_runtime_config_is_rejected(tmp_path, payload, message):
@@ -38,6 +57,23 @@ def test_invalid_runtime_config_is_rejected(tmp_path, payload, message):
 def test_explicit_missing_config_is_rejected(tmp_path):
     with pytest.raises(ValueError, match="configuration file does not exist"):
         load(tmp_path / "typo-config.json")
+
+
+def test_a_config_that_is_not_json_names_the_file_it_could_not_read(tmp_path):
+    """A trailing comma must not read as "no configuration".
+
+    Falling back to defaults here would silently drop the operator's gates,
+    their declared capabilities and their suppressions file — the audit would
+    run, exit 0, and report against a policy nobody chose. The path is in the
+    message because a run resolves a config it was not handed explicitly.
+    """
+    path = tmp_path / "config.json"
+    path.write_text('{"version": 1,}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="invalid JSON") as caught:
+        load(path)
+
+    assert str(path) in str(caught.value)
 
 
 def test_omitted_missing_default_config_uses_defaults(tmp_path, monkeypatch):
