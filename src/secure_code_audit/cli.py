@@ -361,6 +361,137 @@ def _print_preflight(rows: list[dict], unselected: list[str], blocking: list[str
         print("  all required scanners resolved")
 
 
+@dataclass(frozen=True)
+class _Axes:
+    """What the axis split produced, and the LOC that goes with it.
+
+    Seven values travelled together as seven locals inside a 346-line
+    function; a dataclass is what they were already.
+    """
+
+    primary: list[Finding]
+    test: list[Finding]
+    docs: list[Finding]
+    #: Kept whole as well as split: `declared_axes` reads it by name for the
+    #: capability axes, which are not a fixed set.
+    path_axes: dict[str, list[Finding]]
+    all_findings: list[Finding]
+    loc: int
+    test_loc: int
+    docs_loc: int
+    changed_note: str | None
+
+
+def _split_axes(
+    all_findings: list[Finding],
+    args: argparse.Namespace,
+    cfg: config_mod.Config,
+    target: Path,
+    root: Path,
+    own_artifacts: frozenset[Path],
+) -> _Axes:
+    """Partition findings by axis and measure each axis's LOC.
+
+    Lifted whole out of `_do_audit`, which was 346 lines at complexity 36
+    against configured limits of 80 and 15. The checks, their order and
+    their comments are unchanged: this is a move, not a rewrite, because a
+    rewrite of the axis split is how a repository gets graded on its test
+    fixtures and the corpus has already shown what that costs.
+    """
+    # The test tree is reported, not scored. A project graded on its test
+    # fixtures is graded on the wrong thing: across the calibration corpus,
+    # including test directories moved the median normalized subtotal from
+    # 4.36 to 50.15 and put ten of fourteen well-maintained projects at F.
+    # Secrets are no longer exempt from the split. Forcing them back onto the
+    # primary axis wherever they were found assumed every test-tree secret was
+    # a real credential; the corpus disagreed, with `requests` holding four
+    # criticals in `tests/certs/*.key` that its own suite generates. They are
+    # gated instead — see GATED_FROM_ANY_AXIS.
+    root_for_tests = target if target.is_dir() else target.parent
+
+    def _classify(finding: Finding) -> str:
+        # A dependency advisory is about the dependency, not about the file
+        # that happened to declare it. Classified by category before path,
+        # because the path routing gets it wrong: `requirements.txt` matches
+        # the documentation pattern `**/*.txt`, so every CVE in a pip
+        # manifest was filed under **documentation** — eighteen of them on a
+        # six-file demo tree. A dependency finding is not documentation
+        # whatever the manifest is called.
+        #
+        # Returning "primary" hands it to `split_side_axes` below, which is
+        # what moves it onto the dependencies axis. Neither axis is scored,
+        # so this changes where a finding is *reported*, not the grade.
+        if finding.category is Category.DEPENDENCIES:
+            return "primary"
+        # Joined onto the repository root: the patterns are relative to the
+        # scan target, which is not the repository root for a subdirectory
+        # audit.
+        located = root / finding.file_path
+        if is_test_path(located, root_for_tests, cfg.test_patterns):
+            return "test tree"
+        if is_test_path(located, root_for_tests, cfg.docs_patterns):
+            return "documentation"
+        # A finding that *is* a declared capability being exercised (D24),
+        # checked **after** the path axes. A subprocess call in the test tree
+        # is test tree: it is already unscored, and routing it to the
+        # declaration instead moved 492 findings off the tree's own axis and
+        # made the declaration look like it accounted for work it did not.
+        # The declaration is for the shipped source, which is the only place
+        # the path axes leave on the primary axis.
+        declared_as = capability_for(finding, cfg.capabilities)
+        if declared_as is not None:
+            return AXIS_PREFIX + declared_as
+        return "primary"
+
+    # `all_findings` keeps meaning *all* of them. Rebinding it to the primary
+    # set here — which an earlier revision did — silently narrowed everything
+    # downstream that still read the name at face value, and two things did:
+    #
+    #   * the report. The self-audit failed its gate with "1 finding(s) in
+    #     categories ['secrets']" while `findings[]` held only the fourteen
+    #     primary ones, so the operator was told the build failed and given
+    #     no way to learn which file. A gate reason nobody can act on is the
+    #     absence-of-evidence failure this tool exists to prevent.
+    #   * the baseline. `baseline.write` recorded only the primary set, so
+    #     every side-axis finding was absent from it and `fail_on_new`
+    #     re-flagged the same test-tree secret as new on every run, forever.
+    if args.changed_only:
+        all_findings, changed_note = _restrict_to_changed(all_findings, root, args.changed_only)
+    else:
+        changed_note = None
+
+    primary_findings, path_axes = partition_by_path(all_findings, _classify)
+    test_findings = path_axes.get("test tree", [])
+    docs_findings = path_axes.get("documentation", [])
+    if cfg.loc_for_scoring:
+        loc = int(cfg.loc_for_scoring.get("value", 0))
+        test_loc = 0
+        docs_loc = 0
+    else:
+        loc, test_loc, docs_loc = loc_under(
+            target,
+            cfg.include_extensions,
+            cfg.exclude_patterns,
+            cfg.test_patterns,
+            # Same set the findings were filtered against. Numerator and
+            # denominator have to describe the same repository.
+            own_artifacts,
+            cfg.docs_patterns,
+        )
+
+    return _Axes(
+        primary=primary_findings,
+        test=test_findings,
+        docs=docs_findings,
+        path_axes=path_axes,
+        all_findings=all_findings,
+        loc=loc,
+        test_loc=test_loc,
+        docs_loc=docs_loc,
+        changed_note=changed_note,
+    )
+
+
 def _do_audit(args: argparse.Namespace) -> int:
     cfg, target, root = _prepare_audit(args)
     _require_configured_gates(args, cfg)
@@ -442,86 +573,12 @@ def _do_audit(args: argparse.Namespace) -> int:
     all_findings = baseline_mod.mark_new(all_findings, baseline, root)
 
     # ----- scoring -----
-    # The test tree is reported, not scored. A project graded on its test
-    # fixtures is graded on the wrong thing: across the calibration corpus,
-    # including test directories moved the median normalized subtotal from
-    # 4.36 to 50.15 and put ten of fourteen well-maintained projects at F.
-    # Secrets are no longer exempt from the split. Forcing them back onto the
-    # primary axis wherever they were found assumed every test-tree secret was
-    # a real credential; the corpus disagreed, with `requests` holding four
-    # criticals in `tests/certs/*.key` that its own suite generates. They are
-    # gated instead — see GATED_FROM_ANY_AXIS.
-    root_for_tests = target if target.is_dir() else target.parent
-
-    def _classify(finding: Finding) -> str:
-        # A dependency advisory is about the dependency, not about the file
-        # that happened to declare it. Classified by category before path,
-        # because the path routing gets it wrong: `requirements.txt` matches
-        # the documentation pattern `**/*.txt`, so every CVE in a pip
-        # manifest was filed under **documentation** — eighteen of them on a
-        # six-file demo tree. A dependency finding is not documentation
-        # whatever the manifest is called.
-        #
-        # Returning "primary" hands it to `split_side_axes` below, which is
-        # what moves it onto the dependencies axis. Neither axis is scored,
-        # so this changes where a finding is *reported*, not the grade.
-        if finding.category is Category.DEPENDENCIES:
-            return "primary"
-        # Joined onto the repository root: the patterns are relative to the
-        # scan target, which is not the repository root for a subdirectory
-        # audit.
-        located = root / finding.file_path
-        if is_test_path(located, root_for_tests, cfg.test_patterns):
-            return "test tree"
-        if is_test_path(located, root_for_tests, cfg.docs_patterns):
-            return "documentation"
-        # A finding that *is* a declared capability being exercised (D24),
-        # checked **after** the path axes. A subprocess call in the test tree
-        # is test tree: it is already unscored, and routing it to the
-        # declaration instead moved 492 findings off the tree's own axis and
-        # made the declaration look like it accounted for work it did not.
-        # The declaration is for the shipped source, which is the only place
-        # the path axes leave on the primary axis.
-        declared_as = capability_for(finding, cfg.capabilities)
-        if declared_as is not None:
-            return AXIS_PREFIX + declared_as
-        return "primary"
-
-    # `all_findings` keeps meaning *all* of them. Rebinding it to the primary
-    # set here — which an earlier revision did — silently narrowed everything
-    # downstream that still read the name at face value, and two things did:
-    #
-    #   * the report. The self-audit failed its gate with "1 finding(s) in
-    #     categories ['secrets']" while `findings[]` held only the fourteen
-    #     primary ones, so the operator was told the build failed and given
-    #     no way to learn which file. A gate reason nobody can act on is the
-    #     absence-of-evidence failure this tool exists to prevent.
-    #   * the baseline. `baseline.write` recorded only the primary set, so
-    #     every side-axis finding was absent from it and `fail_on_new`
-    #     re-flagged the same test-tree secret as new on every run, forever.
-    if args.changed_only:
-        all_findings, changed_note = _restrict_to_changed(all_findings, root, args.changed_only)
-    else:
-        changed_note = None
-
-    primary_findings, path_axes = partition_by_path(all_findings, _classify)
-    test_findings = path_axes.get("test tree", [])
-    docs_findings = path_axes.get("documentation", [])
-    if cfg.loc_for_scoring:
-        loc = int(cfg.loc_for_scoring.get("value", 0))
-        test_loc = 0
-        docs_loc = 0
-    else:
-        loc, test_loc, docs_loc = loc_under(
-            target,
-            cfg.include_extensions,
-            cfg.exclude_patterns,
-            cfg.test_patterns,
-            # Same set the findings were filtered against. Numerator and
-            # denominator have to describe the same repository.
-            own_artifacts,
-            cfg.docs_patterns,
-        )
+    _axes = _split_axes(all_findings, args, cfg, target, root, own_artifacts)
+    all_findings = _axes.all_findings
+    primary_findings, test_findings, docs_findings = _axes.primary, _axes.test, _axes.docs
+    path_axes = _axes.path_axes
+    loc, test_loc, docs_loc = _axes.loc, _axes.test_loc, _axes.docs_loc
+    changed_note = _axes.changed_note
     # Dependencies come off the code-condition score and onto their own axis.
     # A CVE in a pinned dependency is fixed with a version bump; an injection
     # flaw is fixed with a rewrite. Averaging them produced the largest
