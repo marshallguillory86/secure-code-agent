@@ -134,6 +134,11 @@ ignore = ["E501"]  # let line-length be a soft guide; long log strings are fine
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
+# The suite tests this checkout, never an installed copy. Without it, bare
+# `pytest` imports whichever secure_code_audit the interpreter can find, and
+# an environment holding a plain install grades code nobody is editing —
+# which is how maintainability-agent came to report a bug fixed in #59.
+pythonpath = ["src"]
 
 [tool.coverage.run]
 source = ["secure_code_audit"]
