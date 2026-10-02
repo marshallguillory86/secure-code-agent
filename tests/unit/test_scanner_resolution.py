@@ -125,8 +125,10 @@ def test_config_inside_the_tree_cannot_choose_an_executable_from_the_tree(tmp_pa
     scanner = BanditScanner()
     scanner.configure(tmp_path, cfg)
 
-    assert scanner.command == ()
-    assert not scanner.is_available()
+    # The tree's choice is ignored rather than leaving the scanner with no
+    # command; either way the tree's executable is never what runs.
+    assert not any("pwn.sh" in part for part in scanner.command)
+    assert scanner.ignored_command is True
 
 
 def test_an_operator_config_outside_the_tree_keeps_the_tree_local_workflow(tmp_path):
@@ -188,7 +190,11 @@ def test_a_file_target_refuses_an_in_tree_configured_executable(tmp_path):
     scanner.configure(target, cfg)
 
     assert target_executables_allowed(cfg, target) is False
-    assert scanner.command == ()
+    # Since the untrusted config stopped choosing the command at all, the
+    # scanner resolves as it would with no config rather than to nothing;
+    # what this pins is unchanged — the tree's executable is never it.
+    assert str(executable) not in scanner.command
+    assert scanner.ignored_command is True
 
 
 def test_the_floor_and_optional_sets_are_disjoint_and_complete():
@@ -300,3 +306,41 @@ def test_a_configured_timeout_still_wins_over_the_adapter_default():
     config = Config(scanners={"scorecard": ScannerConfig(timeout_seconds=30)})
 
     assert ScorecardScanner().cfg(config).timeout_seconds == 30
+
+
+def test_config_inside_the_tree_cannot_choose_a_command_at_all(tmp_path):
+    """T1, the half the executable check missed (maintainability-agent's audit, 2026-10-02).
+
+    The guard refused an executable *inside* the tree, and nothing else: a
+    config in the tree could name a program on PATH and give it any
+    arguments, and `python -c "<code>"` is any program. The preflight's
+    `--version` probe ran it, before a single scanner had been asked to
+    audit anything. An untrusted config does not choose the command; the
+    scanner resolves as it would with no config.
+    """
+    marker = tmp_path / "marker"
+    payload = [sys.executable, "-c", f"open({str(marker)!r}, 'w').write('ran')"]
+    cfg = _config_naming(tmp_path, payload, source=tmp_path / "secure-code-agent.json")
+
+    scanner = BanditScanner()
+    scanner.configure(tmp_path, cfg)
+    scanner.binary_version()
+
+    assert "-c" not in scanner.command
+    assert scanner.ignored_command is True
+    assert not marker.exists()
+
+
+def test_an_operator_config_or_explicit_trust_still_chooses_the_command(tmp_path):
+    """The operator's own config outside the tree, and --trust-target-config, are unchanged."""
+    command = [sys.executable, "-m", "bandit"]
+    outside = _config_naming(tmp_path, command, source=tmp_path.parent / "operator.json")
+    trusted = _config_naming(
+        tmp_path, command, source=tmp_path / "secure-code-agent.json", trust=True
+    )
+
+    for cfg in (outside, trusted):
+        scanner = BanditScanner()
+        scanner.configure(tmp_path, cfg)
+        assert scanner.command[1:] == ("-m", "bandit")
+        assert scanner.ignored_command is False

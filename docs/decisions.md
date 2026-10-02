@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.9 — 2026-09-18.** The decision register. D1–D28.
+> Status: **v0.12.10 — 2026-10-02.** The decision register. D1–D29.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -41,6 +41,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D26 | This tool stands alone; feeding the sibling is an integration, not a purpose | 2026-09-18 | Accepted |
 | D27 | The work order is available as facts, not only as prose | 2026-09-19 | Accepted |
 | D28 | A declared capability's findings are not patch targets | 2026-09-20 | Accepted |
+| D29 | An untrusted config does not choose a scanner's command | 2026-10-02 | Accepted |
 
 ---
 
@@ -1828,3 +1829,29 @@ parametrised one the day a fifth capability is declared — which is the shape
 that produced this defect; checking the axis *after* the rule and confidence
 tests sends a declared low-confidence finding to §REVIEW, where it still asks
 an agent to judge architecture the operator already settled.
+
+## D29 — An untrusted config does not choose a scanner's command
+
+**Status:** Accepted · 2026-10-02 · closes the argument half of threat-model T1
+
+**Context.** The T1 ruling refused a command that an in-tree config named
+*from the tree*. Nothing refused the arguments. An in-tree
+`secure-code-agent.json` could set `scanners.bandit.command` to the system
+Python with `-c "<anything>"`, and `binary_version()` ran it during
+`--preflight`, before any scanner had audited anything. maintainability-agent's
+own audit found it: that tool runs this preflight before its user has said
+"run", so asking it about a hostile repository executed the repository's code.
+
+**Decision.** A config the audited tree supplies — inside the containment
+root, without `--trust-target-config` — does not choose any scanner's
+command. The scanner resolves as it would with no config (its binary on
+`PATH`, or its Python module), records `ignored_command`, and the preflight
+row says so. A config outside the tree, and `--trust-target-config`, keep the
+command as before.
+
+**Consequences.** A repository that set a command for a reason of its own —
+a tree-local virtualenv, a wrapper — now gets the default scanner unless its
+owner passes `--trust-target-config`. That is the trade T1 already made for
+executables, extended to the arguments that made the executable check
+decorative.
+
