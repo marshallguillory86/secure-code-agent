@@ -1,6 +1,6 @@
 # secure-code-agent — Product Intent
 
-> Status: **v0.12.10 — 2026-09-11.** The single source of truth for
+> Status: **v0.12.10 — 2026-10-02.** The single source of truth for
 > *why this exists, who it serves, and what it refuses to become.*
 > Companion docs: [`design.md`](design.md) for how it is built,
 > [`architecture.md`](architecture.md) for where the build diverges from the
@@ -306,3 +306,43 @@ rather than settled by whichever feature lands first.
 5. **What is the adoption path for a repository with thousands of existing
    findings?** Baseline plus expiring suppressions is the current answer, but it
    has not been exercised on a large legacy codebase.
+6. **Should preflight advise on a required scanner the operator switched off?**
+   `--preflight --json` builds a row per *selected* scanner, each carrying a
+   `remedy` from the adapter's own `unavailable_fix_hint()`. A scanner that is
+   required but **not selected** never gets a row: it appears only as a name in
+   `required_not_selected`, with no advice attached. A host that wants to tell
+   its user what to do must therefore write that advice itself — which is the
+   thing this tool exists to stop other tools having to invent.
+
+   Raised by `maintainability-agent`, whose Decision 14 puts scanner knowledge
+   in this tool, so MA deliberately wrote no remedy of its own and Grok's audit
+   of MA 4.0.0 flagged MA as silent in that case. Verified here against
+   `cli.py`: the row loop covers `selected` only.
+
+   Undecided, and the shape of an answer is not obvious. "Switched off" is an
+   operator's choice, so advice about it reads closer to *your config and your
+   gate disagree* than to *install this tool* — which may make it a
+   gate-reporting concern rather than a preflight one.
+7. **Should a host be able to ask for a preflight that never reads the target's
+   config?** There is `--config` and there is `--trust-target-config`, but
+   nothing that declines the audited tree's configuration outright: with
+   `--config` omitted, `config_mod.load` discovers `secure-code-agent.json`
+   inside the target.
+
+   A host asking *before* its user has consented to a run — MA's chat door does
+   exactly this — cannot let the target's config decide anything. So MA writes
+   an empty `{}` file and points `--config` at it. That works, and it is a
+   workaround for a gap in this tool's surface. D29 closed the execution half
+   of the same concern; this is the half that remains.
+
+   Raised by `maintainability-agent` (4.0.1 / D222). Verified here against
+   `cli.py`. A flag of this tool's own — MA suggests `--ignore-target-config` —
+   would replace the workaround *if* it belongs in the product.
+
+   Undecided, and **not urgent on the consumer's own account.** Asked directly
+   whether the empty-file route is painful or merely inelegant, MA answered
+   inelegant: a few lines in its `_security_delegate.py`, written to a temp
+   directory outside the target, working against every release from 0.12.10.
+   So this is a question about whether a cleaner surface is worth a third
+   config mode, not about unblocking anything — recorded that way so nobody
+   later reads it as a consumer waiting on us.
