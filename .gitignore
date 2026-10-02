@@ -57,5 +57,22 @@ calibration/.corpus/
 # line the day a workflow actually runs `uv sync`.
 uv.lock
 
-# Scan history — trend data, appended every run.
-.secure-code/
+# Scan history — trend data, appended every run. **Committed, deliberately.**
+#
+# This was ignored, and the standing rule is the opposite: the scan history is
+# committed so the history report survives any checkout being removed. A trend
+# that only exists on one laptop is not a trend, and this repository's whole
+# argument for a score is that movement over time is the number's one genuine
+# use.
+#
+# The file carries counts, scores, scanner names and timestamps. No paths, no
+# code snippets, no secrets — checked before un-ignoring it.
+!.secure-code/
+!.secure-code/history.jsonl
+
+# maintainability-agent's history, beside it, for the same reason and under the
+# same rule. Its dated HTML reports live in docs/audits/ and are never
+# overwritten -- one file per audit, so the record of what the repo scored on a
+# given day survives the checkout it was produced in.
+!.maintainability/
+!.maintainability/history.jsonl
