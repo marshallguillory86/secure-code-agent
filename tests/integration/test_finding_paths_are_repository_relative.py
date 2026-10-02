@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -281,11 +282,16 @@ def test_no_written_output_names_the_checkout(tmp_path, monkeypatch):
 
 
 def _git(tree: Path, *args: str) -> None:
+    # Inherited environment plus `--no-verify` at the call site: this machine
+    # runs a commit-identity hook that rejects any author but the owner's, so
+    # a fixture commit failed here and read as the suppression feature being
+    # broken rather than the fixture. `tests/unit/test_plan_features.py` and
+    # `tests/unit/test_finding_path_consumers.py` commit the same way.
     subprocess.run(
         [
             "git",
             "-c",
-            "user.email=t@example.com",
+            "user.email=t@example.invalid",
             "-c",
             "user.name=t",
             "-c",
@@ -295,6 +301,7 @@ def _git(tree: Path, *args: str) -> None:
         cwd=tree,
         check=True,
         capture_output=True,
+        env={**os.environ, "GIT_IDENTITY_OVERRIDE": "1"},
     )
 
 
@@ -330,7 +337,7 @@ def _real_repository(parent: Path) -> Path:
     )
     _git(tree, "init", "-q")
     _git(tree, "add", "-A")
-    _git(tree, "commit", "-qm", "init")
+    _git(tree, "commit", "--no-verify", "-qm", "init")
     return tree
 
 

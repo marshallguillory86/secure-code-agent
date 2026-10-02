@@ -14,6 +14,11 @@ build/
 dist/
 .pytest_cache/
 .coverage
+# Parallel-run fragments. `.coverage` alone did not cover these, so ~100 stale
+# `.coverage.<host>.<pid>` files accumulated as untracked repo noise and broke
+# every coverage run with "Can't combine statement coverage data with branch
+# data" until they were cleared.
+.coverage.*
 coverage.xml
 htmlcov/
 .mypy_cache/

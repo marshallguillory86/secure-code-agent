@@ -140,7 +140,12 @@ source = ["secure_code_audit"]
 branch = true
 
 [tool.coverage.report]
-fail_under = 85
+# The house floor. Raised 85 -> 92 once the suite could actually clear it:
+# measured 93.79% branch coverage after the test seat covered --verify-against
+# (which had no test through main() at all), the four live-config keys, and the
+# loader's fail-closed paths. Raising it while the suite sat at 90.42% would
+# have bought a red build and no tests.
+fail_under = 92
 exclude_lines = [
   "pragma: no cover",
   "if __name__ == .__main__.:",

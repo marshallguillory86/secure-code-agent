@@ -121,7 +121,21 @@ def load(path: Path) -> tuple[list[SuppressionRule], list[str]]:
 
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or []
-    except yaml.YAMLError as e:
+    except (yaml.YAMLError, ValueError) as e:
+        # `ValueError` alongside `YAMLError`, because PyYAML lets one out.
+        #
+        # An unquoted `expires: 2027-02-30` is a YAML *timestamp*, and
+        # `construct_yaml_timestamp` raises a plain `ValueError` ("day is out
+        # of range for month") rather than a `YAMLError`. It therefore escaped
+        # this handler entirely, left `load`, and surfaced through the CLI's
+        # blanket `except ValueError` as a bare "ERROR: day is out of range
+        # for month" — no file, no entry number, none of the fail-closed
+        # wording every other malformed entry gets.
+        #
+        # Quote the same typo and it was reported properly, so whether an
+        # operator could diagnose their own file depended on whether they
+        # happened to use quotes. This contract says `load` returns
+        # `(rules, errors)`; it does not say it raises.
         return [], [f"{path}: YAML parse error: {e}"]
 
     if not isinstance(raw, list):
