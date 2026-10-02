@@ -346,3 +346,47 @@ rather than settled by whichever feature lands first.
    So this is a question about whether a cleaner surface is worth a third
    config mode, not about unblocking anything — recorded that way so nobody
    later reads it as a consumer waiting on us.
+8. **Does exit-code policy belong in `_exec` or in each adapter?** `_exec`
+   takes an `allowed_exits` tuple and does nothing with it: both branches
+   return the `CompletedProcess` unchanged, so the parameter has no effect on
+   any run. Fourteen adapters pass it, and several then write the same tuple a
+   second time as a live check — `allowed_exits=(0, 183)` sitting beside `if
+   r.returncode not in (0, 183)`. That is the two-sources-of-truth shape this
+   repository keeps finding, except here one of the two sources is inert.
+
+   The cost is visible in `bandit_scanner.py`, which declares `(0, 1)` to
+   `_exec` and then checks no exit code at all beyond the timeout sentinel. A
+   bandit internal error is caught only indirectly, by the JSON parse failing
+   — which it probably does, but that is luck rather than a guard, and the
+   adapter reads as though it had one.
+
+   Two coherent answers, and they differ in where knowledge lives. Delete the
+   parameter, and each adapter keeps stating its own exit codes, which is what
+   already happens; or make `_exec` enforce it, and the fourteen inline checks
+   collapse into the one declaration. The second is the stronger design and the
+   larger change: `_exec` returns a `CompletedProcess`, so enforcement needs a
+   way to say "this exit code is not acceptable" that fifteen call sites can
+   act on without each re-deriving it.
+
+   Found by the test seat while writing the first direct tests for
+   `_execution.py`, which is the kind of thing a paired test finds and an
+   indirect one does not. The docstring now states the truth; the parameter and
+   its call sites are untouched pending this answer.
+9. **Should a curated OWASP id outrank one derived from an overriding CWE?**
+   `_resolve_standards` lets an adapter's `cwe_override` beat the curated map
+   for the CWE, but takes OWASP as `entry.owasp_top10 or
+   owasp_for_cwe(canonical_cwe)` — so the curated entry still supplies OWASP
+   even when its CWE was just overruled. With `cwe_override="CWE-22"` on
+   bandit's B608, the finding reports CWE-22 (path traversal) alongside
+   A03:2021-Injection, where the overriding CWE would have derived
+   A01:2021-Broken Access Control.
+
+   It may be right: the curated row is reviewed and the derivation is a lookup
+   table, so preferring the reviewed value is defensible. It may equally be a
+   seam nobody chose, where an override is honoured for one field and ignored
+   for the field computed from it. Either way a reader of the report sees a CWE
+   and an OWASP category that disagree about what kind of defect it is.
+
+   Pinned by `test_curated_owasp_wins_over_the_one_derived_from_an_overriding_cwe`
+   so the behaviour cannot drift while the question is open. Semgrep is the
+   adapter that uses `cwe_override`, so it is the one whose output this decides.
