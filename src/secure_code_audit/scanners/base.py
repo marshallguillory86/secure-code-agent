@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import os
 import re
@@ -18,6 +19,7 @@ from secure_code_audit.config import (
     containment_root,
     is_within,
     scanner_cfg,
+    target_config_is_untrusted,
     target_executables_allowed,
 )
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
@@ -39,6 +41,9 @@ class Scanner(ABC):
     binary: str  # name of the executable on PATH
     version_flag: str = "--version"
     python_module: str | None = None
+    #: True when the audited tree's own config set this scanner's command and
+    #: it was not honoured. See `configure`.
+    ignored_command: bool = False
     default_category: Category = Category.CODE_VULNERABILITIES
     # How an operator obtains this scanner. Surfaced in the unavailable
     # finding and in --preflight. The agent never installs anything itself.
@@ -61,7 +66,17 @@ class Scanner(ABC):
         """
         root = containment_root(target)
         self._allow_target_executables = target_executables_allowed(config, target)
-        self._resolved_command = self._resolve_command(root, self.cfg(config))
+        chosen = self.cfg(config)
+        # An untrusted config does not choose the command — not just "not an
+        # executable from the tree". It could name any program on PATH with
+        # any arguments, and `python -c "<code>"` is any program; the
+        # `--version` probe ran it during preflight, before anything was
+        # audited (maintainability-agent's audit, 2026-10-02). The scanner
+        # resolves as it would with no config, and says it ignored one.
+        self.ignored_command = bool(chosen.command) and target_config_is_untrusted(config, target)
+        if self.ignored_command:
+            chosen = dataclasses.replace(chosen, command=[])
+        self._resolved_command = self._resolve_command(root, chosen)
 
     @property
     def command(self) -> tuple[str, ...]:

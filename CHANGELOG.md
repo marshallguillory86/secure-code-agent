@@ -4,6 +4,23 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.12.10 — 2026-10-02
+
+**A repository could run code on the auditing machine through preflight.**
+
+### Security — an untrusted config does not choose a scanner's command (D29)
+
+- A `secure-code-agent.json` inside the audited tree could set a scanner's
+  command to any program on `PATH` with any arguments — `python -c "<code>"`
+  included — and `--preflight`'s version probe ran it before anything was
+  audited. The threat model's T1 ruling refused tree-local executables and
+  not the arguments. An in-tree config no longer chooses the command: the
+  scanner resolves as it would with no config, and preflight reports
+  `ignored_command`. `--trust-target-config`, or a config kept outside the
+  tree, keeps the configured command.
+- Found by maintainability-agent's audit, where it was reachable before the
+  user had consented to a run.
+
 ## 0.12.9 — 2026-09-20
 
 **One tool, two answers.** A run reported `5.00 (A+) — no findings` in the
