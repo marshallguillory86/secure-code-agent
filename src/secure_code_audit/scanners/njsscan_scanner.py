@@ -53,9 +53,7 @@ class NjsscanScanner(Scanner):
         args = [*self.command, "--json", str(target), *sc_cfg.extra_args]
 
         # njsscan exits 1 when it has findings, 0 when clean.
-        r = self._exec(
-            args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
-        )
+        r = self._exec(args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds)
         if r.returncode == 124:
             return self.timed_out(target, f"njsscan timed out: {r.stderr}")
         if not r.stdout.strip():

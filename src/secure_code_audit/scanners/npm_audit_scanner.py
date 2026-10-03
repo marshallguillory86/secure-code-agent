@@ -52,9 +52,7 @@ class NpmAuditScanner(Scanner):
         for pkg_dir in pkg_dirs:
             args = [*self.command, "audit", "--json", "--omit=dev"]
             args.extend(sc_cfg.extra_args)
-            r = self._exec(
-                args, cwd=pkg_dir, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
-            )
+            r = self._exec(args, cwd=pkg_dir, timeout_seconds=sc_cfg.timeout_seconds)
             if r.returncode == 124:
                 timeouts.append(f"npm audit timed out in {pkg_dir}")
                 continue

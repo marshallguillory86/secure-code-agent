@@ -406,6 +406,44 @@ for repositories whose `pyproject.toml` is their authoritative audit input.
 
 Wildcard rule (`rule_id: "*"`) requires a `file` or `paths` scope — you cannot disable a rule globally.
 
+## Extending the standards mapping
+
+The shipped mapping table lives in `data/standards.yaml` and covers the rules
+this project curates. Semgrep alone publishes thousands, so point
+`standards_overlay` at your own file to map or correct a rule without waiting
+for a release:
+
+```json
+{ "standards_overlay": "security/standards-overlay.yaml" }
+```
+
+```yaml
+version: 1
+entries:
+  - scanner: semgrep
+    rule_id: python.lang.security.audit.my-rule
+    canonical_cwe: CWE-22
+    owasp_top10: A01
+    asvs_section: V12.3.1
+    nist_ssdf: PW.5.1
+    short_desc: Path traversal in our request handler.
+    fix_hint: Resolve the path and contain it under the upload root.
+```
+
+An overlay entry wins over the shipped table for the fields it sets, and an
+adapter asserting its own CWE still wins over both.
+
+**An overlay cannot set `severity`, `confidence` or `category`**, and a file
+that tries is refused with the reason rather than ignored. Those three are the
+scoring inputs: an overlay that set them could move the grade, which is the
+hole [D32](docs/decisions.md) closed on the configuration side. An overlay says
+*what weakness a rule describes*; it does not say *how much it counts*. Set
+severity policy with `severity_overrides` in a config kept outside the audited
+tree.
+
+A declared overlay that cannot be read fails the run rather than being skipped,
+for the same reason a malformed `.scignore.yaml` does.
+
 ## Baseline + incremental adoption
 
 `secure-code-baseline.json` fingerprints every current finding. On the next run:

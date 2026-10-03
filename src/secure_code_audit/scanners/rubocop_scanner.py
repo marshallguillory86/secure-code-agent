@@ -73,9 +73,7 @@ class RubocopScanner(Scanner):
         ]
 
         # RuboCop exits 1 when it has offenses, 0 when clean.
-        r = self._exec(
-            args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
-        )
+        r = self._exec(args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds)
         if r.returncode == 124:
             return self.timed_out(target, f"rubocop timed out: {r.stderr}")
         if not r.stdout.strip():

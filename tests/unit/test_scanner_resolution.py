@@ -45,9 +45,9 @@ def test_non_executable_configured_command_is_unavailable(tmp_path):
 
 
 def test_python_module_fallback_uses_active_interpreter(tmp_path, monkeypatch):
-    monkeypatch.setattr("secure_code_audit.scanners.base.shutil.which", lambda _name: None)
+    monkeypatch.setattr("secure_code_audit.scanners._resolution.shutil.which", lambda _name: None)
     monkeypatch.setattr(
-        "secure_code_audit.scanners.base.importlib.util.find_spec", lambda _name: object()
+        "secure_code_audit.scanners._resolution.importlib.util.find_spec", lambda _name: object()
     )
 
     scanner = BanditScanner()
@@ -59,11 +59,11 @@ def test_python_module_fallback_uses_active_interpreter(tmp_path, monkeypatch):
 
 def test_named_configured_command_uses_path_and_reports_version(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "secure_code_audit.scanners.base.shutil.which",
+        "secure_code_audit.scanners._resolution.shutil.which",
         lambda name: "/tools/bandit" if name == "custom-bandit" else None,
     )
     monkeypatch.setattr(
-        "secure_code_audit.scanners.base.subprocess.run",
+        "secure_code_audit.scanners._resolution.subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess(
             args=args[0], returncode=0, stdout="bandit 1.9.4\n", stderr=""
         ),
@@ -80,7 +80,7 @@ def test_version_and_exec_failures_are_contained(tmp_path, monkeypatch):
     scanner = BanditScanner()
     scanner._resolved_command = ("bandit",)
     monkeypatch.setattr(
-        "secure_code_audit.scanners.base.subprocess.run",
+        "secure_code_audit.scanners._resolution.subprocess.run",
         lambda *args, **kwargs: (_ for _ in ()).throw(subprocess.TimeoutExpired("bandit", 1)),
     )
     assert scanner.binary_version() is None
@@ -277,7 +277,7 @@ def test_a_failed_version_probe_is_not_reported_as_a_version(tmp_path, monkeypat
     # Scorecard has no --version flag. The probe's stderr was landing in the
     # version column of a report that otherwise claimed the scanner ran fine.
     monkeypatch.setattr(
-        "secure_code_audit.scanners.base.subprocess.run",
+        "secure_code_audit.scanners._resolution.subprocess.run",
         lambda *a, **k: subprocess.CompletedProcess(
             args=a[0], returncode=1, stdout="", stderr="Error: unknown flag: --version"
         ),

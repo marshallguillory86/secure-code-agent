@@ -1,6 +1,6 @@
 # secure-code-agent — Architecture Audit
 
-> Status: **v0.12.10 — 2026-09-11.** Assessment of the system as built.
+> Status: **v0.12.10 — 2026-10-02.** Assessment of the system as built.
 > Companion docs: [`design.md`](design.md) states the intended architecture;
 > this document records where the implementation diverges from it and which
 > divergences are generating recurring defects.
@@ -292,7 +292,15 @@ it is a product decision, not a refactor.
 
 ## 6. Smaller structural debt
 
-- **`cli.py` is orchestrator, pipeline, and presenter** in 501 lines. Extracting
+**No line counts here.** They were hand-copied into this prose and drifted
+badly — `cli.py` was recorded as 501 lines when it had reached 1577, and
+`standards.py` as 523 when it had reached 705. The audit reports both live and
+accurately on every run, so a number transcribed here is a second source of
+truth for something already measured, which is §3's own problem appearing in
+the document that describes it. Sizes below are named as *shapes*, and the
+current figures come from the audit.
+
+- **`cli.py` is orchestrator, pipeline, and presenter.** Extracting
   `_prepare_audit`, `_run_scanners`, `_ingest_sarif_imports`, `_write_outputs`,
   and `_exit_code` brought `_do_audit`
   ([`cli.py:218`](../src/secure_code_audit/cli.py#L218)) under this project's
@@ -301,7 +309,7 @@ it is a product decision, not a refactor.
   classification must happen *before* suppression, or a suppressed
   `tool_unavailable` would read as a successful scan — is recorded only in a
   comment.
-- **`standards.py` is 523 lines**, roughly 390 of them a hand-written
+- **`standards.py` is mostly one table** — roughly 390 lines of hand-written
   `(scanner, rule_id) → StandardsEntry` dict beginning at
   [`standards.py:95`](../src/secure_code_audit/standards.py#L95). Adding a
   mapping requires a package release, operators cannot extend it (the module
@@ -312,9 +320,11 @@ it is a product decision, not a refactor.
   by implementing it with the property that made it unsafe: the whole tree is
   scanned, the report is scoped, and the grade is withheld.
 - **Two console scripts** (`secure-code-agent`, `secure-code-audit`) for one
-  entry point.
-- **`secure-code-report.json` is not gitignored** while `secure-code-report.md`
-  is, so a CI-shaped local run leaves an untracked file behind.
+  entry point — both point at `cli:main`. A third, `secure-code-agent-mcp`, has
+  since been added, and that one is a genuinely different entry point.
+- ~~**`secure-code-report.json` is not gitignored** while `secure-code-report.md`
+  is, so a CI-shaped local run leaves an untracked file behind.~~ **Closed** —
+  both are ignored now.
 - **`environment: name: pypi`** in `release.yml` requires that environment to
   exist in repository settings before the first tagged release will publish.
 

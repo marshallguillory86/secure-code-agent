@@ -286,6 +286,11 @@ class Config:
     gates: dict[str, Any] = field(default_factory=lambda: {"fail_on_new": True})
     outputs: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_OUTPUTS))
     suppressions_file: str = ".scignore.yaml"
+    #: Operator's standards mapping, layered over the shipped table. It may
+    #: add or correct a rule's CWE/OWASP/ASVS/SSDF and prose, and may not
+    #: set severity, confidence or category — those are the scoring inputs
+    #: (D32). §8 question 3.
+    standards_overlay: str | None = None
     loc_for_scoring: dict[str, Any] | None = None
     raw: dict[str, Any] = field(default_factory=dict)
     #: Where this config was read from, or None for built-in defaults. Needed
@@ -423,28 +428,14 @@ _KNOWN_KEYS = frozenset(
         "gates",
         "outputs",
         "suppressions_file",
+        "standards_overlay",
         "loc_for_scoring",
     }
 )
 
 
-def _from_dict(raw: dict[str, Any]) -> Config:
-    if not isinstance(raw, dict):
-        raise ValueError("configuration root must be a JSON object")
-    # Named before the generic sweep: a key we deliberately withdrew deserves
-    # the reason it was withdrawn, not "unknown key".
-    if "asvs_level" in raw:
-        raise ValueError("asvs_level is not an implemented gate; remove it from the configuration")
-    unknown = sorted(set(raw) - _KNOWN_KEYS)
-    if unknown:
-        raise ValueError(
-            f"unknown configuration key(s): {', '.join(unknown)}. "
-            "A key this tool does not read cannot change what it does, so it is "
-            "rejected rather than ignored."
-        )
-    cfg = Config(raw=raw)
-    cfg.version = int(raw.get("version", 1))
-
+def _apply_paths(cfg: Config, raw: dict[str, Any]) -> None:
+    """The `paths` block."""
     paths = raw.get("paths", {})
     if not isinstance(paths, dict):
         raise ValueError("paths must be a JSON object")
@@ -461,6 +452,9 @@ def _from_dict(raw: dict[str, Any]) -> Config:
     if "docs_patterns" in paths:
         cfg.docs_patterns = tuple(_string_list(paths["docs_patterns"], "paths.docs_patterns"))
 
+
+def _apply_capabilities(cfg: Config, raw: dict[str, Any]) -> None:
+    """The `capabilities` block — a declaration is refused without its reason."""
     capabilities_raw = raw.get("capabilities", {})
     if not isinstance(capabilities_raw, dict):
         raise ValueError("capabilities must be a JSON object of name -> reason")
@@ -486,6 +480,9 @@ def _from_dict(raw: dict[str, Any]) -> Config:
         )
     cfg.capabilities = dict(capabilities_raw)
 
+
+def _apply_scanners(cfg: Config, raw: dict[str, Any]) -> None:
+    """The `scanners` block."""
     scanners_raw = raw.get("scanners", {})
     if not isinstance(scanners_raw, dict):
         raise ValueError("scanners must be a JSON object")
@@ -521,6 +518,9 @@ def _from_dict(raw: dict[str, Any]) -> Config:
             inputs=inputs,
         )
 
+
+def _apply_overrides_and_gates(cfg: Config, raw: dict[str, Any]) -> None:
+    """Severity/category overrides, then `gates`."""
     cfg.severity_overrides = _string_mapping(
         raw.get("severity_overrides", {}), "severity_overrides"
     )
@@ -535,6 +535,9 @@ def _from_dict(raw: dict[str, Any]) -> Config:
     # entirely; the ratchet default applies only when they write none.
     cfg.gates = _validate_gates(raw["gates"]) if "gates" in raw else dict(cfg.gates)
 
+
+def _apply_outputs(cfg: Config, raw: dict[str, Any]) -> None:
+    """The `outputs` block, where D2 had to be applied a second time."""
     outputs = raw.get("outputs", {})
     if not isinstance(outputs, dict):
         raise ValueError("outputs must be a JSON object")
@@ -567,23 +570,77 @@ def _from_dict(raw: dict[str, Any]) -> Config:
             )
         cfg.outputs[k] = value
 
+
+def _apply_file_and_loc(cfg: Config, raw: dict[str, Any]) -> None:
+    """`suppressions_file`, `standards_overlay` and `loc_for_scoring`."""
     if "suppressions_file" in raw:
         value = raw["suppressions_file"]
         if not isinstance(value, str) or not value:
             raise ValueError("suppressions_file must be a non-empty string")
         cfg.suppressions_file = value
 
+    if "standards_overlay" in raw:
+        value = raw["standards_overlay"]
+        if value is not None and (not isinstance(value, str) or not value):
+            raise ValueError("standards_overlay must be a non-empty string or null")
+        cfg.standards_overlay = value
+
     if "loc_for_scoring" in raw:
-        value = raw["loc_for_scoring"]
-        if not isinstance(value, dict):
-            raise ValueError("loc_for_scoring must be a JSON object")
-        loc = value.get("value")
-        reason = value.get("reason")
-        if isinstance(loc, bool) or not isinstance(loc, int) or loc < 1:
-            raise ValueError("loc_for_scoring.value must be a positive integer")
-        if not isinstance(reason, str) or not reason:
-            raise ValueError("loc_for_scoring.reason must be a non-empty string")
-        cfg.loc_for_scoring = value
+        cfg.loc_for_scoring = _validated_loc(raw["loc_for_scoring"])
+
+
+def _validated_loc(value: Any) -> dict[str, Any]:
+    """`loc_for_scoring`, or a `ValueError` naming the field that is wrong.
+
+    Its own function because adding `standards_overlay` beside it took
+    `_apply_file_and_loc` to cognitive complexity 18 against a limit of 15,
+    and this block is the one carrying four of the checks. Same messages, in
+    the same order.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("loc_for_scoring must be a JSON object")
+    loc = value.get("value")
+    reason = value.get("reason")
+    if isinstance(loc, bool) or not isinstance(loc, int) or loc < 1:
+        raise ValueError("loc_for_scoring.value must be a positive integer")
+    if not isinstance(reason, str) or not reason:
+        raise ValueError("loc_for_scoring.reason must be a non-empty string")
+    return value
+
+
+# `_from_dict` was one 158-line function at complexity 51 and cognitive 63,
+# against configured limits of 15 and 25 — the worst declaration in the package
+# by both measures. It was never tangled, only long: seven independent blocks
+# that each validated one configuration section and mutated `cfg`.
+#
+# Split one block per helper, in the same order, with the same checks and the
+# same messages. Order is load-bearing and is why this is a move rather than a
+# rewrite: a configuration with two faults must still report the first one it
+# reported before, so the unknown-key sweep stays ahead of every section and
+# the sections keep their original sequence.
+def _from_dict(raw: dict[str, Any]) -> Config:
+    if not isinstance(raw, dict):
+        raise ValueError("configuration root must be a JSON object")
+    # Named before the generic sweep: a key we deliberately withdrew deserves
+    # the reason it was withdrawn, not "unknown key".
+    if "asvs_level" in raw:
+        raise ValueError("asvs_level is not an implemented gate; remove it from the configuration")
+    unknown = sorted(set(raw) - _KNOWN_KEYS)
+    if unknown:
+        raise ValueError(
+            f"unknown configuration key(s): {', '.join(unknown)}. "
+            "A key this tool does not read cannot change what it does, so it is "
+            "rejected rather than ignored."
+        )
+    cfg = Config(raw=raw)
+    cfg.version = int(raw.get("version", 1))
+
+    _apply_paths(cfg, raw)
+    _apply_capabilities(cfg, raw)
+    _apply_scanners(cfg, raw)
+    _apply_overrides_and_gates(cfg, raw)
+    _apply_outputs(cfg, raw)
+    _apply_file_and_loc(cfg, raw)
 
     return cfg
 

@@ -179,3 +179,71 @@ def test_a_declared_extension_list_decides_what_the_denominator_counts(audit):
     python_only = audit({"paths": {"include_extensions": [".py"]}})["score"]["loc_scanned"]
 
     assert with_js - python_only == 400
+
+
+def test_a_declared_standards_overlay_maps_the_findings(audit, tmp_path):
+    """Otherwise the operator's mapping file is a decision that changed nothing.
+
+    `standards_overlay` exists because the curated table is 34 rules and
+    Semgrep alone publishes thousands, so mapping a rule meant waiting for a
+    package release (§8 question 3). Declared and inert, every finding keeps
+    the shipped mapping while the operator believes their file applied — and
+    the CWE is what drives OWASP, the Top-25 weight and corroboration, so
+    they would be reading somebody else's taxonomy.
+
+    The fixture's one finding is bandit B307, curated as CWE-95. The overlay
+    below says CWE-94, its documented parent, which is a mapping an operator
+    might genuinely prefer.
+    """
+    shipped = audit({})["findings"]
+    assert [f["rule_id"] for f in shipped] == ["B307"], shipped
+    assert shipped[0]["canonical_cwe"] == "CWE-95", "premise: the shipped mapping"
+
+    overlay = tmp_path / "standards-overlay.yaml"
+    overlay.write_text(
+        "version: 1\n"
+        "entries:\n"
+        "  - scanner: bandit\n"
+        "    rule_id: B307\n"
+        "    canonical_cwe: CWE-94\n"
+        "    short_desc: Operator maps this to the parent weakness.\n",
+        encoding="utf-8",
+    )
+
+    mapped = audit({"standards_overlay": str(overlay)})["findings"]
+
+    assert [f["rule_id"] for f in mapped] == ["B307"]
+    assert mapped[0]["canonical_cwe"] == "CWE-94", "the declared overlay did not apply"
+    assert mapped[0]["short_desc"] == "Operator maps this to the parent weakness."
+
+
+def test_a_standards_overlay_cannot_move_the_grade(audit, tmp_path):
+    """The P3 property, end to end rather than only in the unit.
+
+    D32 is what happens when something outside the instrument can set a
+    scoring input: an in-tree `severity_overrides` took a repository from
+    0.00/F to 5.00/A+. An overlay is exactly the kind of file an audited tree
+    would ship, so it must not reach severity, confidence or category — and
+    the proof worth having is that the score is identical with and without
+    one.
+    """
+    before = audit({})
+    overlay = tmp_path / "harmless-overlay.yaml"
+    overlay.write_text(
+        "version: 1\n"
+        "entries:\n"
+        "  - scanner: bandit\n"
+        "    rule_id: B307\n"
+        "    canonical_cwe: CWE-94\n"
+        "    short_desc: Mapped.\n",
+        encoding="utf-8",
+    )
+
+    after = audit({"standards_overlay": str(overlay)})
+
+    assert after["findings"][0]["canonical_cwe"] == "CWE-94", "the overlay did apply"
+    assert after["findings"][0]["severity"] == before["findings"][0]["severity"]
+    assert after["findings"][0]["category"] == before["findings"][0]["category"]
+    assert after["score"]["overall"] == before["score"]["overall"], (
+        f"an overlay moved the score: {before['score']['overall']} -> {after['score']['overall']}"
+    )

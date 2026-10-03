@@ -552,8 +552,10 @@ def _pr_comment(
     verdict: Verdict | None = None,
 ) -> str:
     status = "✅" if gate.passed else "❌"
-    n_crit = score.per_severity_count.get(Severity.CRITICAL, 0)
-    n_high = score.per_severity_count.get(Severity.HIGH, 0)
+    # Indexed, not `.get(..., 0)`: a `ScoreReport` carries every Severity,
+    # so the default could never fire. See `ScoreReport.as_table`.
+    n_crit = score.per_severity_count[Severity.CRITICAL]
+    n_high = score.per_severity_count[Severity.HIGH]
     n_new = sum(1 for f in findings if f.is_new and not f.suppressed)
 
     # Same single source as every other output, and the same conservative

@@ -342,42 +342,23 @@ def _same_weakness(a: Finding, b: Finding) -> bool:
     Different scanners merge on a shared CWE, which is the corroboration
     this function exists for — bandit and our own rule catching one
     `shell=True` is one finding with two witnesses.
+
+    **The alias table outranks the CWE, and upstream does not always agree
+    with itself.** Bandit files `mark_safe` as CWE-79 under B308 and CWE-80
+    under B703 — two names for one check firing on one expression. When that
+    ordering was reversed the alias table worked only while Bandit's CWEs were
+    discarded; the moment they were read, every aliased pair acquired two
+    different CWEs and stopped merging, and Django went back to counting
+    `mark_safe` twice: 56 B703 and 51 B308 over 50 shared lines. The corpus
+    caught it, not the unit tests, which pin behaviour for rules with no CWE.
+    (Recorded here when the dead `_merge_key` that first carried it was
+    removed — the reasoning outlived the function.)
     """
     if a.file_path != b.file_path or a.line_start != b.line_start:
         return False
     if a.scanner == b.scanner:
         return _canonical_rule(a) == _canonical_rule(b)
     return bool(a.canonical_cwe) and a.canonical_cwe == b.canonical_cwe
-
-
-def _merge_key(finding: Finding) -> tuple:
-    """What makes two reports the same report.
-
-    **The alias table outranks the CWE.** Two rules declared aliases of each
-    other are the same check, whatever CWEs upstream files them under, and
-    upstream does not always agree with itself: Bandit files `mark_safe` as
-    CWE-79 under B308 and CWE-80 under B703 — cross-site scripting and
-    "improper neutralization of script-related tags", two names for one
-    check firing on one expression.
-
-    That ordering was the other way round and it silently undid this whole
-    function. The alias table worked only while Bandit's CWEs were being
-    discarded; the moment they were read, every aliased pair acquired two
-    different CWEs and stopped merging. Django went back to counting
-    `mark_safe` twice — 56 B703 and 51 B308 over 50 shared lines — and the
-    corpus caught it, not the unit tests, which pin behaviour for rules that
-    have no CWE.
-
-    Otherwise the CWE is the discriminator: two checks at one line with
-    different CWEs are two weaknesses and both are kept. With no CWE and no
-    alias entry we do not know they are the same, so nothing merges.
-    """
-    alias = RULE_ALIASES.get(finding.scanner, {})
-    if finding.rule_id in alias or finding.rule_id in set(alias.values()):
-        discriminator = f"{finding.scanner}:{alias.get(finding.rule_id, finding.rule_id)}"
-    else:
-        discriminator = finding.canonical_cwe or f"{finding.scanner}:{finding.rule_id}"
-    return (finding.file_path.as_posix(), finding.line_start, discriminator)
 
 
 def merge_corroborating(findings: Iterable[Finding]) -> list[Finding]:

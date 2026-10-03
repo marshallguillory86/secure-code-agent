@@ -1,36 +1,36 @@
-"""Scanner protocol + subprocess helpers."""
+"""Scanner protocol + the outcome constructors every adapter builds with.
+
+`Scanner` had grown to 423 lines against a 300-line class limit by holding
+four unrelated jobs. Three of them moved out, each to a module that can be
+read and reviewed on its own:
+
+- `_resolution.CommandResolution` — which program runs, and whether it can
+- `_execution.SubprocessExecution` — running it, and reading its exit code
+- `_finding_builder.FindingConstruction` — turning its output into findings
+
+What stays here is what `Scanner` is *for*: the `scan()` contract and the one
+constructor per outcome. They are inherited rather than composed because the
+suite and fifteen adapters call them as methods on the scanner — `self._exec`,
+`self._make_finding`, `BanditScanner._sanitized_env()` — and that surface is
+the thing worth keeping stable.
+"""
 
 from __future__ import annotations
 
-import dataclasses
-import importlib.util
-import os
-import re
-import shutil
-import subprocess
-import sys
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 
-from secure_code_audit.config import (
-    Config,
-    containment_root,
-    is_within,
-    scanner_cfg,
-    target_config_is_untrusted,
-    target_executables_allowed,
-)
-from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.config import Config, scanner_cfg
+from secure_code_audit.findings import Confidence, Finding, Severity
 from secure_code_audit.scanner_status import ScannerOutcome, ScanResult
-from secure_code_audit.standards import StandardsEntry, is_top25, lookup, owasp_for_cwe
+from secure_code_audit.scanners._execution import SubprocessExecution
+from secure_code_audit.scanners._finding_builder import FindingConstruction
+from secure_code_audit.scanners._resolution import CommandResolution
 
-#: CSI escape sequences. Tools colourise `--version` and we store the result.
-_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
-
-class Scanner(ABC):
+class Scanner(CommandResolution, SubprocessExecution, FindingConstruction, ABC):
     """Base class for all scanner adapters.
 
     Subclasses implement `scan()`, returning a `ScanResult` built with the
@@ -38,127 +38,10 @@ class Scanner(ABC):
     """
 
     name: str  # canonical id used in config + reports
-    binary: str  # name of the executable on PATH
-    version_flag: str = "--version"
-    python_module: str | None = None
-    #: True when the audited tree's own config set this scanner's command and
-    #: it was not honoured. See `configure`.
-    ignored_command: bool = False
-    default_category: Category = Category.CODE_VULNERABILITIES
-    # How an operator obtains this scanner. Surfaced in the unavailable
-    # finding and in --preflight. The agent never installs anything itself.
-    install_hint: str = ""
     #: Wall clock this adapter needs. Scanners that query a remote API are
     #: legitimately slower than ones reading a file tree, and an operator
     #: should not have to discover that from a timeout.
     default_timeout_seconds: int = 600
-
-    # ----- availability ----------------------------------------------------
-
-    def configure(self, target: Path, config: Config) -> None:
-        """Resolve the command once so probing and execution use the same tool.
-
-        The containment root is computed **first** and used for every
-        decision below it. It was computed last, on the line after the two
-        calls that needed it, so both of those compared against the raw
-        target — and for a single-file audit nothing lives beneath a regular
-        file, so both inverted to "allowed".
-        """
-        root = containment_root(target)
-        self._allow_target_executables = target_executables_allowed(config, target)
-        chosen = self.cfg(config)
-        # An untrusted config does not choose the command — not just "not an
-        # executable from the tree". It could name any program on PATH with
-        # any arguments, and `python -c "<code>"` is any program; the
-        # `--version` probe ran it during preflight, before anything was
-        # audited (maintainability-agent's audit, 2026-10-02). The scanner
-        # resolves as it would with no config, and says it ignored one.
-        self.ignored_command = bool(chosen.command) and target_config_is_untrusted(config, target)
-        if self.ignored_command:
-            chosen = dataclasses.replace(chosen, command=[])
-        self._resolved_command = self._resolve_command(root, chosen)
-
-    @property
-    def command(self) -> tuple[str, ...]:
-        resolved = getattr(self, "_resolved_command", None)
-        if resolved is not None:
-            return resolved
-        found = shutil.which(self.binary) if self.binary else None
-        return (found,) if found else ()
-
-    def _resolve_command(self, root: Path, config: ScannerConfig) -> tuple[str, ...]:
-        """`root` is the containment root — a directory, never a file target."""
-        resolved = self._resolve_candidate(root, config)
-        if not resolved:
-            return ()
-        # One containment check for every resolution route, not just the
-        # relative-path one. PATH can contain '.' or a tree-local directory, so
-        # checking only the explicit-path branch would leave the same door open
-        # a step to the left.
-        if not getattr(self, "_allow_target_executables", False) and is_within(
-            Path(resolved[0]), root
-        ):
-            return ()
-        return resolved
-
-    def _resolve_candidate(self, root: Path, config: ScannerConfig) -> tuple[str, ...]:
-        if config.command:
-            executable, *arguments = config.command
-            candidate = Path(executable).expanduser()
-            if candidate.is_absolute() or "/" in executable or "\\" in executable:
-                if not candidate.is_absolute():
-                    # Against the containment root. Joining onto a file target
-                    # produced `app.py/scanner`, which resolves to nothing and
-                    # quietly returned "no command" for a reason unrelated to
-                    # the guard that should have refused it.
-                    candidate = root / candidate
-                candidate = candidate.resolve()
-                if candidate.is_file() and os.access(candidate, os.X_OK):
-                    return (str(candidate), *arguments)
-                return ()
-            found = shutil.which(executable)
-            return (found, *arguments) if found else ()
-
-        found = shutil.which(self.binary) if self.binary else None
-        if found:
-            return (found,)
-        if self.python_module and importlib.util.find_spec(self.python_module) is not None:
-            return (sys.executable, "-m", self.python_module)
-        return ()
-
-    def is_available(self) -> bool:
-        return bool(self.command)
-
-    def binary_version(self) -> str | None:
-        if not self.is_available():
-            return None
-        try:
-            r = subprocess.run(
-                [*self.command, self.version_flag],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            return None
-        # A failed probe is not a version. Reporting stderr here put
-        # "Error: unknown flag: --version" in the version column of a report
-        # that was otherwise claiming the scanner had run fine.
-        if r.returncode != 0:
-            return None
-        # Strip ANSI colour before picking a line, and skip lines that were
-        # nothing but colour. njsscan opens its version output with a bare
-        # `\x1b[34m` on its own line and puts the version on the next one, so
-        # taking the first line recorded the scanner version as `[34m` — in
-        # the coverage block, in every report, and in a calibration study
-        # whose whole claim is that it re-derives from pinned inputs.
-        raw = r.stdout or r.stderr or ""
-        for line in _ANSI.sub("", raw).splitlines():
-            cleaned = line.strip()
-            if cleaned:
-                return cleaned
-        return None
 
     # ----- main entrypoint ------------------------------------------------
 
@@ -176,208 +59,6 @@ class Scanner(ABC):
         directly — those keep the outcome and its control finding in step.
         """
         ...
-
-    # ----- subprocess helpers ---------------------------------------------
-
-    def _exec(
-        self,
-        args: list[str],
-        cwd: Path,
-        timeout_seconds: int,
-        allowed_exits: tuple[int, ...] = (0,),
-    ) -> subprocess.CompletedProcess:
-        """Run a scanner subprocess with sanitized env, no shell.
-
-        Some scanners (npm audit, pip-audit) exit nonzero on findings; pass
-        `allowed_exits` to mark those as success.
-
-        `cwd` is coerced to a directory. Auditing a single file is supported
-        — the CLI and several adapters carry `target if target.is_dir() else
-        target.parent` for exactly that — but every adapter passed the raw
-        target here, so `secure-code-agent path/to/one.py` died with
-        `NotADirectoryError` out of `subprocess.py` before any scanner ran.
-        Fixing it once here is better than asking fifteen adapters to
-        remember.
-        """
-        if cwd is not None and not cwd.is_dir():
-            cwd = cwd.parent
-        env = self._sanitized_env()
-        try:
-            r = subprocess.run(
-                args,
-                cwd=str(cwd),
-                env=env,
-                shell=False,
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-            )
-        except subprocess.TimeoutExpired as exc:
-            return subprocess.CompletedProcess(
-                args=exc.cmd or args,
-                returncode=124,
-                stdout="",
-                stderr=f"timeout after {timeout_seconds}s",
-            )
-        if r.returncode not in allowed_exits and r.returncode != 0:
-            return r  # caller decides how to handle
-        return r
-
-    @staticmethod
-    def _sanitized_env() -> dict[str, str]:
-        """A minimal env for subprocesses — keep PATH and locale, drop the rest.
-        Prevents accidental secret-leak into the scanner process via env."""
-        keep = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP")
-        return {k: v for k, v in os.environ.items() if k in keep}
-
-    # ----- finding construction helper ------------------------------------
-
-    def _make_finding(
-        self,
-        *,
-        rule_id: str,
-        message: str,
-        file_path: Path,
-        line_start: int,
-        line_end: int | None,
-        code_snippet: str | None,
-        severity: Severity | None = None,
-        confidence: Confidence | None = None,
-        category: Category | None = None,
-        cwe_override: str | None = None,
-        scanner_cwe: str | None = None,
-        scanner_name: str | None = None,
-    ) -> Finding:
-        """Construct a canonical Finding from scanner-emitted bits, layering
-        in the standards mapping. Scanner-emitted severity wins over the
-        map's default; confidence falls back to the map; category is set
-        per the map unless explicitly overridden.
-
-        Three sources of a CWE, in descending authority:
-
-        `cwe_override` is the adapter asserting it knows better than both the
-        map and the tool — Semgrep uses it, because a Semgrep rule's own
-        metadata is more specific than anything we could curate for it.
-
-        The curated `_MAP` comes next. It is reviewed, and it is the only
-        source that also carries OWASP, ASVS, SSDF and a fix hint.
-
-        `scanner_cwe` is the last resort: what the tool said about its own
-        rule. Bandit publishes a CWE for every plugin and gosec for every
-        rule, and we were discarding both — 86% of real corpus findings
-        carried no CWE at all while the README led with "Anchored to NIST
-        SSDF · OWASP ASVS · OWASP Top 10 · MITRE CWE Top 25". It ranks below
-        the curated map because upstream picks a defensible CWE rather than
-        the most specific one (Bandit files `assert_used` under CWE-703,
-        "improper check for unusual conditions"), but a defensible CWE beats
-        none.
-        """
-
-        scanner_label = scanner_name or self.name
-        entry: StandardsEntry | None = lookup(scanner_label, rule_id)
-
-        # Mapping fallback to wildcard (handled inside lookup).
-        canonical_cwe = cwe_override or (entry.canonical_cwe if entry else None) or scanner_cwe
-        owasp_top10 = (entry.owasp_top10 if entry else None) or owasp_for_cwe(canonical_cwe)
-        asvs_section = entry.asvs_section if entry else None
-        nist_ssdf = entry.nist_ssdf if entry else None
-        chosen_cat = category or (entry.category if entry else self.default_category)
-        chosen_sev = severity or (entry.severity if entry else Severity.MEDIUM)
-        chosen_conf = confidence or (entry.confidence if entry else Confidence.MEDIUM)
-        short_desc = entry.short_desc if entry else None
-        fix_hint = entry.fix_hint if entry else None
-
-        # The path is kept as the tool reported it. `findings.anchor` makes it
-        # repository-relative for every adapter and every SARIF import at once;
-        # doing it here as well was how two conventions came to coexist.
-        fingerprint = Finding.make_fingerprint(
-            canonical_cwe=canonical_cwe,
-            rule_id=rule_id,
-            file_path=file_path,
-            code_snippet=code_snippet,
-        )
-
-        return Finding(
-            rule_id=rule_id,
-            scanner=scanner_label,
-            fingerprint=fingerprint,
-            canonical_cwe=canonical_cwe,
-            owasp_top10=owasp_top10,
-            asvs_section=asvs_section,
-            nist_ssdf=nist_ssdf,
-            category=chosen_cat,
-            severity=chosen_sev,
-            confidence=chosen_conf,
-            file_path=file_path,
-            line_start=line_start,
-            line_end=line_end,
-            code_snippet=code_snippet,
-            message=message,
-            short_desc=short_desc,
-            fix_hint=fix_hint,
-            cwe_top25=is_top25(canonical_cwe),
-        )
-
-    def _findings_exit_contradiction(
-        self,
-        target: Path,
-        *,
-        exit_code: int,
-        findings_exit: int,
-        findings: list[Finding],
-    ) -> str | None:
-        """Catch "the scanner said it found things, and we parsed none".
-
-        A findings-signalling exit code is the tool asserting it detected
-        something. Recording zero findings in that case reports a clean scan
-        of a target the scanner just called dirty — the scanner's own signal,
-        silently discarded. Fail the scanner instead, so coverage says we do
-        not know rather than saying nothing is there.
-
-        Returns the reason when the contradiction holds, else None. The caller
-        turns that into `self.failed(...)` — the helper does not build the
-        finding itself, because the outcome is the caller's to state.
-        """
-        if exit_code != findings_exit or findings:
-            return None
-        return (
-            f"{self.name} exited {exit_code} to signal findings but produced no "
-            "parseable results; refusing to record this as a clean scan"
-        )
-
-    def _unavailable_finding(self, target: Path) -> Finding:
-        """Informational finding emitted when no safe command can be resolved."""
-        return Finding(
-            rule_id=f"{self.name}.tool_unavailable",
-            scanner=self.name,
-            fingerprint=f"unavailable.{self.name}",
-            canonical_cwe=None,
-            owasp_top10=None,
-            asvs_section=None,
-            nist_ssdf=None,
-            category=Category.POLICY_DOCS,
-            severity=Severity.INFORMATIONAL,
-            confidence=Confidence.HIGH,
-            file_path=target,
-            line_start=0,
-            line_end=None,
-            code_snippet=None,
-            message=(
-                f"Could not resolve {self.name} from its configured command, PATH, "
-                "or supported Python module fallback; scan skipped."
-            ),
-            short_desc=None,
-            fix_hint=self.unavailable_fix_hint(),
-        )
-
-    def unavailable_fix_hint(self) -> str:
-        """Operator-actionable text for a scanner that could not be resolved."""
-        install = self.install_hint or f"Install {self.binary}"
-        return (
-            f"{install}, or set scanners.{self.name}.command to an explicit path, "
-            "or supply its SARIF via --sarif-import."
-        )
 
     # ----- results --------------------------------------------------------
     #

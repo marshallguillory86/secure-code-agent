@@ -76,7 +76,6 @@ class PipAuditScanner(Scanner):
                 args,
                 cwd=target,
                 timeout_seconds=sc_cfg.timeout_seconds,
-                allowed_exits=(0, 1),
             )
             if result.returncode == 124:
                 timeouts.append(f"pip-audit timed out on {audit_input.path}")

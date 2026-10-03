@@ -110,14 +110,37 @@ class SuppressionRule:
         return datetime.date.today() > self.expires
 
 
-def load(path: Path) -> tuple[list[SuppressionRule], list[str]]:
-    """Returns (rules, validation_errors). On a missing file, both are empty."""
+@dataclass(frozen=True, slots=True)
+class _Required:
+    """The three fields every entry must carry, validated."""
+
+    rule_id: str
+    reason: str
+    expires: datetime.date
+
+
+@dataclass(frozen=True, slots=True)
+class _Narrow:
+    """The optional keys that narrow a suppression, validated."""
+
+    file: str | None
+    paths: tuple[str, ...]
+    fingerprint: str | None
+    line: int | None
+
+
+def _parse_document(path: Path) -> tuple[list, str | None]:
+    """The file as a list of entries, or the one error that stopped it.
+
+    An absent file is not an error — it yields no entries and no error, so
+    the caller's loop runs zero times rather than branching on it.
+    """
     if not path.exists():
-        return [], []
+        return [], None
     try:
         import yaml  # pyyaml — only imported when a suppressions file is present
     except ImportError:
-        return [], [f"{path}: pyyaml not installed — `pip install pyyaml` to use .scignore.yaml"]
+        return [], f"{path}: pyyaml not installed — `pip install pyyaml` to use .scignore.yaml"
 
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or []
@@ -136,89 +159,144 @@ def load(path: Path) -> tuple[list[SuppressionRule], list[str]]:
         # operator could diagnose their own file depended on whether they
         # happened to use quotes. This contract says `load` returns
         # `(rules, errors)`; it does not say it raises.
-        return [], [f"{path}: YAML parse error: {e}"]
+        return [], f"{path}: YAML parse error: {e}"
 
     if not isinstance(raw, list):
-        return [], [f"{path}: top-level must be a list of suppression entries."]
+        return [], f"{path}: top-level must be a list of suppression entries."
+    return raw, None
+
+
+def _required_fields(
+    prefix: str, entry: dict, today: datetime.date
+) -> tuple[_Required | None, str | None]:
+    """`rule_id`, `reason` and a bounded `expires`, or the first failure."""
+    rule_id = str(entry.get("rule_id", "")).strip()
+    if not rule_id:
+        return None, f"{prefix}: 'rule_id' is required."
+    reason = str(entry.get("reason", "")).strip()
+    if not reason:
+        return None, f"{prefix}: 'reason' is required (non-empty)."
+    expires_raw = str(entry.get("expires", "")).strip()
+    if not _DATE_RE.match(expires_raw):
+        return None, f"{prefix}: 'expires' is required as YYYY-MM-DD."
+    try:
+        expires = datetime.date.fromisoformat(expires_raw)
+    except ValueError:
+        return None, f"{prefix}: 'expires' not parseable."
+    if (expires - today).days > _MAX_TTL_DAYS:
+        return None, (
+            f"{prefix}: 'expires' must be within {_MAX_TTL_DAYS} days "
+            f"(got {(expires - today).days} days out)."
+        )
+    return _Required(rule_id=rule_id, reason=reason, expires=expires), None
+
+
+def _identity_keys(prefix: str, entry: dict) -> str | None:
+    """`fingerprint` and `line` pin an entry to one finding. Error, or None.
+
+    Separate from the rest of `_narrow_keys` because these two answer a
+    different question — *which* finding rather than *what shape* of match —
+    and because carrying all four checks in one body put that function at
+    complexity 18 against a limit of 15.
+
+    Both are validated only when present. Absent is the common case and means
+    "do not pin"; present-and-malformed must fail rather than be dropped, or
+    the entry widens back to the broad file+rule form while still reading as
+    narrow.
+    """
+    fingerprint_v = entry.get("fingerprint")
+    if "fingerprint" in entry and not _VALID_FINGERPRINT.fullmatch(str(fingerprint_v or "")):
+        return f"{prefix}: 'fingerprint' must be 16 hexadecimal characters (got {fingerprint_v!r})."
+
+    line_v = entry.get("line")
+    if "line" in entry and not (
+        isinstance(line_v, int) and not isinstance(line_v, bool) and line_v > 0
+    ):
+        return f"{prefix}: 'line' must be a positive integer (got {line_v!r})."
+    return None
+
+
+def _narrow_keys(prefix: str, entry: dict, rule_id: str) -> tuple[_Narrow | None, str | None]:
+    """The narrowing keys, or the first failure.
+
+    FAIL CLOSED on anything unrecognised or malformed. Silently ignoring a key means a
+    typo (`fingerpint:`) or an empty value quietly downgrades a narrow suppression back to
+    the broad file+rule form — restoring the blind spot the narrow keys exist to remove,
+    with the config still reading as if it were narrow.
+    """
+    unknown = sorted(set(entry) - _ALLOWED_KEYS)
+    if unknown:
+        return None, (
+            f"{prefix}: unknown field(s) {', '.join(unknown)}. "
+            f"Allowed: {', '.join(sorted(_ALLOWED_KEYS))}."
+        )
+
+    file_v = entry.get("file")
+    paths_v = entry.get("paths") or []
+    if rule_id == "*" and not file_v and not paths_v:
+        return None, f"{prefix}: rule_id='*' requires `file` or `paths`."
+
+    identity_error = _identity_keys(prefix, entry)
+    if identity_error is not None:
+        return None, identity_error
+    fingerprint_v = entry.get("fingerprint")
+    line_v = entry.get("line")
+
+    return (
+        _Narrow(
+            file=str(file_v) if file_v else None,
+            paths=tuple(str(p) for p in paths_v) if paths_v else (),
+            fingerprint=str(fingerprint_v) if fingerprint_v else None,
+            line=line_v if isinstance(line_v, int) else None,
+        ),
+        None,
+    )
+
+
+def _rule_from_entry(
+    prefix: str, entry: dict, today: datetime.date
+) -> tuple[SuppressionRule | None, str | None]:
+    """One validated rule, or the first reason this entry is refused."""
+    required, error = _required_fields(prefix, entry, today)
+    if required is None:
+        return None, error
+    narrow, error = _narrow_keys(prefix, entry, required.rule_id)
+    if narrow is None:
+        return None, error
+    return (
+        SuppressionRule(
+            rule_id=required.rule_id,
+            reason=required.reason,
+            expires=required.expires,
+            file=narrow.file,
+            paths=narrow.paths,
+            fingerprint=narrow.fingerprint,
+            line=narrow.line,
+        ),
+        None,
+    )
+
+
+def load(path: Path) -> tuple[list[SuppressionRule], list[str]]:
+    """Returns (rules, validation_errors). On a missing file, both are empty."""
+    entries, error = _parse_document(path)
+    if error is not None:
+        return [], [error]
 
     rules: list[SuppressionRule] = []
     errors: list[str] = []
     today = datetime.date.today()
 
-    for i, entry in enumerate(raw):
+    for i, entry in enumerate(entries):
+        prefix = f"{path}: entry #{i}"
         if not isinstance(entry, dict):
-            errors.append(f"{path}: entry #{i}: must be a mapping.")
+            errors.append(f"{prefix}: must be a mapping.")
             continue
-        rule_id = str(entry.get("rule_id", "")).strip()
-        if not rule_id:
-            errors.append(f"{path}: entry #{i}: 'rule_id' is required.")
-            continue
-        reason = str(entry.get("reason", "")).strip()
-        if not reason:
-            errors.append(f"{path}: entry #{i}: 'reason' is required (non-empty).")
-            continue
-        expires_raw = str(entry.get("expires", "")).strip()
-        if not _DATE_RE.match(expires_raw):
-            errors.append(f"{path}: entry #{i}: 'expires' is required as YYYY-MM-DD.")
-            continue
-        try:
-            expires = datetime.date.fromisoformat(expires_raw)
-        except ValueError:
-            errors.append(f"{path}: entry #{i}: 'expires' not parseable.")
-            continue
-        if (expires - today).days > _MAX_TTL_DAYS:
-            errors.append(
-                f"{path}: entry #{i}: 'expires' must be within {_MAX_TTL_DAYS} days "
-                f"(got {(expires - today).days} days out)."
-            )
-            continue
-
-        # FAIL CLOSED on anything unrecognised or malformed. Silently ignoring a key means a
-        # typo (`fingerpint:`) or an empty value quietly downgrades a narrow suppression back to
-        # the broad file+rule form — restoring the blind spot the narrow keys exist to remove,
-        # with the config still reading as if it were narrow.
-        unknown = sorted(set(entry) - _ALLOWED_KEYS)
-        if unknown:
-            errors.append(
-                f"{path}: entry #{i}: unknown field(s) {', '.join(unknown)}. "
-                f"Allowed: {', '.join(sorted(_ALLOWED_KEYS))}."
-            )
-            continue
-
-        file_v = entry.get("file")
-        paths_v = entry.get("paths") or []
-        if rule_id == "*" and not file_v and not paths_v:
-            errors.append(f"{path}: entry #{i}: rule_id='*' requires `file` or `paths`.")
-            continue
-
-        fingerprint_v = entry.get("fingerprint")
-        if "fingerprint" in entry and not _VALID_FINGERPRINT.fullmatch(str(fingerprint_v or "")):
-            errors.append(
-                f"{path}: entry #{i}: 'fingerprint' must be 16 hexadecimal characters "
-                f"(got {fingerprint_v!r})."
-            )
-            continue
-
-        line_v = entry.get("line")
-        if "line" in entry and not (
-            isinstance(line_v, int) and not isinstance(line_v, bool) and line_v > 0
-        ):
-            errors.append(
-                f"{path}: entry #{i}: 'line' must be a positive integer (got {line_v!r})."
-            )
-            continue
-
-        rules.append(
-            SuppressionRule(
-                rule_id=rule_id,
-                reason=reason,
-                expires=expires,
-                file=str(file_v) if file_v else None,
-                paths=tuple(str(p) for p in paths_v) if paths_v else (),
-                fingerprint=str(fingerprint_v) if fingerprint_v else None,
-                line=line_v if isinstance(line_v, int) else None,
-            )
-        )
+        rule, error = _rule_from_entry(prefix, entry, today)
+        if rule is None:
+            errors.append(error)
+        else:
+            rules.append(rule)
 
     return rules, errors
 
@@ -253,6 +331,72 @@ def apply(
             )
         else:
             out.append(f)
+    return out
+
+
+def unused_findings(
+    findings_rules: list[SuppressionRule],
+    findings: list[Finding],
+    path: Path,
+    root: Path | None = None,
+) -> list[Finding]:
+    """One informational finding per suppression that matched nothing.
+
+    An entry whose subject is gone reads as active protection and protects
+    none: either the finding was fixed and the entry should be deleted, or
+    the code moved and the entry silently stopped covering it.
+
+    Expired rules are excluded — they do not suppress, so they match nothing
+    by construction, and `expired_findings` already reports them as CRITICAL.
+    One entry must not produce two findings about itself.
+
+    INFORMATIONAL because `SEVERITY_WEIGHT` prices it at 0.0: tidiness must
+    not move a grade. The full reasoning, and the incident that prompted it,
+    are in `tests/unit/test_suppressions.py` and `docs/product-intent.md`.
+    """
+    out: list[Finding] = []
+    for r in findings_rules:
+        if r.expired:
+            continue
+        if any(r.matches(f, root) for f in findings):
+            continue
+        rid = f"suppressions.unused.{r.rule_id}"
+        snippet = f"rule_id: {r.rule_id}; expires {r.expires.isoformat()}; reason: {r.reason}"
+        out.append(
+            Finding(
+                rule_id=rid,
+                scanner="suppressions",
+                fingerprint=Finding.make_fingerprint(
+                    canonical_cwe=None,
+                    rule_id=rid,
+                    file_path=path,
+                    code_snippet=snippet,
+                ),
+                canonical_cwe=None,
+                owasp_top10=None,
+                asvs_section=None,
+                nist_ssdf="PO.4.1",
+                category=Category.POLICY_DOCS,
+                severity=Severity.INFORMATIONAL,
+                confidence=Confidence.HIGH,
+                file_path=path,
+                line_start=0,
+                line_end=None,
+                code_snippet=snippet,
+                message=(
+                    f"Suppression for rule `{r.rule_id}` matched no finding in this "
+                    f'run: "{r.reason}". Either the finding was fixed and this entry '
+                    "should be deleted, or the code it covered moved and the entry no "
+                    "longer protects it."
+                ),
+                short_desc="Suppression with no subject.",
+                fix_hint=(
+                    "Delete the entry if the finding is fixed, or point it at where the "
+                    "code moved. An entry that matches nothing reads as protection and "
+                    "provides none."
+                ),
+            )
+        )
     return out
 
 

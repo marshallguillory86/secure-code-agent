@@ -23,16 +23,22 @@ from secure_code_audit.scanner_status import ScannerOutcome, ScanResult
 from secure_code_audit.scanners.base import Scanner
 
 ADAPTER_DIR = Path(inspect.getfile(Scanner)).parent
-#: The one module allowed to build a control finding, because it is the one
-#: that derives it from the outcome.
-CONTROL_FINDING_HOME = "base.py"
+#: The modules allowed to build a control finding, because between them they
+#: are the machinery that derives one from an outcome. `base.py` holds the
+#: outcome constructors; `_finding_builder.py` holds the finding they build.
+#: The rule this file enforces is about *adapters*, and a private module here
+#: is `Scanner`'s own innards rather than an adapter — so the underscore
+#: prefix is the exemption, which keeps the next split from having to be
+#: listed by name. An adapter cannot hide behind it: every adapter has to
+#: appear in `SCANNERS`, which the test above walks.
+NOT_AN_ADAPTER = {"__init__.py", "base.py"}
 
 
 def _adapter_sources() -> list[Path]:
     return sorted(
         path
         for path in ADAPTER_DIR.glob("*.py")
-        if path.name not in {"__init__.py", CONTROL_FINDING_HOME}
+        if path.name not in NOT_AN_ADAPTER and not path.name.startswith("_")
     )
 
 
@@ -78,7 +84,7 @@ def test_no_adapter_hand_builds_a_control_finding(source: Path):
     assert offenders == [], (
         f"{source.name} builds a control finding by hand: {offenders}. "
         f"Outcome and control finding must be set together — see "
-        f"Scanner._control_result in {CONTROL_FINDING_HOME}."
+        f"Scanner._control_result in base.py."
     )
 
 

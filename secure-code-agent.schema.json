@@ -298,6 +298,14 @@
       "default": ".scignore.yaml",
       "description": "Path to the suppressions file. Per design.md \u00a710."
     },
+    "standards_overlay": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null,
+      "description": "Path to an operator standards overlay (YAML), layered over the shipped mapping table. May add or correct canonical_cwe, owasp_top10, asvs_section, nist_ssdf, short_desc and fix_hint. May NOT set severity, confidence or category: those are the scoring inputs and an overlay that set them could move the grade (D32). See product-intent.md \u00a78 question 3."
+    },
     "loc_for_scoring": {
       "type": "object",
       "description": "Override the auto-computed LOC count (rare).",
