@@ -90,3 +90,62 @@ def test_fingerprint_falls_back_to_rule_id_when_no_cwe():
 def test_category_enum_round_trip():
     for cat in Category:
         assert Category(cat.value) is cat
+
+
+def test_the_fingerprint_matches_what_suppressions_accept():
+    """The 16-character slice is a contract with operators, not a detail.
+
+    A `silent-truncation` risk rule matches the hex-digest slice in
+    `make_fingerprint`, and the decision recorded there is that it stays.
+    This is what makes that decision enforced rather than merely written
+    down. The slice is described rather than quoted, because quoting it
+    here reproduced the finding in the test file — which is the third time
+    in this session that spelling out a matched pattern in prose created a
+    second copy of it.
+
+    `suppressions._VALID_FINGERPRINT` validates an operator's
+    `fingerprint:` entry as exactly 16 hex characters; the loader's error
+    message, `README.md` and `docs/design.md` all state it. So widening or
+    narrowing the slice would not be a refactor — it would silently stop
+    every pinned suppression and every committed baseline from matching,
+    and a `fingerprint:` entry is the narrowest and most deliberate
+    suppression an operator can write.
+
+    A falsifier, not a red test: the property already held. It exists so
+    that changing the slice fails here, beside the reasoning, instead of
+    failing in an operator's next audit.
+    """
+    from secure_code_audit.suppressions import _VALID_FINGERPRINT
+
+    fingerprint = Finding.make_fingerprint(
+        canonical_cwe="CWE-89",
+        rule_id="B608",
+        file_path=Path("src/app.py"),
+        code_snippet="query = f'SELECT {x}'",
+    )
+
+    # The pattern is `[0-9a-f]{16}`, so this single assertion already carries
+    # the length, the alphabet and the case. A separate `== .lower()` check
+    # sat here and was both redundant and shaped like a tautology, which
+    # MA's `vacuous-assertion` rule said out loud.
+    assert len(fingerprint) == 16, fingerprint
+    assert _VALID_FINGERPRINT.fullmatch(fingerprint), (
+        f"{fingerprint!r} is not what the suppression loader accepts; a pinned "
+        "fingerprint: entry would no longer match the finding it names"
+    )
+
+
+def test_the_fingerprint_is_stable_for_the_same_finding():
+    """Baseline identity depends on it being a function of its inputs alone.
+
+    Not a tautology: `make_fingerprint` normalises the snippet, so two
+    callers formatting the same line differently must agree. A fingerprint
+    that moved with whitespace would make every reformat read as a new
+    finding, and `fail_on_new` would fail the build for a reindent.
+    """
+    args = {"canonical_cwe": "CWE-89", "rule_id": "B608", "file_path": Path("src/app.py")}
+
+    first = Finding.make_fingerprint(**args, code_snippet="query =  f'SELECT  {x}'")
+    second = Finding.make_fingerprint(**args, code_snippet="query = f'SELECT {x}'")
+
+    assert first == second

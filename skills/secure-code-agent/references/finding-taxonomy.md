@@ -72,7 +72,7 @@ Suppress when:
 
 Never:
 - Suppress because "it's noisy."
-- Suppress with `reason: "TODO"` or empty.
+- Suppress with a placeholder reason — a bare "fix later", or an empty string.
 - Suppress without an expiry.
 
 ## Suppression syntax

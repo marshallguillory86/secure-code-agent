@@ -136,7 +136,7 @@ This is a constrained task, not a refactor.
    unless a finding explicitly proves the current behavior is unsafe.
 9. Add a focused test that exercises the specific security boundary
    you fixed. The test must FAIL on the pre-fix code and PASS on
-   the post-fix code. No "TODO: add test later".
+   the post-fix code. Do not defer the test to a later change.
 10. Keep the patch small. If you find yourself rewriting a function
     rather than patching it, stop and report the structural issue.
 
