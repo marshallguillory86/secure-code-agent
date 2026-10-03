@@ -28,6 +28,7 @@ from pathlib import Path
 
 import pytest
 import tomllib
+import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 WORKFLOWS = REPO / ".github" / "workflows"
@@ -115,4 +116,71 @@ def test_no_workflow_carries_its_own_coverage_floor(workflow: Path):
         f"{'=' + found.group('value') if found.group('value') else ''}, which "
         "overrides fail_under in pyproject.toml. Remove the flag and let the "
         "declared floor govern."
+    )
+
+
+#: A real pytest invocation, not the word appearing inside a flag value —
+#: `-o cache_dir=.pytest-cache-ci` mentions pytest and runs nothing.
+_INVOCATION = re.compile(r"(?:python3?\s+-m\s+pytest|^\s*pytest)\b", re.M)
+
+
+def _pytest_commands(workflow: Path) -> list[str]:
+    """Every command in this workflow that actually invokes pytest.
+
+    Parsed from the YAML rather than the raw text, so a folded `run: >-`
+    block arrives as the single command it becomes — reading raw lines would
+    see `--cov` and the `pytest` token on separate lines and could call an
+    invocation silent when it is not.
+    """
+    doc = yaml.safe_load(workflow.read_text(encoding="utf-8")) or {}
+    found: list[str] = []
+    for job in (doc.get("jobs") or {}).values():
+        for step in job.get("steps") or []:
+            run = step.get("run")
+            if not isinstance(run, str):
+                continue
+            for command in run.splitlines():
+                if _INVOCATION.search(command):
+                    found.append(command.strip())
+    return found
+
+
+def test_the_invocation_detector_finds_the_real_ones_only():
+    """Keeps the check below from passing because it found nothing.
+
+    Two ways this goes quietly wrong: the regex misses `python -m pytest`
+    and every workflow looks compliant, or it fires on
+    `-o cache_dir=.pytest-cache-ci` and reports a flag value as a command.
+    """
+    assert _INVOCATION.search("python -m pytest -q")
+    assert _INVOCATION.search("  pytest tests/unit/x.py")
+    assert not _INVOCATION.search("python -m build -o cache_dir=.pytest-cache-ci")
+
+    total = sum(len(_pytest_commands(w)) for w in _workflow_files())
+    assert total >= 5, f"expected at least 5 pytest invocations across CI, found {total}"
+
+
+@pytest.mark.parametrize("workflow", _workflow_files(), ids=lambda p: p.name)
+def test_every_ci_pytest_invocation_declares_its_coverage_intent(workflow: Path):
+    """Prevents a CI step inheriting the coverage gate by accident.
+
+    `pyproject.toml` puts `--cov` in `addopts`, so coverage is the default
+    for every pytest run and `fail_under = 92` applies to it. That is right
+    for the job whose purpose is to measure, and wrong everywhere else: a
+    single-file step cannot reach 92 and would fail for a reason unrelated
+    to what it tests, and a second full-suite run would pay for coverage
+    twice in Actions minutes.
+
+    So silence is not allowed. An invocation either passes `--cov`, meaning
+    it is the measuring run, or `--no-cov`, meaning it deliberately is not.
+    """
+    silent = [
+        command
+        for command in _pytest_commands(workflow)
+        if "--cov" not in command and "--no-cov" not in command
+    ]
+    assert silent == [], (
+        f"{workflow.relative_to(REPO)} has pytest invocations that say nothing "
+        f"about coverage: {silent}. Add --no-cov if the step is not the one "
+        "measuring it, or --cov if it is."
     )

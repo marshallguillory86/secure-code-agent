@@ -133,7 +133,15 @@ ignore = ["E501"]  # let line-length be a soft guide; long log strings are fine
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --strict-markers"
+# Coverage is on by default, so the declared test command — plain `pytest`,
+# which is what maintainability-agent runs — reports it and the
+# `fail_under` below actually applies. Without this the suite was
+# measurable only by whoever remembered the flags, and MA scored
+# test_effectiveness as "not measurable" on every run.
+# A step that is not the one measuring passes `--no-cov`;
+# tests/unit/test_one_coverage_floor.py requires every CI invocation to say
+# which it is.
+addopts = "-q --strict-markers --cov=secure_code_audit --cov-branch --cov-report=term"
 # The suite tests this checkout, never an installed copy. Without it, bare
 # `pytest` imports whichever secure_code_audit the interpreter can find, and
 # an environment holding a plain install grades code nobody is editing —
