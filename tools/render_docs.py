@@ -29,13 +29,20 @@ import html
 import os
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
 import markdown
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+# Every git call in this repository goes through `git_tools`: an absolute
+# `git`, a fixed argv, never a shell, and a timeout. The first cut of this
+# tool invoked a child process itself, and the self-audit flagged it three
+# ways — B404 for the import, B603 for the call, B607 for the partial path.
+# A docs tool is not the place to become the second thing that shells out.
+from secure_code_audit.git_tools import tracked_files  # noqa: E402
 
 STYLES = Path(__file__).with_suffix(".css")
 BRAND = "secure-code-agent"
@@ -73,25 +80,9 @@ GROUPS: list[tuple[str, object]] = [
 DEFAULT_GROUP = "Reference"
 
 
-def _git(args: list[str], repo: Path) -> str:
-    """A fixed argv, no shell, read-only, with a timeout.
-
-    Not `subprocess` with a string anywhere: this repository's own
-    `sca.python.subprocess.shell_true` rule exists to catch that, and a tool
-    in this tree is audited by the gate it ships.
-    """
-    return subprocess.run(  # noqa: S603 - fixed argv, no shell
-        ["git", "-C", str(repo), *args],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,
-    ).stdout
-
-
 def sources(repo: Path) -> list[Path]:
     """Every markdown document git tracks, wherever it lives."""
-    return sorted(Path(p) for p in _git(["ls-files", "*.md"], repo).split())
+    return sorted(Path(p) for p in tracked_files(repo, "*.md"))
 
 
 def standalone_html(repo: Path) -> list[Path]:
@@ -101,7 +92,7 @@ def standalone_html(repo: Path) -> list[Path]:
     overwritten, and are already readable HTML. Re-rendering them would be
     pointless and copying them would duplicate megabytes per audit.
     """
-    listed = _git(["ls-files", "docs/*.html", "docs/**/*.html"], repo).split()
+    listed = tracked_files(repo, "docs/*.html", "docs/**/*.html")
     return sorted(Path(p) for p in listed if not p.startswith("docs/html/"))
 
 

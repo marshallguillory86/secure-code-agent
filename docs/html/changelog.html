@@ -4,6 +4,13 @@
 <div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
 <div class="layout"><aside><p class="label">On this page</p><div class="toc">
 <ul>
+<li><a href="#01211-2026-10-03">0.12.11 — 2026-10-03</a><ul>
+<li><a href="#security-the-audited-tree-does-not-grade-itself-d32">Security — the audited tree does not grade itself (D32)</a></li>
+<li><a href="#fixed">Fixed</a></li>
+<li><a href="#added">Added</a></li>
+<li><a href="#changed">Changed</a></li>
+</ul>
+</li>
 <li><a href="#01210-2026-10-02">0.12.10 — 2026-10-02</a><ul>
 <li><a href="#security-an-untrusted-config-does-not-choose-a-scanners-command-d29">Security — an untrusted config does not choose a scanner's command (D29)</a></li>
 </ul>
@@ -115,37 +122,37 @@
 </li>
 <li><a href="#050-2026-09-10">0.5.0 — 2026-09-10</a><ul>
 <li><a href="#fixed-040-reports-itself-as-030">Fixed — 0.4.0 reports itself as 0.3.0</a></li>
-<li><a href="#added">Added</a></li>
+<li><a href="#added_1">Added</a></li>
 </ul>
 </li>
 <li><a href="#040-2026-09-09">0.4.0 — 2026-09-09</a><ul>
 <li><a href="#changed-behaviour-that-will-move-existing-results">Changed — behaviour that will move existing results</a></li>
-<li><a href="#added_1">Added</a></li>
+<li><a href="#added_2">Added</a></li>
 <li><a href="#added-the-coverage-check-and-the-tools-it-found">Added — the coverage check, and the tools it found</a></li>
 <li><a href="#fixed-defects-found-by-the-tool-auditing-itself">Fixed — defects found by the tool auditing itself</a></li>
 <li><a href="#fixed-remaining-known-defects">Fixed — remaining known defects</a></li>
 <li><a href="#security">Security</a></li>
-<li><a href="#fixed">Fixed</a></li>
+<li><a href="#fixed_1">Fixed</a></li>
 <li><a href="#documentation">Documentation</a></li>
 <li><a href="#still-open-deliberately">Still open, deliberately</a></li>
 </ul>
 </li>
 <li><a href="#030-2026-08-09">0.3.0 — 2026-08-09</a><ul>
-<li><a href="#added_2">Added</a></li>
-<li><a href="#fixed_1">Fixed</a></li>
+<li><a href="#added_3">Added</a></li>
+<li><a href="#fixed_2">Fixed</a></li>
 <li><a href="#documentation_1">Documentation</a></li>
 </ul>
 </li>
 <li><a href="#020-2026-05-13">0.2.0 — 2026-05-13</a><ul>
 <li><a href="#added-tier-2-scanners">Added — Tier-2 scanners</a></li>
 <li><a href="#added-standards-mappings">Added — standards mappings</a></li>
-<li><a href="#fixed_2">Fixed</a></li>
+<li><a href="#fixed_3">Fixed</a></li>
 <li><a href="#refactored">Refactored</a></li>
 <li><a href="#tests">Tests</a></li>
 </ul>
 </li>
 <li><a href="#010-2026-05-13">0.1.0 — 2026-05-13</a><ul>
-<li><a href="#added_3">Added</a></li>
+<li><a href="#added_4">Added</a></li>
 <li><a href="#known-limitations">Known limitations</a></li>
 </ul>
 </li>
@@ -155,6 +162,76 @@
 <main><div class="meta">History</div><h1>Changelog</h1><p>All notable changes to <code>secure-code-agent</code> are documented here. Format follows
 <a href="https://keepachangelog.com/">Keep a Changelog</a>. Semver pre-1.0 — config
 schema may evolve.</p>
+<h2 id="01211-2026-10-03">0.12.11 — 2026-10-03</h2>
+<p><strong>The audited repository could set its own grade.</strong></p>
+<h3 id="security-the-audited-tree-does-not-grade-itself-d32">Security — the audited tree does not grade itself (D32)</h3>
+<ul>
+<li><code>severity_overrides</code> and <code>category_overrides</code> were applied from any
+  configuration, including one discovered <em>inside</em> the audited tree, with no
+  <code>--trust-target-config</code>. <code>INFORMATIONAL</code> carries weight 0.0, so re-labelling
+  a finding removed it from the score while leaving it visible in the report.
+  Measured on one shell-injection finding: <strong>0.00 (F) honestly, 5.00 (A+) with
+  an in-tree <code>severity_overrides</code></strong>. The audited party moved its own grade.</li>
+<li>Both keys are now dropped before any consumer reads them when the
+  configuration comes from inside the containment root, and the run warns on
+  stderr naming the file. <code>--trust-target-config</code>, and a configuration kept
+  outside the tree, still apply them.</li>
+<li>D29 closed the argument half of threat-model T1; this is the half about what
+  an in-tree configuration may claim about the <em>findings</em>. Promise <strong>P3</strong> now
+  names both directions: it refused an input whose removal raises the graded
+  field, and this was one whose addition raised it.</li>
+</ul>
+<h3 id="fixed">Fixed</h3>
+<ul>
+<li><strong>The coverage floor CI enforced was not the one declared.</strong> <code>fail_under</code>
+  was raised to 92 in 0.12.10 while both workflows passed
+  <code>--cov-fail-under=85</code> on the command line, which wins. The gate stayed at
+  85, and a release could have shipped under the floor it claims. The number
+  is declared once, in <code>pyproject.toml</code>.</li>
+<li><strong>The suite tested whatever copy was installed.</strong> Nothing put <code>src</code> on the
+  import path, so bare <code>pytest</code> imported whichever <code>secure_code_audit</code> the
+  interpreter had. maintainability-agent runs this repository's declared test
+  command from its own virtualenv and had been reporting a bug fixed in
+  0.12.10 — so it had never once measured this suite.</li>
+<li><strong>Bandit reported a clean scan when it had failed.</strong> It declared
+  <code>allowed_exits=(0, 1)</code> to <code>_exec</code>, which did nothing with it, and then
+  checked no exit code at all. Bandit exits 2 on an internal error and can
+  still emit a JSON envelope, which was parsed as an empty clean result.
+  Exit-code policy now belongs to each adapter (D30).</li>
+<li><strong>A CWE override was honoured for the CWE and ignored for the OWASP id
+  derived from it</strong>, so a Semgrep rule asserting CWE-22 against B608 produced
+  CWE-22 with A03 — path traversal filed under Injection (D31).</li>
+<li>A <code>--only</code> calibration run computed its variants block over reports left by
+  earlier runs, at whatever scanner versions were current then — including the
+  figures D16 chose the grade slope from.</li>
+<li>A calibration run in which every repository failed still exited 0.</li>
+</ul>
+<h3 id="added">Added</h3>
+<ul>
+<li><strong>A suppression that matches nothing is reported.</strong> Only the expiry was
+  enforced; nothing asked whether an entry still had a subject. <code>INFORMATIONAL</code>,
+  so tidiness cannot move a grade.</li>
+<li><strong><code>standards_overlay</code></strong> layers an operator's own standards mapping over the
+  shipped table, which now ships as <code>data/standards.yaml</code>. An overlay may add
+  or correct a rule's CWE, OWASP id, ASVS section, SSDF practice and prose, and
+  is refused if it names severity, confidence or category — those are the
+  scoring inputs, and an overlay that set them would reopen D32 through a
+  second door.</li>
+<li><strong><code>docs/html/</code></strong>, a rendered reading copy of every document in the
+  repository, generated by <code>tools/render_docs.py</code> and held current by a test
+  that compares the committed copy against a fresh render.</li>
+<li><code>docs/remediation-prompt-evaluation.md</code>, the study design for §4
+  criterion 3 — the one success criterion with no evidence behind it.</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li>The declared test command reports coverage to an artifact, so a consumer can
+  read it. maintainability-agent now measures <code>test_effectiveness</code> for this
+  repository for the first time.</li>
+<li><code>Scanner</code> splits into command resolution, subprocess execution and finding
+  construction (423 → 104 lines); <code>suppressions.load</code> splits along its three
+  jobs (111 → 22 lines). No call site changed.</li>
+</ul>
 <h2 id="01210-2026-10-02">0.12.10 — 2026-10-02</h2>
 <p><strong>A repository could run code on the auditing machine through preflight.</strong></p>
 <h3 id="security-an-untrusted-config-does-not-choose-a-scanners-command-d29">Security — an untrusted config does not choose a scanner's command (D29)</h3>
@@ -966,7 +1043,7 @@ disagree. The release workflow reads the package. A first attempt used
 <code>importlib.metadata</code> instead and was worse — it reports whatever distribution
 happens to be installed, which in a working checkout was a stale 0.1.0, and
 provenance that depends on the reader's install state is not provenance.</p>
-<h3 id="added">Added</h3>
+<h3 id="added_1">Added</h3>
 <ul>
 <li><strong><code>--security-pillar &lt;path&gt;</code></strong> emits <code>security-pillar.json</code> for
   <code>maintainability-agent</code> to ingest (<a href="docs-decisions.html">D3</a>, contract in
@@ -1009,7 +1086,7 @@ audited with 0.3.0 can score differently under 0.4.0:</p>
   breaks any out-of-tree scanner adapter. Nothing in the documented CLI or
   config surface changes; see <a href="docs-decisions.html">D13</a> for the migration shape.</li>
 </ul>
-<h3 id="added_1">Added</h3>
+<h3 id="added_2">Added</h3>
 <ul>
 <li>The offline Semgrep ruleset is now a <strong>versioned profile</strong>: <code>sca-offline</code>,
   with a version and a SHA-256 digest of the shipped file, cited in scanner
@@ -1126,7 +1203,7 @@ audited with 0.3.0 can score differently under 0.4.0:</p>
   route, not only the relative-path branch, because <code>PATH</code> can contain <code>.</code> or a
   tree-local directory.</li>
 </ul>
-<h3 id="fixed">Fixed</h3>
+<h3 id="fixed_1">Fixed</h3>
 <ul>
 <li><strong>Withholding evidence can no longer buy a better grade.</strong> The score is a
   rate over findings, so disabling scanners removed findings and the number
@@ -1173,7 +1250,7 @@ whether the number this tool reports means anything.</p>
 <h2 id="030-2026-08-09">0.3.0 — 2026-08-09</h2>
 <p>Coverage-integrity release. A clean finding set and successful scanner
 coverage are now reported and gated separately.</p>
-<h3 id="added_2">Added</h3>
+<h3 id="added_3">Added</h3>
 <ul>
 <li>Enforced <code>gates.require_scanners</code>. Required scanners now fail coverage when
   unavailable, timed out, failed, emitted invalid output, were not applicable,
@@ -1214,7 +1291,7 @@ coverage are now reported and gated separately.</p>
   with an unpinned formatter that turned an upstream release into a red build
   with no change in this repository.</li>
 </ul>
-<h3 id="fixed_1">Fixed</h3>
+<h3 id="fixed_2">Fixed</h3>
 <ul>
 <li>CI now uploads the audit SARIF to Code Scanning when required coverage fails.
   The step carried no status-check function, so GitHub's implicit <code>success()</code>
@@ -1315,7 +1392,7 @@ mappings and mocked-subprocess test coverage.</p>
 scanners. Scorecard checks get per-check mappings for <code>Branch-Protection</code>,
 <code>Signed-Releases</code>, <code>Pinned-Dependencies</code>, <code>Token-Permissions</code>,
 <code>Security-Policy</code>, <code>Dangerous-Workflow</code> plus a wildcard fallback.</p>
-<h3 id="fixed_2">Fixed</h3>
+<h3 id="fixed_3">Fixed</h3>
 <ul>
 <li><code>owasp_url()</code> now generates a deep-link to the specific Top-10 bucket
   (<code>A03_2021-Injection</code>) instead of always returning the index URL.</li>
@@ -1340,7 +1417,7 @@ scanners. Scorecard checks get per-check mappings for <code>Branch-Protection</c
 </ul>
 <h2 id="010-2026-05-13">0.1.0 — 2026-05-13</h2>
 <p>Initial public release.</p>
-<h3 id="added_3">Added</h3>
+<h3 id="added_4">Added</h3>
 <ul>
 <li>Deterministic CLI gate over six Tier-1 scanners: Bandit, Semgrep, pip-audit,
   npm audit, Gitleaks, and a built-in regex rule pack.</li>
