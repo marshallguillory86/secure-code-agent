@@ -24,6 +24,7 @@ blocks it, this is that lint.
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -184,3 +185,60 @@ def test_every_ci_pytest_invocation_declares_its_coverage_intent(workflow: Path)
         f"about coverage: {silent}. Add --no-cov if the step is not the one "
         "measuring it, or --cov if it is."
     )
+
+
+#: Coverage artifacts a consumer reads, in maintainability-agent's own order.
+#: It requires the file to be newer than the moment before it ran the suite,
+#: so a committed report cannot set a repository's own test_effectiveness.
+CONSUMED_ARTIFACTS = ("coverage.xml", "coverage/lcov.info", "lcov.info")
+
+
+def _addopts() -> str:
+    config = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    return config["tool"]["pytest"]["ini_options"]["addopts"]
+
+
+def _writes_a_consumable_artifact(addopts: str) -> bool:
+    """Does this addopts string make a run leave a file a consumer can read?"""
+    return "--cov-report=xml" in addopts or "--cov-report=lcov" in addopts
+
+
+def test_the_declared_test_command_writes_a_coverage_artifact_not_just_stdout():
+    """Prevents coverage being reported only where no tool can read it.
+
+    `--cov-report=term` prints a percentage for a human and writes nothing.
+    maintainability-agent reads an *artifact* — one of CONSUMED_ARTIFACTS —
+    and scored `test_effectiveness` as "not measurable" on every audit of
+    this repository while the number sat in stdout. Adding `--cov` without
+    a file report fixes the visible half and leaves the measured half
+    exactly as broken, which is why this asserts the file and not the flag.
+    """
+    addopts = _addopts()
+    assert "--cov=" in addopts, f"addopts does not enable coverage at all: {addopts!r}"
+    assert _writes_a_consumable_artifact(addopts), (
+        f"addopts reports coverage but writes no artifact a consumer reads: "
+        f"{addopts!r}. One of {CONSUMED_ARTIFACTS} must be produced; "
+        "--cov-report=term alone is invisible to every tool."
+    )
+
+
+def test_the_coverage_artifact_is_not_committed():
+    """A committed report would be provenance the suite did not earn.
+
+    Every run now rewrites `coverage.xml` at the repository root. Tracking
+    it would put a generated file in review diffs, and a consumer that
+    accepts a stale artifact would be reading the tree's claim about itself
+    rather than a measurement — which is the attack its freshness check
+    exists to refuse.
+    """
+    ignored = (REPO / ".gitignore").read_text(encoding="utf-8")
+    assert "coverage.xml" in ignored, "coverage.xml is written by every run and must be gitignored"
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "coverage.xml", "lcov.info", "coverage/lcov.info"],
+        cwd=REPO,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+    assert tracked == [], f"a coverage artifact is tracked in git: {tracked}"
