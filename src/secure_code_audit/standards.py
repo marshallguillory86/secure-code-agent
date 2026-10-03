@@ -190,6 +190,169 @@ def _load_table(path: Path) -> dict[tuple[str, str], StandardsEntry]:
 _MAP: dict[tuple[str, str], StandardsEntry] = _load_table(_DATA_FILE)
 
 
+# --- The operator overlay --------------------------------------------------
+#
+# §8 question 3: the curated table is 34 rules and Semgrep alone publishes
+# thousands, so an operator who maps their own rules waits for a release.
+# The overlay is how they do not.
+#
+# It carries the *standards* fields only. `severity`, `confidence` and
+# `category` are refused, because those three are the scoring inputs and D32
+# is what happens when something outside the instrument can set them: an
+# in-tree `severity_overrides` moved a repository's own grade from 0.00/F to
+# 5.00/A+ by re-labelling one finding. An overlay is exactly the kind of file
+# an audited tree would ship, so it may say what weakness a rule describes
+# and not how much it counts.
+
+#: Fields an overlay row may carry.
+_OVERLAY_KEYS = frozenset(
+    {
+        "scanner",
+        "rule_id",
+        "canonical_cwe",
+        "owasp_top10",
+        "asvs_section",
+        "nist_ssdf",
+        "short_desc",
+        "fix_hint",
+    }
+)
+
+#: Fields an overlay row may not carry, with the reason attached to each.
+_SCORING_KEYS = ("severity", "confidence", "category")
+
+
+@dataclass(frozen=True, slots=True)
+class OverlayEntry:
+    """An operator's mapping for one rule. Standards fields only."""
+
+    canonical_cwe: str | None = None
+    owasp_top10: str | None = None
+    asvs_section: str | None = None
+    nist_ssdf: str | None = None
+    short_desc: str | None = None
+    fix_hint: str | None = None
+
+
+#: Process-wide, installed once per run. `_resolve_standards` is reached from
+#: fifteen adapters, and threading a config object through all of them to
+#: deliver one optional table would be the larger change. Tests clear it.
+_OVERLAY: dict[tuple[str, str], OverlayEntry] = {}
+
+
+def _overlay_row(
+    where: str, row: object
+) -> tuple[tuple[str, str] | None, OverlayEntry | None, str]:
+    """One validated overlay row, or the reason it is refused.
+
+    Returns `(key, entry, "")` or `(None, None, error)`. Split out of
+    `load_overlay` because carrying all five checks in the loop put that
+    function at cognitive complexity 18 against a limit of 15.
+    """
+    if not isinstance(row, dict):
+        return None, None, f"{where}: must be a mapping."
+
+    scoring = [key for key in _SCORING_KEYS if key in row]
+    if scoring:
+        return (
+            None,
+            None,
+            f"{where}: an overlay may not set {', '.join(scoring)}. Those are the "
+            f"scoring inputs, and an overlay that set them could move the grade — "
+            f"see D32. Map the rule's standards here, and set severity policy with "
+            f"severity_overrides in a config kept outside the audited tree.",
+        )
+
+    unknown = sorted(set(row) - _OVERLAY_KEYS)
+    if unknown:
+        return (
+            None,
+            None,
+            f"{where}: unknown field(s) {', '.join(unknown)}. "
+            f"Allowed: {', '.join(sorted(_OVERLAY_KEYS))}.",
+        )
+
+    scanner = str(row.get("scanner", "")).strip().lower()
+    rule_id = str(row.get("rule_id", "")).strip()
+    if not scanner or not rule_id:
+        return None, None, f"{where}: 'scanner' and 'rule_id' are both required."
+
+    return (
+        (scanner, rule_id),
+        OverlayEntry(
+            canonical_cwe=row.get("canonical_cwe"),
+            owasp_top10=row.get("owasp_top10"),
+            asvs_section=row.get("asvs_section"),
+            nist_ssdf=row.get("nist_ssdf"),
+            short_desc=row.get("short_desc"),
+            fix_hint=row.get("fix_hint"),
+        ),
+        "",
+    )
+
+
+def load_overlay(path: Path) -> tuple[dict[tuple[str, str], OverlayEntry], list[str]]:
+    """Read an overlay file. Returns `(entries, errors)`; never a partial table.
+
+    Fails closed, like `suppressions.load`: on any error the caller gets no
+    entries and the reasons, because half an applied overlay is a mapping
+    nobody wrote. A named-but-absent file is an error rather than an empty
+    table — it is a typo in a path, and silence would mean the operator's
+    whole mapping file quietly did nothing.
+    """
+    import yaml
+
+    if not path.exists():
+        return {}, [f"{path}: standards overlay not found."]
+    try:
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (yaml.YAMLError, ValueError, OSError) as exc:
+        # `ValueError` alongside `YAMLError` for the same reason
+        # `suppressions.load` catches it: an unquoted impossible date is a
+        # YAML timestamp, and PyYAML raises a plain ValueError for it.
+        return {}, [f"{path}: could not be read: {exc}"]
+
+    rows = document.get("entries") if isinstance(document, dict) else None
+    if not isinstance(rows, list):
+        return {}, [f"{path}: 'entries' must be a list."]
+
+    entries: dict[tuple[str, str], OverlayEntry] = {}
+    errors: list[str] = []
+    for index, row in enumerate(rows):
+        key, entry, error = _overlay_row(f"{path}: entry #{index}", row)
+        if error:
+            errors.append(error)
+        elif key in entries:
+            errors.append(f"{path}: entry #{index}: duplicate rule {key[0]}/{key[1]}.")
+        else:
+            entries[key] = entry
+    if errors:
+        return {}, errors
+    return entries, []
+
+
+def install_overlay(entries: dict[tuple[str, str], OverlayEntry]) -> None:
+    """Make these the active overlay for this process."""
+    global _OVERLAY
+    _OVERLAY = dict(entries)
+
+
+def clear_overlay() -> None:
+    """Forget any installed overlay. Used by tests, and by nothing else."""
+    global _OVERLAY
+    _OVERLAY = {}
+
+
+def overlay_for(scanner: str, rule_id: str) -> OverlayEntry | None:
+    """The operator's mapping for this rule, with the same wildcard fallback."""
+    if not _OVERLAY:
+        return None
+    exact = _OVERLAY.get((scanner.lower(), rule_id))
+    if exact is not None:
+        return exact
+    return _OVERLAY.get((scanner.lower(), "*"))
+
+
 def lookup(scanner: str, rule_id: str) -> StandardsEntry | None:
     """Resolve (scanner, rule_id) → StandardsEntry, with wildcard fallback.
 

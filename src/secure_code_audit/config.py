@@ -286,6 +286,11 @@ class Config:
     gates: dict[str, Any] = field(default_factory=lambda: {"fail_on_new": True})
     outputs: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_OUTPUTS))
     suppressions_file: str = ".scignore.yaml"
+    #: Operator's standards mapping, layered over the shipped table. It may
+    #: add or correct a rule's CWE/OWASP/ASVS/SSDF and prose, and may not
+    #: set severity, confidence or category — those are the scoring inputs
+    #: (D32). §8 question 3.
+    standards_overlay: str | None = None
     loc_for_scoring: dict[str, Any] | None = None
     raw: dict[str, Any] = field(default_factory=dict)
     #: Where this config was read from, or None for built-in defaults. Needed
@@ -423,6 +428,7 @@ _KNOWN_KEYS = frozenset(
         "gates",
         "outputs",
         "suppressions_file",
+        "standards_overlay",
         "loc_for_scoring",
     }
 )
@@ -566,24 +572,40 @@ def _apply_outputs(cfg: Config, raw: dict[str, Any]) -> None:
 
 
 def _apply_file_and_loc(cfg: Config, raw: dict[str, Any]) -> None:
-    """`suppressions_file` and `loc_for_scoring`."""
+    """`suppressions_file`, `standards_overlay` and `loc_for_scoring`."""
     if "suppressions_file" in raw:
         value = raw["suppressions_file"]
         if not isinstance(value, str) or not value:
             raise ValueError("suppressions_file must be a non-empty string")
         cfg.suppressions_file = value
 
+    if "standards_overlay" in raw:
+        value = raw["standards_overlay"]
+        if value is not None and (not isinstance(value, str) or not value):
+            raise ValueError("standards_overlay must be a non-empty string or null")
+        cfg.standards_overlay = value
+
     if "loc_for_scoring" in raw:
-        value = raw["loc_for_scoring"]
-        if not isinstance(value, dict):
-            raise ValueError("loc_for_scoring must be a JSON object")
-        loc = value.get("value")
-        reason = value.get("reason")
-        if isinstance(loc, bool) or not isinstance(loc, int) or loc < 1:
-            raise ValueError("loc_for_scoring.value must be a positive integer")
-        if not isinstance(reason, str) or not reason:
-            raise ValueError("loc_for_scoring.reason must be a non-empty string")
-        cfg.loc_for_scoring = value
+        cfg.loc_for_scoring = _validated_loc(raw["loc_for_scoring"])
+
+
+def _validated_loc(value: Any) -> dict[str, Any]:
+    """`loc_for_scoring`, or a `ValueError` naming the field that is wrong.
+
+    Its own function because adding `standards_overlay` beside it took
+    `_apply_file_and_loc` to cognitive complexity 18 against a limit of 15,
+    and this block is the one carrying four of the checks. Same messages, in
+    the same order.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("loc_for_scoring must be a JSON object")
+    loc = value.get("value")
+    reason = value.get("reason")
+    if isinstance(loc, bool) or not isinstance(loc, int) or loc < 1:
+        raise ValueError("loc_for_scoring.value must be a positive integer")
+    if not isinstance(reason, str) or not reason:
+        raise ValueError("loc_for_scoring.reason must be a non-empty string")
+    return value
 
 
 # `_from_dict` was one 158-line function at complexity 51 and cognitive 63,

@@ -258,10 +258,12 @@ roadmap stops being one.
 - Cross-scanner deduplication. Overlapping SCA adapters can currently
   double-count one advisory. Fingerprints are stable enough to support this; the
   scorer does not yet do it.
-- Operator-defined standards rule packs. The mapping table is currently
-  compiled into the package. **Accepted 2026-10-02 and no longer deferred** —
-  §8 question 3 answers it: ship the mapping as data with an operator overlay.
-  Not yet built, so it stays listed until it is.
+- ~~Operator-defined standards rule packs. The mapping table is currently
+  compiled into the package.~~ **Shipped 2026-10-02.** The table is
+  `data/standards.yaml`, and `standards_overlay` layers an operator's own
+  mapping over it. The overlay carries the standards fields only — it cannot
+  set severity, confidence or category, because those are the scoring inputs
+  (D32). §8 question 3.
 - ~~Scoped changed-file audits.~~ **Shipped in 0.12.0.** `--changed-only REF`
   scans the whole tree, scopes the *report* to files changed since `REF`, and
   withholds the grade — a run that looks at less must not score better.
@@ -334,6 +336,10 @@ wanted to be the one to close it.
    customization to invite.
 
    **Answered 2026-10-02 — ship it as data, with an operator overlay.**
+   **Built the same day**: `data/standards.yaml` plus a `standards_overlay`
+   config key. The overlay may add or correct a rule's CWE, OWASP id, ASVS
+   section, SSDF practice and prose, and is refused if it names severity,
+   confidence or category — see D32's scope note, which this is.
    Decided together with `standards.py`'s size finding, which is this same
    problem seen from the other side: 705 lines, roughly 390 of them a
    hand-written table that needs a package release to extend, with the

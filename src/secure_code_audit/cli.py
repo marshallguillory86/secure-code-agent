@@ -21,6 +21,7 @@ from secure_code_audit import (
     renderers,
     sarif,
     scanners,
+    standards,
     suppressions,
     triage,
 )
@@ -497,6 +498,8 @@ def _do_audit(args: argparse.Namespace) -> int:
     # Before any consumer reads them: the audited tree does not grade itself.
     cfg = _refuse_target_policy(cfg, target)
     _require_configured_gates(args, cfg)
+    if (failed := _install_standards_overlay(cfg, root)) is not None:
+        return failed
     # Before anything is resolved or written, and before any scanner runs.
     _assert_config_writes_are_contained(cfg, root, target)
     # Resolved before the scan so the run can recognise its own artifacts.
@@ -1140,6 +1143,33 @@ def _write_outputs(
     # is the only output that carries both axes plus the practice level.
     if paths.security_pillar is not None and pillar is not None:
         pillar_mod.write(pillar, paths.security_pillar)
+
+
+def _install_standards_overlay(cfg: config_mod.Config, root: Path) -> int | None:
+    """Layer the operator's standards mapping over the shipped table.
+
+    Returns an exit code when the overlay cannot be applied, else None.
+
+    Fails closed, for the same reason a malformed suppressions file does: the
+    operator named a mapping file, so running without it reports findings
+    under the standards nobody chose — unmapped where they should be mapped,
+    and no louder than a rule nobody has curated. Reachable only when the key
+    is set, so repositories that do not use an overlay are unaffected.
+    """
+    if not cfg.standards_overlay:
+        return None
+    path = _under_root(root, cfg.standards_overlay)
+    entries, errors = standards.load_overlay(path)
+    if errors:
+        for err in errors:
+            sys.stderr.write(f"ERROR: {err}\n")
+        sys.stderr.write(
+            f"ERROR: standards_overlay {path} is declared but could not be applied; "
+            "refusing to report findings mapped by a table the operator did not choose.\n"
+        )
+        return 1
+    standards.install_overlay(entries)
+    return None
 
 
 #: Config keys that move the grade, and so may not come from the audited tree.

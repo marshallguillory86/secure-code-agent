@@ -14,7 +14,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
-from secure_code_audit.standards import StandardsEntry, is_top25, lookup, owasp_for_cwe
+from secure_code_audit.standards import (
+    StandardsEntry,
+    is_top25,
+    lookup,
+    overlay_for,
+    owasp_for_cwe,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,9 +75,25 @@ def _resolve_standards(
     none.
     """
     entry: StandardsEntry | None = lookup(scanner_label, rule_id)
+    # The operator's overlay sits between the adapter and the curated table,
+    # and only for the standards fields. It cannot reach severity, confidence
+    # or category — those are the scoring inputs, and an overlay that set them
+    # could move the grade the way an in-tree `severity_overrides` did before
+    # D32. §8 question 3 is why it exists at all.
+    extra = overlay_for(scanner_label, rule_id)
 
-    # Mapping fallback to wildcard (handled inside lookup).
-    canonical_cwe = cwe_override or (entry.canonical_cwe if entry else None) or scanner_cwe
+    def mapped(field: str) -> str | None:
+        """The operator's value for a standards field, then the curated one.
+
+        One helper rather than `(extra.x if extra else None) or (entry.x if
+        entry else None)` written six times: that spelling put this function
+        at cognitive complexity 17, and six copies of a precedence rule is
+        six places for it to drift.
+        """
+        return getattr(extra, field, None) or getattr(entry, field, None)
+
+    # Mapping fallback to wildcard (handled inside lookup and overlay_for).
+    canonical_cwe = cwe_override or mapped("canonical_cwe") or scanner_cwe
     # An override decides the OWASP category too, because a CWE and an OWASP
     # id that disagree describe two different defects. This was
     # `entry.owasp_top10 or owasp_for_cwe(...)` unconditionally, so a Semgrep
@@ -83,21 +105,20 @@ def _resolve_standards(
     # id describes the CWE the override just replaced, so it would reinstate
     # the same incoherence. None means "no Top 10 category", which is the
     # honest answer. D31, and docs/product-intent.md §8 question 9.
-    owasp_top10 = (
-        owasp_for_cwe(canonical_cwe)
-        if cwe_override
-        else (entry.owasp_top10 if entry else None) or owasp_for_cwe(canonical_cwe)
-    )
+    derived = owasp_for_cwe(canonical_cwe)
+    owasp_top10 = derived if cwe_override else mapped("owasp_top10") or derived
     return _Standards(
         canonical_cwe=canonical_cwe,
         owasp_top10=owasp_top10,
-        asvs_section=entry.asvs_section if entry else None,
-        nist_ssdf=entry.nist_ssdf if entry else None,
+        asvs_section=mapped("asvs_section"),
+        nist_ssdf=mapped("nist_ssdf"),
+        # Scoring inputs. The overlay is deliberately absent from these three
+        # lines, and that absence is the whole of D32's scope note.
         category=category or (entry.category if entry else default_category),
         severity=severity or (entry.severity if entry else Severity.MEDIUM),
         confidence=confidence or (entry.confidence if entry else Confidence.MEDIUM),
-        short_desc=entry.short_desc if entry else None,
-        fix_hint=entry.fix_hint if entry else None,
+        short_desc=mapped("short_desc"),
+        fix_hint=mapped("fix_hint"),
     )
 
 
