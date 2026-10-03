@@ -1,0 +1,173 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Finding taxonomy · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#severity">Severity</a></li>
+<li><a href="#confidence">Confidence</a></li>
+<li><a href="#categories">Categories</a></li>
+<li><a href="#standards">Standards</a></li>
+<li><a href="#how-to-read-a-finding">How to read a finding</a></li>
+<li><a href="#when-to-suppress-vs-fix">When to suppress vs. fix</a></li>
+<li><a href="#suppression-syntax">Suppression syntax</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Agent instructions</div><h1>Finding taxonomy</h1><p>Use this reference when interpreting a <code>secure-code-agent</code> finding.</p>
+<h2 id="severity">Severity</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Meaning</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>critical</code></td>
+<td>Active or imminent compromise vector</td>
+<td>Fix immediately. Block merge.</td>
+</tr>
+<tr>
+<td><code>high</code></td>
+<td>Exploitable with effort</td>
+<td>Fix in-PR. Don't merge without a fix or doc'd suppression.</td>
+</tr>
+<tr>
+<td><code>medium</code></td>
+<td>Defense-in-depth weakness</td>
+<td>Fix in current sprint. Suppress with reason if accepted risk.</td>
+</tr>
+<tr>
+<td><code>low</code></td>
+<td>Hygiene / posture issue</td>
+<td>Track. Fix as time permits.</td>
+</tr>
+<tr>
+<td><code>informational</code></td>
+<td>Awareness only</td>
+<td>Read; no action required.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="confidence">Confidence</h2>
+<ul>
+<li><code>high</code> — scanner is sure (rule + AST match + no documented FP pattern).</li>
+<li><code>medium</code> — pattern match with some heuristic. Read the snippet before patching.</li>
+<li><code>low</code> — broad pattern, likely false-positive surface. Investigate before changing code.</li>
+</ul>
+<h2 id="categories">Categories</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Examples</th>
+<th style="text-align: right;">Default weight</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>secrets</code></td>
+<td>Hardcoded API keys, tokens in history, <code>.env</code> in git</td>
+<td style="text-align: right;">1.5×</td>
+</tr>
+<tr>
+<td><code>dependencies</code></td>
+<td>CVE in pinned dep, yanked package, abandoned upstream</td>
+<td style="text-align: right;">1.0×</td>
+</tr>
+<tr>
+<td><code>code_vulnerabilities</code></td>
+<td>SQLi, XSS, command-injection, path-traversal, SSRF, XXE, deserialization</td>
+<td style="text-align: right;">1.5×</td>
+</tr>
+<tr>
+<td><code>auth_authz</code></td>
+<td>Missing auth gate, IDOR, broken access control, JWT misuse</td>
+<td style="text-align: right;">1.5×</td>
+</tr>
+<tr>
+<td><code>crypto</code></td>
+<td>Weak alg, hardcoded IV, ECB, MD5/SHA-1 for security, missing constant-time</td>
+<td style="text-align: right;">1.5×</td>
+</tr>
+<tr>
+<td><code>supply_chain</code></td>
+<td>Unpinned action, missing SBOM, no signed releases, low Scorecard</td>
+<td style="text-align: right;">0.8×</td>
+</tr>
+<tr>
+<td><code>config_iac</code></td>
+<td>World-readable S3, public security group, Dockerfile <code>USER root</code>, k8s privileged</td>
+<td style="text-align: right;">1.0×</td>
+</tr>
+<tr>
+<td><code>logging_observability</code></td>
+<td>Secrets in logs, PII in URLs, missing audit trail on auth events</td>
+<td style="text-align: right;">0.8×</td>
+</tr>
+<tr>
+<td><code>policy_docs</code></td>
+<td>Missing SECURITY.md, no responsible-disclosure path, no threat model</td>
+<td style="text-align: right;">0.5×</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="standards">Standards</h2>
+<p>Every finding carries up to four standards refs. Read them — they are the
+authoritative description, not the scanner's one-liner.</p>
+<ul>
+<li><strong>CWE id</strong> — https://cwe.mitre.org/data/definitions/<num>.html (the dedupe key)</li>
+<li><strong>OWASP Top 10 (2021)</strong> — https://owasp.org/Top10/2021/</li>
+<li><strong>OWASP ASVS 5.0</strong> — https://github.com/OWASP/ASVS</li>
+<li><strong>NIST SSDF SP 800-218</strong> — https://csrc.nist.gov/pubs/sp/800/218/final</li>
+</ul>
+<p>CWE Top 25 (2025) findings get a 1.25× scoring boost. The list is reproduced
+in <code>docs/standards.md</code>.</p>
+<h2 id="how-to-read-a-finding">How to read a finding</h2>
+<ol>
+<li><strong>Read the standard.</strong> The scanner's rule description is a summary. The
+   linked CWE / ASVS / OWASP entry is the contract.</li>
+<li><strong>Read the snippet.</strong> Confidence is about the pattern, not the context.</li>
+<li><strong>Identify the attacker-controlled input.</strong> If you can't name the input,
+   you can't fix the finding properly.</li>
+<li><strong>Patch at the boundary.</strong> Sanitize / parameterize / validate at the
+   trust boundary, not at every call site.</li>
+<li><strong>Add a test.</strong> The test must FAIL on the pre-fix code.</li>
+</ol>
+<h2 id="when-to-suppress-vs-fix">When to suppress vs. fix</h2>
+<p>Fix when:
+- The finding is a real defect (even if exploit cost is high).
+- The fix is bounded (≤30 LOC patch + a test).
+- The fix doesn't touch unrelated code.</p>
+<p>Suppress when:
+- The finding is a verifiable false positive (you can name why the pattern
+  is safe in context).
+- The risk is accepted with a documented expiry (≤365 days).
+- The underlying behavior is being rewritten and the suppression is
+  scoped to that rewrite's window.</p>
+<p>Never:
+- Suppress because "it's noisy."
+- Suppress with <code>reason: "TODO"</code> or empty.
+- Suppress without an expiry.</p>
+<h2 id="suppression-syntax">Suppression syntax</h2>
+<p><code>.scignore.yaml</code>:</p>
+<pre><code class="language-yaml">- file: services/legacy_billing.py
+  rule_id: &quot;*&quot;
+  reason:  &quot;Slated for rewrite Q3 2026 — gated by initiative INV-44.&quot;
+  expires: &quot;2026-09-30&quot;
+
+- rule_id: &quot;B101&quot;
+  paths:   [&quot;tests/&quot;]
+  reason:  &quot;assert statements are legitimate in test code.&quot;
+  expires: &quot;2027-05-13&quot;
+</code></pre>
+<p><code>paths</code> entries are repository-relative and use the <code>exclude_patterns</code> syntax:
+a trailing <code>/</code> means that directory at any depth, and a bare name matches at
+any depth.</p>
+<p>Wildcard rule (<code>rule_id: "*"</code>) <strong>requires</strong> a <code>file</code> or <code>paths</code> scope. You
+cannot disable a rule globally.</p>
+<footer>Rendered from <code>skills/secure-code-agent/references/finding-taxonomy.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

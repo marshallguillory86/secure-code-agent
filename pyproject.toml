@@ -88,6 +88,11 @@ dev = [
   "pytest>=8.0",
   "pytest-cov>=4.0",
   "ruff==0.16.9",
+  # Renders docs/html, the reading copy of every document in the repository.
+  # A dev dependency, not a runtime one: the audit never renders documentation,
+  # and tests/unit/test_rendered_docs.py is what keeps the committed copy
+  # current. See tools/render_docs.py.
+  "markdown>=3.5",
 ]
 
 [project.scripts]

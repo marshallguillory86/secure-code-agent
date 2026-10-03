@@ -1,0 +1,185 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Work orders — the first-class output · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#1-audit">1. Audit</a></li>
+<li><a href="#2-the-work-order">2. The work order</a><ul>
+<li><a href="#fix-patch-these">§FIX — patch these</a></li>
+<li><a href="#review-confirm-before-changing">§REVIEW — confirm before changing</a></li>
+<li><a href="#accept-test-tree-and-documentation">§ACCEPT — test tree and documentation</a></li>
+</ul>
+</li>
+<li><a href="#3-fix">3. Fix</a></li>
+<li><a href="#4-verify">4. Verify</a></li>
+<li><a href="#5-trend">5. Trend</a></li>
+<li><a href="#in-ci">In CI</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Work orders and remediation</div><h1>Work orders — the first-class output</h1><blockquote>
+<p>Status: <strong>v0.12.11 — 2026-09-11.</strong> Triage tiers and outcome verification.</p>
+</blockquote>
+<p>The score is second class. It is worth something as a <em>trend</em> and very
+little as a number, and the thing that actually improves a repository is a
+bounded, specific instruction an agent can act on and a way to check
+afterwards that it did.</p>
+<p>This page is the whole loop: <strong>audit → work order → fix → verify → trend.</strong></p>
+<hr />
+<h2 id="1-audit">1. Audit</h2>
+<pre><code class="language-bash">secure-code-agent .
+</code></pre>
+<p>Writes two files by default:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>file</th>
+<th>what it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>secure-code-report.md</code></td>
+<td>what the audit found, for a person</td>
+</tr>
+<tr>
+<td><code>secure-code-remediation-prompt.md</code></td>
+<td><strong>the work order</strong>, for an agent</td>
+</tr>
+</tbody>
+</table></div>
+<p>Both are written without a flag. The report describes your code; the work
+order changes it, and the one that changes it used to be reachable only by
+passing <code>--prompt-output</code> — so the artifact that grades you was always on
+and the artifact that helps you was off unless you knew to ask.</p>
+<p>Set any <code>outputs.*_path</code> to <code>null</code> to turn that file off. SARIF, JSON and
+the PR comment stay off until asked, because they are for other systems to
+read rather than for the person at the terminal.</p>
+<hr />
+<h2 id="2-the-work-order">2. The work order</h2>
+<p>Three tiers, each with its own instructions, because a flat list gives a
+command injection and a variable-name match the same billing.</p>
+<h3 id="fix-patch-these">§FIX — patch these</h3>
+<p>The scanner is confident, and the rule has not been measured producing
+noise. Each finding carries file and line, the offending snippet, its CWE,
+OWASP, ASVS and SSDF anchoring, and a concrete suggested fix.</p>
+<h3 id="review-confirm-before-changing">§REVIEW — confirm before changing</h3>
+<p>Either the scanner reported low confidence, or the rule is on the measured
+low-precision list. <strong>The reason is stated per finding</strong>, so the agent is
+not being told "be careful" without being told why.</p>
+<p>A justified suppression is a <em>successful</em> outcome for this tier, not a
+failure. That is the point of having it: a noisy rule is demoted, never
+dropped.</p>
+<blockquote>
+<p>Bandit's <code>B105</code> scored <strong>zero</strong> useful hits out of 22 across the
+calibration corpus — <code>EMAIL_HOST_PASSWORD = ""</code>, <code>PASSWORD_FIELD =
+"password"</code>, <code>django-insecure-</code> — and still caught a planted
+<code>DB_PASSWORD = "SuperSecret123!"</code> in a synthetic vulnerable repository.
+Dropping it would lose the credential. Leaving it unlabelled buries the
+credential under noise. So it is labelled, and the <em>value</em> is judged as
+well as the rule: twelve characters with a digit and an uppercase letter
+promotes a finding back to §FIX. Checked against all 22 corpus values, it
+promotes none of them.</p>
+</blockquote>
+<h3 id="accept-test-tree-and-documentation">§ACCEPT — test tree and documentation</h3>
+<p>Summarised rather than listed, grouped by rule, with a drafted
+<code>.scignore.yaml</code> entry. The decision here is per rule, not per line.</p>
+<blockquote>
+<p>Listing these individually produced a 541KB, 15,390-line work order when
+this tool audited itself — past most context windows and useless to a
+person. The same content is now 111 lines.</p>
+</blockquote>
+<p><strong>§FIX is capped at 12 patch blocks; §REVIEW is one line per finding, capped
+at 12; the §ACCEPT table lists 8 rules.</strong> Quoted code is trimmed to 3 lines.
+Every cap <strong>says what it left out</strong>, with a pointer to the JSON report where
+everything lives — capping is fine, capping silently is the
+absence-of-evidence failure this whole project exists to prevent.</p>
+<p>The caps were 40 per tier, which fixed the 15,390-line number and not the
+principle: Django still produced 1,954 lines and PyGoat 1,602. The bulk was
+not the findings but the context around them — Django's twelve §FIX blocks
+carried <strong>212 lines inside code fences</strong>, because scanners return
+whole-function context and nothing trimmed it. A work order is a prompt
+someone pastes into an agent, not a backlog; ordinary repositories now land
+at 85–145 lines.</p>
+<hr />
+<h2 id="3-fix">3. Fix</h2>
+<p>Hand the work order to any agent. The hard constraints and patch protocol
+travel with it — see <a href="docs-remediation.html"><code>remediation.md</code></a>.</p>
+<hr />
+<h2 id="4-verify">4. Verify</h2>
+<pre><code class="language-bash">secure-code-agent . --verify-against secure-code-report.json
+</code></pre>
+<p>Re-audits and compares against the run that produced the order.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>outcome</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>fixed</strong></td>
+<td>reported before, gone now, and the code actually changed</td>
+</tr>
+<tr>
+<td><strong>still open</strong></td>
+<td>reported before and after</td>
+</tr>
+<tr>
+<td><strong>silenced</strong></td>
+<td>gone, but only because a suppression or an inline marker now covers it</td>
+</tr>
+<tr>
+<td><strong>introduced</strong></td>
+<td>did not exist before this work</td>
+</tr>
+<tr>
+<td><strong>deferred</strong></td>
+<td>test tree and documentation — reported, never required</td>
+</tr>
+</tbody>
+</table></div>
+<p>Exit code is 0 only if the run <strong>passes</strong>: nothing regressed, and either
+work was done or there was none to do. A verification step that always
+passes verifies nothing.</p>
+<p>Two distinctions worth stating, because both were wrong at first:</p>
+<p><strong>"Improved" and "passed" are different questions.</strong> They were one property,
+and with nothing to fix, nothing was fixed, so a clean repository exited 1
+forever — a CI step that could never go green again, which is a good way to
+teach people to delete the CI step. <code>improved</code> stays strict for reporting;
+<code>passed</code> is the gate.</p>
+<p><strong>Silencing is not fixing.</strong> Hard constraint 6 forbids <code># nosec</code>, <code># noqa</code>
+and friends, and forbidding is not detecting: Bandit honours <code># nosec</code>
+itself, so the finding stops arriving and simply reads as repaired. Measured
+on a fixture, two real findings silenced that way reported <em>"improved: 2
+fixed"</em> and exited 0. Verification now reads the source back around the
+reported line and calls it what it is.</p>
+<hr />
+<h2 id="5-trend">5. Trend</h2>
+<p>Every run appends one line to <code>.secure-code/history.jsonl</code> and prints the
+movement:</p>
+<pre><code>trend: 3.90 (B+) — up 3.86 from 0.04 (F), 3 scored runs
+</code></pre>
+<p>Append-only. A malformed line costs one run rather than the history, and
+unknown keys from a newer version are ignored so an old reader survives a
+new writer. Findings are deliberately <em>not</em> stored: they would grow without
+bound, duplicate the reports, and — since findings quote source — turn the
+history into a second copy of the repository.</p>
+<p>A run whose coverage was too thin to grade records <code>score: null</code>, and the
+trend skips it rather than plotting a collapse to zero that never happened.</p>
+<hr />
+<h2 id="in-ci">In CI</h2>
+<pre><code class="language-yaml">- name: Audit
+  run: secure-code-agent . --json-output report.json --fail-on-gate
+
+# ... agent applies the work order ...
+
+- name: Prove it helped
+  run: secure-code-agent . --verify-against report.json
+</code></pre>
+<p>The second step fails the build if the agent silenced findings, introduced
+new ones, or left the order undone.</p>
+<footer>Rendered from <code>docs/work-orders.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

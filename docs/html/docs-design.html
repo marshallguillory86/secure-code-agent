@@ -1,0 +1,433 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>secure-code-agent — Design Spec · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#1-problem">1. Problem</a></li>
+<li><a href="#2-goals">2. Goals</a></li>
+<li><a href="#3-non-goals">3. Non-goals</a></li>
+<li><a href="#4-architecture">4. Architecture</a><ul>
+<li><a href="#41-why-subprocess-not-library-imports">4.1 Why subprocess, not library imports?</a></li>
+<li><a href="#42-scanner-protocol">4.2 Scanner protocol</a></li>
+<li><a href="#43-finding-normalization">4.3 Finding normalization</a></li>
+</ul>
+</li>
+<li><a href="#5-standards-taxonomy">5. Standards taxonomy</a></li>
+<li><a href="#6-audit-categories">6. Audit categories</a></li>
+<li><a href="#7-scoring-model">7. Scoring model</a></li>
+<li><a href="#8-hard-gates">8. Hard gates</a></li>
+<li><a href="#9-baseline-incremental-adoption">9. Baseline + incremental adoption</a></li>
+<li><a href="#10-suppressions-scignoreyaml">10. Suppressions (.scignore.yaml)</a><ul>
+<li><a href="#10a-declared-capabilities-d24">10a. Declared capabilities (D24)</a></li>
+</ul>
+</li>
+<li><a href="#11-remediation-prompt-the-differentiator">11. Remediation prompt (the differentiator)</a></li>
+<li><a href="#12-outputs-every-run-can-emit-any-subset">12. Outputs (every run can emit any subset)</a></li>
+<li><a href="#13-cli-surface-locked">13. CLI surface (locked)</a></li>
+<li><a href="#14-threat-model">14. Threat model</a></li>
+<li><a href="#15-versioning-compatibility">15. Versioning + compatibility</a></li>
+<li><a href="#16-open-questions-track-in-gh-issues-not-in-this-doc">16. Open questions (track in GH issues, not in this doc)</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Product and intent</div><h1>secure-code-agent — Design Spec</h1><blockquote>
+<p>Status: <strong>v0.12.11 — shipped; this records the design as built.</strong>
+Companion docs: <a href="docs-product-intent.html"><code>product-intent.md</code></a> (why this exists), <a href="docs-architecture.html"><code>architecture.md</code></a> (the system as built), <a href="docs-standards.html"><code>standards.md</code></a>, <a href="docs-scoring.html"><code>scoring.md</code></a>, <a href="docs-scanners.html"><code>scanners.md</code></a>, <a href="docs-remediation.html"><code>remediation.md</code></a>, <a href="docs-threat-model.html"><code>threat-model.md</code></a>.</p>
+</blockquote>
+<h2 id="1-problem">1. Problem</h2>
+<p>LLM coding agents (Claude Code, Codex, Copilot, Cursor, Windsurf, custom SDK agents) ship code at human-review-saturating speed. When you point them at a security finding, they routinely overcorrect: swap crypto libraries, rewrite authentication flows, weaken validation to make tests green, disable a "noisy" rule, or stage a 600-line refactor for a one-line CWE-89. Existing scanners (Semgrep, Bandit, CodeQL, Snyk, Trivy) emit findings — none of them ship a <strong>bounded prompt back to the agent</strong> that says <em>"fix only these specific findings, do not touch crypto/auth/validation/logging, preserve behavior."</em></p>
+<p>That gap is what this tool fills, as a product that stands on its own: a deterministic CI gate that orchestrates best-in-class scanners, normalizes their output across CWE / OWASP / NIST taxonomies, scores the repo, and — most importantly — generates a remediation prompt scoped to the actual findings with explicit guardrails against the failure modes above. A repository that has never heard of any sibling project installs this one and gets all of it.</p>
+<p>It is <em>also</em> the security sibling of <a href="https://github.com/marshallguillory86/maintainability-agent"><code>maintainability-agent</code></a>, and can feed that tool's Security pillar by writing one file. That is an integration between two independent products, not a decomposition of one — see <a href="docs-product-intent.html">product-intent.md</a> §5 principle 9.</p>
+<h2 id="2-goals">2. Goals</h2>
+<ol>
+<li><strong>Deterministic first, AI optional.</strong> The audit never calls an LLM by default. The remediation prompt is a generated artifact you choose to hand to an agent.</li>
+<li><strong>Bounded scope.</strong> The remediation prompt explicitly forbids touching crypto, auth, validation, logging, and tests unless a finding names them as the defect.</li>
+<li><strong>Standards-anchored.</strong> Findings map to a canonical taxonomy: CWE id, OWASP Top 10 category, OWASP ASVS section, NIST SSDF practice. Operators see <em>which standard is failing</em>, not just <em>which scanner shouted</em>.</li>
+<li><strong>Scanner-agnostic orchestration.</strong> SARIF 2.1.0 in, SARIF 2.1.0 out. The tool is a scoring + remediation layer; we don't write yet another SAST engine.</li>
+<li><strong>Stable finding identity.</strong> Canonical CWE, normalized path, and normalized evidence form the baseline fingerprint. Cross-scanner findings remain separate in scoring in the current release.</li>
+<li><strong>No vendor lock-in.</strong> Markdown, JSON, SARIF, PR-comment, baseline — all plain files. Pair with mature scanners; don't replace them.</li>
+<li><strong>CI-first, local-first.</strong> Same binary in local pre-commit, local CI, GitHub Actions, GitLab, Buildkite. No SaaS round-trip required.</li>
+</ol>
+<h2 id="3-non-goals">3. Non-goals</h2>
+<ul>
+<li><strong>Not a SAST engine.</strong> No custom AST analysis. We delegate to Semgrep / Bandit / CodeQL / etc.</li>
+<li><strong>Not a runtime defense.</strong> No WAF, no IDS, no agent in the request path. Static + supply-chain + config posture only.</li>
+<li><strong>Not a SaaS dashboard.</strong> Findings live as files in your repo. Pipe them anywhere; we don't host.</li>
+<li><strong>Not a license scanner.</strong> License compliance is a separate concern (see <code>pip-licenses</code>, <code>license-checker</code>). This tool focuses on <em>security</em> hygiene.</li>
+<li><strong>Not an exploit generator.</strong> No DAST, no fuzzing, no PoC generation.</li>
+</ul>
+<h2 id="4-architecture">4. Architecture</h2>
+<pre><code class="language-text">┌────────────────────────────────────────────────────────────────────────────┐
+│  secure-code-agent CLI                                                     │
+│                                                                            │
+│  ┌──────────┐    ┌───────────┐    ┌────────────┐    ┌──────────────────┐ │
+│  │  Config  │───▶│  Scanner  │───▶│  Findings  │───▶│  Scoring +       │ │
+│  │  loader  │    │  runner   │    │  normalizer│    │  category map    │ │
+│  └──────────┘    └───────────┘    └────────────┘    └──────────────────┘ │
+│        │              │                  │                    │           │
+│        │              │                  │                    ▼           │
+│        │              │                  │           ┌──────────────────┐ │
+│        │              │                  │           │  Baseline diff   │ │
+│        │              │                  │           └──────────────────┘ │
+│        │              │                  │                    │           │
+│        │              │                  ▼                    ▼           │
+│        │              │           ┌──────────────────────────────────┐   │
+│        │              │           │  Renderers                       │   │
+│        │              │           │   · Markdown report              │   │
+│        │              │           │   · JSON                          │   │
+│        │              │           │   · SARIF 2.1.0                  │   │
+│        │              │           │   · PR comment                   │   │
+│        │              │           │   · Remediation prompt (bounded) │   │
+│        │              │           │   · Agent standards files        │   │
+│        │              │           └──────────────────────────────────┘   │
+│        ▼              ▼                                                   │
+│  ┌──────────────────────────────────────────────────────────────────────┐│
+│  │  Hard gate (exit code) — configurable per category/severity         ││
+│  └──────────────────────────────────────────────────────────────────────┘│
+└────────────────────────────────────────────────────────────────────────────┘
+        │
+        │   Scanners (subprocess, never imported as libraries):
+        │
+        ├── Bandit            (Python SAST)
+        ├── Semgrep           (multi-language SAST, also ingests Semgrep Cloud SARIF)
+        ├── pip-audit         (Python SCA)
+        ├── npm audit         (Node SCA)
+        ├── OSV-Scanner       (multi-ecosystem SCA via osv.dev)
+        ├── Gitleaks          (secret scanning, history-aware)
+        ├── TruffleHog        (secret scanning, entropy + verifiers)
+        ├── Trivy             (containers / IaC / filesystem / Kubernetes)
+        ├── Checkov           (IaC: Terraform / CloudFormation / Helm / Dockerfile)
+        ├── Hadolint          (Dockerfile lint)
+        ├── njsscan           (JS/TS SAST, offline, no Node needed)
+        ├── RuboCop           (Ruby security cops, --only Security)
+        ├── gosec             (Go SAST — opt-in; needs the Go toolchain)
+        ├── CodeQL (SARIF ingest only — CodeQL runs separately in CI)
+        ├── OpenSSF Scorecard (repo hygiene + supply-chain)
+        └── Built-in regex rules (rules/*.py — see scanners.md)
+</code></pre>
+<h3 id="41-why-subprocess-not-library-imports">4.1 Why subprocess, not library imports?</h3>
+<p>Three reasons:</p>
+<ol>
+<li><strong>Version isolation.</strong> Bandit's API moves between minor versions; importing it pins your environment to whatever it pins. Subprocess + JSON output → stable contract.</li>
+<li><strong>License surface.</strong> Subprocess gives us MIT/Apache-2.0 separation; importing GPL-adjacent tools would contaminate.</li>
+<li><strong>Local + CI parity.</strong> The same <code>bandit --format json</code> call works whether the user has bandit in their venv, on their PATH, or in a Docker image. We don't care which.</li>
+</ol>
+<h3 id="42-scanner-protocol">4.2 Scanner protocol</h3>
+<p>Every scanner implements:</p>
+<pre><code class="language-python">class Scanner(Protocol):
+    name: str
+    binary: str
+    def configure(self, target: Path, config: Config) -&gt; None: ...
+    def run(self, target: Path, config: Config) -&gt; list[Finding]: ...
+</code></pre>
+<p>Missing binaries don't crash the audit — they emit a single <code>informational</code> finding (<code>tool_unavailable</code>) and the scanner is skipped. Scanner execution is reported separately from security findings as <code>COMPLETE</code>, <code>PARTIAL</code>, or <code>FAILED</code> coverage. Hard gates can require specific scanners (<code>require_scanners: ["bandit", "gitleaks"]</code>); required scanners must complete successfully, so unavailable, timed-out, failed, invalid-output, and not-applicable outcomes fail the gate.</p>
+<h3 id="43-finding-normalization">4.3 Finding normalization</h3>
+<p>Every scanner output is converted to a canonical <code>Finding</code>:</p>
+<pre><code class="language-python">@dataclass(frozen=True)
+class Finding:
+    rule_id:          str             # scanner-local id (B608, generic.python.sql.tainted-sql-string)
+    canonical_cwe:    str | None      # e.g. &quot;CWE-89&quot; — a fingerprint input when mapped
+    owasp_top10:      str | None      # e.g. &quot;A03:2021-Injection&quot;
+    asvs_section:    str | None       # e.g. &quot;V5.3&quot;
+    nist_ssdf:       str | None       # e.g. &quot;PW.5.1&quot;
+    category:         Category        # 1-of-9 high-level bucket
+    severity:         Severity        # CRITICAL/HIGH/MEDIUM/LOW/INFO
+    confidence:       Confidence      # HIGH/MEDIUM/LOW (per-scanner)
+    message:          str
+    file_path:        Path            # POSIX, repository-relative (D20)
+    line_start:       int
+    line_end:         int | None
+    code_snippet:     str | None
+    scanner:          str             # which tool emitted it
+    fingerprint:      str             # for baseline identity
+    suppressed:       bool            # acknowledged via .scignore.yaml
+    suppression_note: str | None
+</code></pre>
+<p><code>fingerprint</code> is <code>sha256((canonical_cwe or rule_id) + file_path + normalized_code)[:16]</code> — stable across whitespace-only edits, distinct across files, and independent of where the checkout lives, because <code>file_path</code> is repository-relative by the time it is computed (<code>findings.anchor</code>, D20). It supports baseline identity; the current scorer does not deduplicate findings.</p>
+<h2 id="5-standards-taxonomy">5. Standards taxonomy</h2>
+<p>We anchor to five public standards, all reproduced under <a href="docs-standards.html"><code>standards.md</code></a>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Source</th>
+<th>What we use it for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>NIST SSDF SP 800-218</strong></td>
+<td>Process-level mapping (which SSDF practice does this finding violate?)</td>
+</tr>
+<tr>
+<td><strong>OWASP Top 10 (2021)</strong></td>
+<td>Web-app risk bucket — operator-friendly</td>
+</tr>
+<tr>
+<td><strong>OWASP ASVS 5.0</strong></td>
+<td>Verification requirement (L1/L2/L3) per finding</td>
+</tr>
+<tr>
+<td><strong>MITRE CWE Top 25 (2025)</strong></td>
+<td>Canonical weakness id used in stable fingerprints</td>
+</tr>
+<tr>
+<td><strong>OpenSSF Scorecard checks</strong></td>
+<td>Repo hygiene + supply-chain integrity score</td>
+</tr>
+</tbody>
+</table></div>
+<p>The reviewed mapping table in <code>src/secure_code_audit/standards.py</code> translates
+known scanner rule ids into available CWE, OWASP Top 10, ASVS, and SSDF fields.
+Unmapped findings remain valid with null standards fields; adding a mapping is
+a code and test change.</p>
+<h2 id="6-audit-categories">6. Audit categories</h2>
+<p>Findings roll up to <strong>nine canonical categories</strong>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Examples</th>
+<th style="text-align: right;">Default weight</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>secrets</code></td>
+<td>Hardcoded API keys, tokens in history, .env in git</td>
+<td style="text-align: right;">1.5×</td>
+</tr>
+<tr>
+<td><code>dependencies</code></td>
+<td>CVE in pinned dep, yanked package, abandoned upstream</td>
+<td style="text-align: right;">1.0×</td>
+</tr>
+<tr>
+<td><code>code_vulnerabilities</code></td>
+<td>SQLi, XSS, command-injection, path-traversal, SSRF, XXE, insecure deserialization</td>
+<td style="text-align: right;">1.5×</td>
+</tr>
+<tr>
+<td><code>auth_authz</code></td>
+<td>Missing auth gate, IDOR, broken access control, JWT misuse</td>
+<td style="text-align: right;">1.5×</td>
+</tr>
+<tr>
+<td><code>crypto</code></td>
+<td>Weak alg, hardcoded IV, ECB, MD5/SHA-1 for security, missing constant-time</td>
+<td style="text-align: right;">1.5×</td>
+</tr>
+<tr>
+<td><code>supply_chain</code></td>
+<td>Unpinned action, missing SBOM, no signed releases, low Scorecard</td>
+<td style="text-align: right;">0.8×</td>
+</tr>
+<tr>
+<td><code>config_iac</code></td>
+<td>World-readable S3, public security group, Dockerfile <code>USER root</code>, k8s privileged</td>
+<td style="text-align: right;">1.0×</td>
+</tr>
+<tr>
+<td><code>logging_observability</code></td>
+<td>Secrets in logs, PII in URLs, missing audit trail on auth events</td>
+<td style="text-align: right;">0.8×</td>
+</tr>
+<tr>
+<td><code>policy_docs</code></td>
+<td>Missing SECURITY.md, no responsible-disclosure path, no threat model</td>
+<td style="text-align: right;">0.5×</td>
+</tr>
+</tbody>
+</table></div>
+<p>Category weight × severity weight × confidence weight = finding score. Sum → category score → overall score. Math is in <a href="docs-scoring.html"><code>scoring.md</code></a>.</p>
+<h2 id="7-scoring-model">7. Scoring model</h2>
+<p>Letter grade A+ → F, mapped from a 0.0 → 5.0 axis (mirrors maintainability-agent so operators have one mental model). The 5.0 baseline is "clean across every category"; deductions are weighted finding totals normalized by code volume so a 100k-LOC repo isn't penalized for having more findings than a 1k-LOC one. Full math in <a href="docs-scoring.html"><code>scoring.md</code></a>.</p>
+<h2 id="8-hard-gates">8. Hard gates</h2>
+<p>Configurable boolean gates that fail CI:</p>
+<pre><code class="language-json">&quot;gates&quot;: {
+  &quot;fail_on_severity&quot;:    [&quot;critical&quot;, &quot;high&quot;],
+  &quot;fail_on_category&quot;:    [&quot;secrets&quot;, &quot;auth_authz&quot;],
+  &quot;fail_on_new&quot;:         true,
+  &quot;min_score&quot;:           4.0,
+  &quot;require_scanners&quot;:    [&quot;bandit&quot;, &quot;gitleaks&quot;],
+  &quot;max_unsuppressed&quot;:    { &quot;high&quot;: 0, &quot;medium&quot;: 10 }
+}
+</code></pre>
+<p>Gates compose with OR semantics — any tripped gate is a non-zero exit.</p>
+<h2 id="9-baseline-incremental-adoption">9. Baseline + incremental adoption</h2>
+<p><code>secure-code-baseline.json</code> fingerprints every current finding. On next run:</p>
+<ul>
+<li>Findings present in baseline → counted as <code>acknowledged</code>, do not trip <code>fail_on_new</code>.</li>
+<li>Findings missing from baseline → <code>new</code>. Trip the gate.</li>
+<li>Use <code>--bump-baseline</code> after an intentional accept (with operator initials + reason).</li>
+</ul>
+<p>This lets legacy repos adopt the gate without a 200-finding day-one cleanup. Same pattern as maintainability-agent.</p>
+<h2 id="10-suppressions-scignoreyaml">10. Suppressions (<code>.scignore.yaml</code>)</h2>
+<p>Per-file or per-rule suppression with mandatory justification:</p>
+<pre><code class="language-yaml">- file: services/legacy_billing.py
+  rule_id: &quot;*&quot;
+  reason:  &quot;Slated for rewrite Q3 2026 — gated by initiative INV-44.&quot;
+  expires: &quot;2026-09-30&quot;
+- rule_id: &quot;B101&quot;   # assert_used — used pervasively in test fixtures
+  paths:   [&quot;tests/&quot;]
+  reason:  &quot;assert statements legitimate in test code.&quot;
+- file: api/tests/test_validation_errors.py
+  rule_id: gitleaks.generic-api-key
+  reason:  &quot;Deliberate test canary, not a credential.&quot;
+  expires: &quot;2027-08-01&quot;
+  fingerprint: 0aaa689f8a967d8c   # optional: pin to ONE finding (16 hex, from the report)
+  line: 18                        # optional: with fingerprint, pins the exact location
+</code></pre>
+<p><code>fingerprint</code> and <code>line</code> narrow an entry to a single finding. Without them, an entry covers every
+present and future finding of that rule in that file. Neither is sufficient alone for secrets: the
+fingerprint deliberately excludes the line so reformatting cannot break baseline identity, and
+gitleaks reports REDACTED evidence — so two different secrets in one file share a fingerprint and
+only <code>line</code> separates them. Unknown fields and malformed values are rejected, never ignored: a
+typo must not silently widen a suppression back to file+rule.</p>
+<p><code>paths</code> globs are repository-relative and are matched by <code>git_tools.matches_pattern</code>, the matcher
+<code>exclude_patterns</code>, <code>test_patterns</code> and <code>docs_patterns</code> use: a trailing <code>/</code> means that directory at
+any depth, a bare name matches at any depth, and <code>**/</code> includes the root (D21).</p>
+<p><code>expires</code> is required. Past-expiry suppressions become CRITICAL findings on their own — you can't ship <code>reason: "we'll fix it later"</code> forever.</p>
+<h3 id="10a-declared-capabilities-d24">10a. Declared capabilities (D24)</h3>
+<p>A suppression answers "this finding is not a defect". Some findings need a
+different answer: "this is what this project <em>is</em>". A tool that runs external
+analyzers imports <code>subprocess</code> and spawns them; the report is correct and will
+be identical on every run forever, and a suppression for it expires annually
+for a fact that has not changed.</p>
+<pre><code class="language-json">&quot;capabilities&quot;: {
+  &quot;spawns_processes&quot;: &quot;Runs the analyzer pool as subprocesses. ADR 006.&quot;,
+  &quot;parses_untrusted_xml&quot;: &quot;Reads analyzer XML produced in the audited tree.&quot;
+}
+</code></pre>
+<p>A finding whose rule <strong>is</strong> the declared capability being exercised is routed
+to a <code>declared: &lt;name&gt;</code> axis: counted, listed, not scored. Known names and the
+rules each claims are in <code>capabilities.CAPABILITY_RULES</code>.</p>
+<p>Four properties keep this from being a quieter <code>--skip</code>:</p>
+<ul>
+<li><strong>Declared, never inferred.</strong> The operator states it in a file a reviewer
+  reads. The tool does not decide a project looks like it spawns processes.</li>
+<li><strong>Narrow.</strong> <code>B602</code> (<code>shell=True</code>) belongs to no capability. Spawning a
+  process is architecture; handing a string to a shell is a decision.</li>
+<li><strong>Falsifiable.</strong> A declaration matching no finding is reported as
+  <code>unexercised</code>; a misspelled name is refused rather than declaring nothing.</li>
+<li><strong>Disclosed.</strong> The summary prints the score the tree earns with declarations
+  disregarded, so a project that declares its way up a band shows it, and the
+  declared axis prints the reason the configuration gave — Markdown and JSON
+  both. 0.12.6 shipped this last half missing: the reason reached the routing
+  and never the page, leaving a moved grade with no statement of why (D25).
+  A declared axis carries its own note for that reason; the fixed axes' notes
+  are the same sentence for every project and stay with the renderer.</li>
+</ul>
+<p>Path axes are checked first — a subprocess call in the test tree is test tree.
+Declared axes gate on the same terms as the path axes: a secret beside a
+declared finding still fails the build.</p>
+<p>A declaration asserts an architecture, <strong>not its correctness</strong>. It says the
+project reads XML it did not write, not that the parser is hardened, which is
+why the findings stay in the report.</p>
+<h2 id="11-remediation-prompt-the-differentiator">11. Remediation prompt (the differentiator)</h2>
+<p>Full template in <a href="docs-remediation.html"><code>remediation.md</code></a>. Key guardrails the prompt embeds:</p>
+<blockquote>
+<p><strong>Hard constraints (the agent MUST NOT violate):</strong>
+1. Fix only the findings listed below. Do not touch unrelated code.
+2. Do not change cryptographic algorithms, key derivation, IV/nonce handling, or padding modes unless a finding explicitly names them as the defect.
+3. Do not change authentication flows, session handling, or authorization gates unless a finding explicitly names them.
+4. Do not weaken input validation, output encoding, or logging to make existing tests pass.
+5. Do not disable security tests, security lint rules, or remove <code>@_limiter.limit</code> / similar decorators.
+6. Do not introduce new dependencies; prefer stdlib or already-vendored libraries.
+7. Preserve behavior unless a finding proves the current behavior is unsafe.
+8. Add a focused test that exercises the specific security boundary you fixed.</p>
+</blockquote>
+<p>The prompt also injects the standards mapping for each finding so the agent can read the CWE/OWASP/ASVS context without round-tripping to the operator.</p>
+<h2 id="12-outputs-every-run-can-emit-any-subset">12. Outputs (every run can emit any subset)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>secure-code-report.md</code></td>
+<td>Operator-readable findings with code snippets, sorted by severity</td>
+</tr>
+<tr>
+<td><code>secure-code-report.json</code></td>
+<td>Machine-readable canonical findings</td>
+</tr>
+<tr>
+<td><code>secure-code.sarif</code></td>
+<td>SARIF 2.1.0, every result, suppressed ones marked with <code>suppressions</code></td>
+</tr>
+<tr>
+<td><code>secure-code.code-scanning.sarif</code></td>
+<td>SARIF for upload to code scanning: no suppressed results (D22)</td>
+</tr>
+<tr>
+<td><code>secure-code-pr-comment.md</code></td>
+<td>Short body for <code>gh pr comment</code></td>
+</tr>
+<tr>
+<td><code>secure-code-remediation-prompt.md</code></td>
+<td>Bounded prompt for the AI agent</td>
+</tr>
+<tr>
+<td><code>secure-code-baseline.json</code></td>
+<td>Fingerprint snapshot for incremental adoption</td>
+</tr>
+<tr>
+<td>Agent standards files</td>
+<td><code>AGENTS.md</code>, <code>CLAUDE.md</code>, <code>.cursor/rules/security.mdc</code>, <code>.github/copilot-instructions.md</code> security sections via <code>--init-agent-standards</code></td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="13-cli-surface-locked">13. CLI surface (locked)</h2>
+<pre><code class="language-text">secure-code-agent [path]
+  --config FILE                  Explicit config path (must exist); otherwise use secure-code-agent.json when present
+  --output FILE                  Markdown report path
+  --json-output FILE             Canonical JSON path
+  --sarif-output FILE            SARIF 2.1.0 path
+  --code-scanning-sarif-output FILE  SARIF for code-scanning upload, without suppressed results
+  --comment-output FILE          PR-comment markdown path
+  --prompt-output FILE           Remediation prompt path
+  --baseline FILE                Read existing baseline
+  --bump-baseline                Rewrite baseline from current findings
+  --fail-on-gate                 Exit nonzero if any gate trips
+  --fail-on-new                  Exit nonzero on findings not in baseline
+  --changed-only REF             Report only findings in files changed since REF.
+                                 Whole tree still scanned; grade withheld.
+  --target codex|claude-code|cursor|copilot|windsurf|generic
+                                 Init agent standards file for that host
+  --instructions-output-dir DIR  Where to write the agent standards file
+  --skip-scanners NAME[,NAME]    Skip specific scanners
+  --only-scanners  NAME[,NAME]   Only run specific scanners
+  --severity-threshold LEVEL     Filter findings below this severity
+  --json                         Pure-JSON to stdout (for scripting)
+  --version
+  --help
+</code></pre>
+<h2 id="14-threat-model">14. Threat model</h2>
+<p>The agent runs on developer machines and in CI. Threats we consider:</p>
+<ul>
+<li><strong>Malicious repo content.</strong> Scanners exec'd as subprocesses with <code>cwd=target, env={cleared}, shell=False</code>. We never <code>eval</code> or <code>exec</code> repo content.</li>
+<li><strong>Output injection.</strong> Markdown report renders code snippets with fenced blocks; PR-comment escapes for GitHub flavor.</li>
+<li><strong>Suppression bypass.</strong> Operators can't suppress an entire category; they suppress specific rule+file with mandatory <code>expires</code> and <code>reason</code>. Expired suppressions become CRITICAL.</li>
+<li><strong>Baseline tampering.</strong> Baseline is a checked-in artifact with operator-attributable diffs; reviewers must approve baseline changes.</li>
+</ul>
+<p>Full threat model in <a href="docs-threat-model.html"><code>threat-model.md</code></a>.</p>
+<h2 id="15-versioning-compatibility">15. Versioning + compatibility</h2>
+<ul>
+<li><strong>Semver.</strong> v0.x is pre-1.0 — config schema may evolve. v1.0 locks the schema.</li>
+<li><strong>SARIF 2.1.0.</strong> Output format pinned; we emit OASIS-compliant SARIF that GitHub's code-scanning ingests directly.</li>
+<li><strong>Scanner contract.</strong> We support the JSON output format documented in each scanner's <em>latest stable</em> docs. Breaking format changes upstream → minor-version bump here with a compat note.</li>
+</ul>
+<h2 id="16-open-questions-track-in-gh-issues-not-in-this-doc">16. Open questions (track in GH issues, not in this doc)</h2>
+<ul>
+<li>Should the remediation prompt include reproducer test code, or only the finding? (Likely yes for HIGH/CRITICAL; cost/benefit pending.)</li>
+<li>How to handle CodeQL findings that only exist in GitHub's hosted DB and never run locally? (Currently: import SARIF artifact via <code>--sarif-import path/to/codeql.sarif</code>.)</li>
+<li>Should the agent ship a default <code>.scignore.yaml</code> for common framework false positives (FastAPI test fixtures, Django settings.py SECRET_KEY references, etc.)? Probably yes; v0.2.</li>
+</ul>
+<hr />
+<p>This spec is the contract. Anything that doesn't match this doc is either (a) a documented v0.2 item, or (b) a bug.</p>
+<footer>Rendered from <code>docs/design.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

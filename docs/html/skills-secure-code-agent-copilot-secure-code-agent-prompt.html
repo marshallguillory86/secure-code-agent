@@ -1,0 +1,89 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Secure-Code Agent · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#core-workflow">Core Workflow</a></li>
+<li><a href="#hard-rules-non-negotiable-when-fixing-security-findings">Hard rules — non-negotiable when fixing security findings</a></li>
+<li><a href="#installing-or-running">Installing or running</a></li>
+<li><a href="#generating-per-agent-standards">Generating per-agent standards</a></li>
+<li><a href="#false-positives">False positives</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Agent instructions</div><h1>Secure-Code Agent</h1><hr />
+<p>mode: agent
+description: Run a secure-code-agent audit and apply only bounded remediation. Source of truth for security gates anchored to CWE / OWASP / NIST SSDF.
+tools: ['workspace', 'terminal']</p>
+<hr />
+<p>Use the <code>secure-code-agent</code> CLI as the source of truth for deterministic
+security audits + bounded remediation. Wraps Bandit, Semgrep, pip-audit,
+npm audit, Gitleaks, built-in regex rules, and SARIF ingest from
+CodeQL/Snyk/Trivy. Normalized output across CWE / OWASP Top 10 / OWASP
+ASVS / NIST SSDF.</p>
+<h2 id="core-workflow">Core Workflow</h2>
+<ol>
+<li>Inspect the repo's existing instructions and config before running:
+   - <code>AGENTS.md</code>, <code>CLAUDE.md</code>, <code>.github/copilot-instructions.md</code>.
+   - <code>secure-code-agent.json</code>.
+   - <code>.scignore.yaml</code>.</li>
+<li>Prefer the repo's configured command. Otherwise:</li>
+</ol>
+<pre><code class="language-bash">secure-code-agent \
+  --config secure-code-agent.json \
+  --fail-on-gate \
+  --output secure-code-report.md \
+  --json-output secure-code-report.json \
+  --sarif-output secure-code.sarif \
+  --prompt-output secure-code-remediation-prompt.md \
+  --comment-output secure-code-pr-comment.md
+</code></pre>
+<ol start="3">
+<li><code>--changed-only REF</code> scopes the report to files changed since REF and
+   issues no grade. Pair it with <code>--fail-on-new</code> for branch / PR work.</li>
+<li>Read <code>secure-code-remediation-prompt.md</code> before editing — treat it
+   as the bounded task brief.</li>
+<li>Fix only the reported findings.</li>
+<li>Re-run the audit and any native tests/lints.</li>
+<li>Report commands run, gate pass/fail, residual false positives.</li>
+</ol>
+<h2 id="hard-rules-non-negotiable-when-fixing-security-findings">Hard rules — non-negotiable when fixing security findings</h2>
+<ol>
+<li>Fix only the findings listed. Do not touch unrelated code.</li>
+<li>Do not change cryptographic algorithms, KDF, IV/nonce handling,
+   padding modes, or random sources unless a finding names them.</li>
+<li>Do not change authentication flows, session handling, token lifetime,
+   cookie attributes, or authorization gates unless a finding names them.</li>
+<li>Do not weaken input validation, output encoding, sanitization, bounds
+   checks, regex strictness, or rate limits to make existing tests pass.</li>
+<li>Do not disable, delete, or skip security tests. Do not remove
+   <code>@_limiter.limit</code>, <code>@require_auth</code>, <code>@require_csrf</code>, or similar.</li>
+<li>Do not silence linter warnings via <code># nosec</code>, <code># noqa</code>, <code># type: ignore</code>,
+   <code>eslint-disable</code>, <code>sonar-disable</code>.</li>
+<li>Do not introduce new third-party dependencies. Prefer stdlib or
+   already-vendored libraries.</li>
+<li>Preserve behavior. Same inputs → same outputs unless a finding proves
+   current behavior is unsafe.</li>
+<li>Add a focused test that exercises the security boundary you fixed.
+   The test must FAIL pre-fix and PASS post-fix.</li>
+<li>Keep the patch small.</li>
+</ol>
+<h2 id="installing-or-running">Installing or running</h2>
+<pre><code class="language-bash">python3 -m pip install secure-code-agent
+python3 -m pip install -e .
+python3 -m secure_code_audit.cli --config secure-code-agent.json
+</code></pre>
+<h2 id="generating-per-agent-standards">Generating per-agent standards</h2>
+<pre><code class="language-bash">secure-code-agent --init-agent-standards \
+  --target codex --target claude-code --target cursor \
+  --target copilot --target windsurf
+</code></pre>
+<h2 id="false-positives">False positives</h2>
+<p>Do NOT silently apply a fix. Add a <code>.scignore.yaml</code> entry with:
+- <code>rule_id</code> (or <code>*</code> scoped to <code>file</code>/<code>paths</code>)
+- <code>reason</code> (required, non-empty)
+- <code>expires</code> (required, ISO date, ≤ 365 days)</p>
+<p>Operator will review.</p>
+<footer>Rendered from <code>skills/secure-code-agent/copilot/secure-code-agent.prompt.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

@@ -1,0 +1,2108 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Decision register · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#d1-the-line-is-at-executing-what-the-tree-supplies">D1 — The line is at executing what the tree supplies</a></li>
+<li><a href="#d2-unknown-configuration-keys-are-rejected-not-ignored">D2 — Unknown configuration keys are rejected, not ignored</a></li>
+<li><a href="#d3-the-ma-security-pillar-is-fed-by-an-artifact">D3 — The MA Security pillar is fed by an artifact</a></li>
+<li><a href="#d4-a-failing-security-audit-fails-mas-ci">D4 — A failing security audit fails MA's CI</a></li>
+<li><a href="#d5-the-condition-scale-must-be-calibrated">D5 — The condition scale must be calibrated</a></li>
+<li><a href="#d6-scanner-licences-are-judged-by-mechanism-not-by-name">D6 — Scanner licences are judged by mechanism, not by name</a></li>
+<li><a href="#d7-the-project-declares-a-minimum-tool-floor-and-defaults-to-it">D7 — The project declares a minimum tool floor, and defaults to it</a></li>
+<li><a href="#d8-floor-tools-have-a-cadence-and-repository-level-ones-arrive-by-import">D8 — Floor tools have a cadence, and repository-level ones arrive by import</a></li>
+<li><a href="#d9-our-ruleset-is-the-offline-floor-bounded-to-language-primitives">D9 — Our ruleset is the offline floor, bounded to language primitives</a></li>
+<li><a href="#d10-rules-ship-as-a-versioned-digest-identified-profile">D10 — Rules ship as a versioned, digest-identified profile</a></li>
+<li><a href="#d11-author-a-rule-only-where-no-floor-scanner-already-covers-it">D11 — Author a rule only where no floor scanner already covers it</a></li>
+<li><a href="#d12-the-coverage-check-run-for-the-other-four-languages">D12 — The coverage check, run for the other four languages</a></li>
+<li><a href="#d13-adapters-state-their-outcome-nothing-infers-it-from-a-name">D13 — Adapters state their outcome; nothing infers it from a name</a></li>
+<li><a href="#d14-parsers-are-tested-against-real-captured-output-and-the-gap-is-declared">D14 — Parsers are tested against real captured output, and the gap is declared</a></li>
+<li><a href="#d15-a-scanners-severity-is-not-a-measure-of-consequence">D15 — A scanner's severity is not a measure of consequence</a></li>
+<li><a href="#d16-the-grade-is-a-density-and-the-gate-is-what-catches-a-vulnerability">D16 — The grade is a density, and the gate is what catches a vulnerability</a></li>
+<li><a href="#d17-calibrated-against-both-populations-secrets-is-a-count-and-three-bands-are-unmeasurable">D17 — Calibrated against both populations; secrets is a count, and three bands are unmeasurable</a></li>
+<li><a href="#d18-our-output-is-never-our-input-a-variable-reference-is-not-a-credential">D18 — Our output is never our input; a variable reference is not a credential</a><ul>
+<li><a href="#part-one-stored-analysis-output-is-not-source">Part one — stored analysis output is not source</a></li>
+<li><a href="#part-two-a-variable-reference-is-not-a-credential">Part two — a variable reference is not a credential</a></li>
+</ul>
+</li>
+<li><a href="#d19-scoring_model-the-instrument-says-when-it-changed">D19 — scoring_model: the instrument says when it changed</a></li>
+<li><a href="#d20-a-findings-path-is-repository-relative-set-in-one-place">D20 — A finding's path is repository-relative, set in one place</a></li>
+<li><a href="#d21-a-suppression-glob-means-what-an-exclude-pattern-means">D21 — A suppression glob means what an exclude pattern means</a></li>
+<li><a href="#d22-what-reaches-code-scanning-is-what-should-become-an-alert">D22 — What reaches code scanning is what should become an alert</a></li>
+<li><a href="#d23-nothing-to-scan-is-not-a-failure-to-scan">D23 — Nothing to scan is not a failure to scan</a></li>
+<li><a href="#d24-a-project-may-declare-what-it-is-and-be-reported-rather-than-scored">D24 — A project may declare what it is, and be reported rather than scored</a></li>
+<li><a href="#d25-a-declared-axis-states-its-reason-on-the-page-or-it-is-not-a-disclosure">D25 — A declared axis states its reason on the page, or it is not a disclosure</a></li>
+<li><a href="#d26-this-tool-stands-alone-feeding-the-sibling-is-an-integration-not-a-purpose">D26 — This tool stands alone; feeding the sibling is an integration, not a purpose</a></li>
+<li><a href="#d27-the-work-order-is-available-as-facts-not-only-as-prose">D27 — The work order is available as facts, not only as prose</a></li>
+<li><a href="#d28-a-declared-capabilitys-findings-are-not-patch-targets">D28 — A declared capability's findings are not patch targets</a></li>
+<li><a href="#d29-an-untrusted-config-does-not-choose-a-scanners-command">D29 — An untrusted config does not choose a scanner's command</a></li>
+<li><a href="#d30-an-adapter-judges-its-own-tools-exit-codes-and-_exec-judges-none">D30 — An adapter judges its own tool's exit codes, and _exec judges none</a></li>
+<li><a href="#d31-an-overriding-cwe-decides-the-owasp-category-derived-from-it">D31 — An overriding CWE decides the OWASP category derived from it</a></li>
+<li><a href="#d32-the-audited-tree-does-not-grade-itself">D32 — The audited tree does not grade itself</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Decisions and architecture</div><h1>Decision register</h1><blockquote>
+<p>Status: <strong>v0.12.11 — 2026-10-03.</strong> The decision register. D1–D32.</p>
+</blockquote>
+<p>Product decisions that constrain the code, with the reasoning and the rejected
+alternatives. Modelled on <code>maintainability-agent</code>'s register, which exists
+because <em>a decision that lists only the chosen path is a rationalization</em>.</p>
+<p>A decision belongs here when it settles a question the code alone cannot
+answer. Defects belong in <a href="docs-release-blockers.html"><code>release-blockers.md</code></a>;
+architecture belongs in <a href="docs-architecture.html"><code>architecture.md</code></a>; intent belongs in
+<a href="docs-product-intent.html"><code>product-intent.md</code></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Decision</th>
+<th>Date</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1</td>
+<td>The line is at executing what the tree supplies, not at distrusting repositories</td>
+<td>2026-09-08</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D2</td>
+<td>Unknown configuration keys are rejected, not ignored</td>
+<td>2026-09-08</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D3</td>
+<td>The MA Security pillar is fed by an artifact, not by MA executing this tool</td>
+<td>2026-09-08</td>
+<td><strong>Amended 2026-09-13</strong> — MA runs this tool; the artifact contract is unchanged; no package dependency</td>
+</tr>
+<tr>
+<td>D4</td>
+<td>A failing security audit fails MA's CI</td>
+<td>2026-09-08</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D5</td>
+<td>The condition scale must be calibrated against a corpus before it is trusted</td>
+<td>2026-09-08</td>
+<td><strong>Closed</strong> by D16 and D17</td>
+</tr>
+<tr>
+<td>D6</td>
+<td>Scanner licences are judged by mechanism, not by name</td>
+<td>2026-09-08</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D7</td>
+<td>The project declares a minimum tool floor, and defaults to it</td>
+<td>2026-09-08</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D8</td>
+<td>Floor tools have a cadence; repository-level ones arrive by import</td>
+<td>2026-09-08</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D9</td>
+<td>Our ruleset is the offline floor, bounded to language primitives</td>
+<td>2026-09-09</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D10</td>
+<td>Rules ship as a versioned, digest-identified profile</td>
+<td>2026-09-09</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D11</td>
+<td>Author a rule only where no floor scanner already covers it</td>
+<td>2026-09-09</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D12</td>
+<td>The coverage check, run for the other four languages</td>
+<td>2026-09-09</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D13</td>
+<td>Adapters state their outcome; nothing infers it from a finding's name</td>
+<td>2026-09-09</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D14</td>
+<td>Parsers are tested against real captured output, and the gap is declared</td>
+<td>2026-09-09</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D15</td>
+<td>A scanner's severity is not a measure of consequence, and nothing may rank on it</td>
+<td>2026-09-11</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D16</td>
+<td>The grade is a density, and the gate is what catches a vulnerability</td>
+<td>2026-09-11</td>
+<td>Accepted — amended by D17</td>
+</tr>
+<tr>
+<td>D17</td>
+<td>Calibrated against both populations; <code>secrets</code> is a count, and three bands are unmeasurable</td>
+<td>2026-09-11</td>
+<td>Accepted — closes D5</td>
+</tr>
+<tr>
+<td>D18</td>
+<td>Our output is never our input; a variable reference is not a credential</td>
+<td>2026-09-11</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D19</td>
+<td><code>scoring_model</code>: the instrument says when it changed, and a digest holds it honest</td>
+<td>2026-09-11</td>
+<td>Accepted — schema v2</td>
+</tr>
+<tr>
+<td>D20</td>
+<td>A finding's path is repository-relative, set in one place</td>
+<td>2026-09-14</td>
+<td>Accepted — replaces D5's absolute-path convention</td>
+</tr>
+<tr>
+<td>D21</td>
+<td>A suppression glob means what an exclude pattern means</td>
+<td>2026-09-14</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D22</td>
+<td>What reaches code scanning is what should become an alert</td>
+<td>2026-09-14</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D23</td>
+<td>Nothing to scan is not a failure to scan</td>
+<td>2026-09-17</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D24</td>
+<td>A project may declare what it is, and be reported rather than scored</td>
+<td>2026-09-18</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D25</td>
+<td>A declared axis states its reason on the page, or it is not a disclosure</td>
+<td>2026-09-18</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D26</td>
+<td>This tool stands alone; feeding the sibling is an integration, not a purpose</td>
+<td>2026-09-18</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D27</td>
+<td>The work order is available as facts, not only as prose</td>
+<td>2026-09-19</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D28</td>
+<td>A declared capability's findings are not patch targets</td>
+<td>2026-09-20</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D29</td>
+<td>An untrusted config does not choose a scanner's command</td>
+<td>2026-10-02</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D30</td>
+<td>An adapter judges its own tool's exit codes, and <code>_exec</code> judges none</td>
+<td>2026-10-02</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D31</td>
+<td>An overriding CWE decides the OWASP category derived from it</td>
+<td>2026-10-02</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D32</td>
+<td>The audited tree does not grade itself</td>
+<td>2026-10-02</td>
+<td>Accepted</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="d1-the-line-is-at-executing-what-the-tree-supplies">D1 — The line is at executing what the tree supplies</h2>
+<p><strong>Question.</strong> Are audited repositories trusted? <code>threat-model.md</code> called
+repository content untrusted <em>and</em> called the operator the author of the
+config, while <code>secure-code-agent.json</code> normally lives in the audited tree. Both
+could not be true, and the code took the permissive reading — a relative
+<code>scanners.&lt;name&gt;.command</code> resolved under the audit target and was executed.</p>
+<p>This is the same question <code>maintainability-agent</code> faced in its security queue,
+where eslint executed the tree's own configuration while <code>SECURITY.md</code> said the
+agent does not execute scanned code.</p>
+<p><strong>Options.</strong></p>
+<ol>
+<li><em>Repositories are trusted.</em> Correct the docs to say so. Cheap and honest, but
+   narrows who can safely run the tool — and this tool's whole purpose is
+   auditing code you have reason to doubt.</li>
+<li><em>Repositories are untrusted.</em> Refuse all repository-supplied configuration.
+   Costs the documented tree-local interpreter workflow, which is a real
+   product change for a legitimate use.</li>
+</ol>
+<p><strong>Decision — neither framing; the line moved.</strong> MA drew its line at <em>executing
+code</em> rather than at trusting repositories, and the same line is correct here.
+Configuration is an instruction to execute, so:</p>
+<ul>
+<li>A config <strong>outside</strong> the tree is an operator artifact and may name a
+  tree-local interpreter — the documented workflow survives.</li>
+<li>A config <strong>inside</strong> the tree is repository content, and a command it names
+  that also resolves inside the tree is refused. The scanner reports
+  <code>unavailable</code>, which fails required coverage rather than skipping quietly.</li>
+<li><code>--trust-target-config</code> is the operator's explicit opt-in, and is
+  <strong>command-line only</strong>: a config file cannot grant itself the trust the flag
+  exists to withhold.</li>
+</ul>
+<p><strong>Consequence.</strong> The containment check runs on the resolved path from every
+resolution route, not just the relative-path branch, because <code>PATH</code> can contain
+<code>.</code> or a tree-local directory.</p>
+<h2 id="d2-unknown-configuration-keys-are-rejected-not-ignored">D2 — Unknown configuration keys are rejected, not ignored</h2>
+<p><strong>Question.</strong> <code>secure-code-agent.schema.json</code> declares
+<code>additionalProperties: false</code>, but the runtime loader ignored unknown keys. The
+schema is not enforced at runtime (<a href="docs-architecture.html"><code>architecture.md</code></a> §3), so
+the two disagreed.</p>
+<p><strong>Decision.</strong> The loader rejects unknown top-level keys. A key this tool does
+not read cannot change what it does, so a config that names one is either a
+typo that silently disabled a gate, or an assertion of a privilege that was
+never granted. Both deserve an error rather than silence. Keys withdrawn on
+purpose — <code>asvs_level</code> — keep their specific reason instead of the generic
+message.</p>
+<p><strong>Consequence.</strong> Two sources of truth remain. Generation was the intended
+fix and was rejected on inspection: the schema is nested where <code>Config</code> is
+flat — <code>paths.include_extensions</code> and <code>paths.exclude_patterns</code> are one JSON
+object and two dataclass fields, and <code>gates</code>/<code>outputs</code> are free-form dicts with
+no dataclass at all — so generating either from the other means a mapping layer
+that would itself be a third source of truth. They are held in step by
+<code>tests/unit/test_contract_sync.py</code> instead, which asserts the loader and the
+schema accept the same keys at both the top level and the per-scanner level,
+and that no <code>Config</code> field is settable only by editing source. Enforcement
+rather than generation, and the reason recorded rather than the intent
+restated.</p>
+<h2 id="d3-the-ma-security-pillar-is-fed-by-an-artifact">D3 — The MA Security pillar is fed by an artifact</h2>
+<p><strong>Question.</strong> <code>maintainability-agent</code> declares Security as a <code>DELEGATED</code> pillar
+naming this tool (<a href="https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/adr-007-pillars-and-practice.md">MA ADR 007</a>
+§1), but has no ingestion path. Should MA execute <code>secure-code-agent</code>, or
+ingest an artifact it produces?</p>
+<p><strong>Decision.</strong> This tool writes <code>security-pillar.json</code>; MA ingests it via
+<code>--security-pillar &lt;path&gt;</code>.</p>
+<p><strong>Built 2026-09-09.</strong> <code>--security-pillar &lt;path&gt;</code> emits it; the contract is
+<a href="docs-ma-integration.html"><code>ma-integration.md</code></a>. The document carries MA's own two
+axes — practice level from configuration and CI, code condition from the
+scanners — and never their mean. Everything structural is reused rather than
+re-derived: the scope vocabulary, the posture matrix and its thresholds come
+from MA's <code>_pillars.py</code>, and the maturity rubric with its <code>MAX_WITHOUT_CI</code> cap
+from <code>_practice.py</code>. Two tools reporting "level 3" or "healthy" about the same
+repository must mean the same thing by it.</p>
+<p>Copied by value, not imported. A dependency edge between the two packages would
+make them releasable only together, which is the property MA's ADR 008 protects
+when it refuses a combined MCP server. <code>test_posture_matches_mas_matrix</code> is
+what keeps the copies honest.</p>
+<p><strong><code>condition</code> is null whenever coverage is incomplete</strong>, and this is the half
+that matters most. Our score is a rate over findings, so removing scanners
+removes findings and the number rises — measured once at 0.00/F to 5.00/A+.
+Handing that to MA would launder an unscanned repository into a pillar report
+that looks measured. A perfect practice level with no evidence reports
+<code>unverified</code>, never <code>healthy</code>.</p>
+<p><strong>Why not have MA execute this tool.</strong> MA's P1 keeps analysis free of network
+access and tool acquisition opt-in. Shelling out would put a network-capable
+scanner orchestrator inside MA's deterministic core and import this tool's
+trust boundary — including D1 — into MA's. Artifact ingestion matches MA's
+existing adapter rule: <em>ingest tool output, preserve provenance.</em></p>
+<p><strong>Amended 2026-09-13 — MA runs this tool.</strong> Decided by Marshall with MA's
+<a href="https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/defect-register-chat-surface.md">D177</a>.
+The artifact path left the pillar measured only where some other process had
+written the document first. CI did; nothing else did, and an audit through
+MA's chat door never could — so the pillar was unmeasured everywhere a person
+asked for it. From MA 3.7.0 every MA audit runs <code>secure-code-agent</code>. What this
+decision protected, and what holds now:</p>
+<ul>
+<li><strong>The contract is unchanged.</strong> MA still reads <code>security-pillar.json</code>,
+  schema v2, and still trusts none of its own numbers over it.</li>
+<li><strong>No dependency edge.</strong> MA 3.7.0 did add one, pinned below this tool's
+  current release, and within the day it downgraded a machine's install and put
+  this project's <code>mcp&lt;2</code> extra beside MA's <code>mcp&gt;=2</code>. MA 3.7.2 removed it: MA
+  runs whichever release is installed within a supported range and reports a
+  missing or out-of-range one. Both tools stay independently releasable, which
+  is the property the paragraph above named.</li>
+<li><strong>This tool's trust boundary stays its own.</strong> MA runs it as a child through
+  MA's single runner, passes no configuration of its own — an outside config is
+  trusted to name executables in the tree (D1) — and redirects every
+  report out of the audited tree. The one write it cannot redirect,
+  <code>.secure-code/history.jsonl</code>, is declared in MA's MCP write boundary.</li>
+<li><strong>Network.</strong> The scanners this tool orchestrates may reach the network; MA's
+  P1 already states that it does not police child analyzers' sockets and does
+  not transmit the audited source. That is the trade accepted here, stated
+  rather than assumed.</li>
+<li><strong><code>--security-pillar</code> is still supported</strong> for pipelines that run this tool
+  as its own gated step, as MA's CI does; MA then uses that document and does
+  not run the tool again. A document sitting in the audited tree is no longer
+  read on its own authority.</li>
+</ul>
+<h2 id="d4-a-failing-security-audit-fails-mas-ci">D4 — A failing security audit fails MA's CI</h2>
+<p><strong>Decision.</strong> When the Security pillar reports a failure, MA's CI fails.</p>
+<p><strong>This diverges from MA precedent, deliberately.</strong> <a href="https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/adr-002-null-verified-grade-in-ci.md">MA ADR 002</a>
+rejected coupling <code>verified_grade</code> to <code>--fail-on-gate</code> on the grounds that it
+would turn a hard-finding gate into an evidence-completeness gate — <em>"a new CLI
+contract, not a consequence."</em> That reasoning still holds; the contract is
+being changed on purpose rather than by accident, and it is recorded here so
+the divergence is visible to whoever implements it.</p>
+<p><strong>Open sub-question.</strong> Whether <em>insufficient evidence</em> fails CI, or only
+<em>findings</em>, is not settled by this decision. D5 bears on it: gating on a scale
+nobody has calibrated would fail builds on an arbitrary threshold.</p>
+<h2 id="d5-the-condition-scale-must-be-calibrated">D5 — The condition scale must be calibrated</h2>
+<p><strong>Question.</strong> <code>_LETTER_GRADE_TABLE</code> carries the comment <em>"mirrors
+maintainability-agent"</em>. It borrowed MA's <strong>bands</strong> without MA's <strong>calibration
+study</strong>, and the <code>sqrt(LOC/1000)</code> dampener is an invented normalizer with no
+corpus behind it. Nobody has established that A+ means anything.</p>
+<p>MA learned this the expensive way at 0.5.0: absolute finding counts graded
+repository <em>size</em>, scoring Django, pytest, black, tornado, httpx, lodash,
+svelte and fastapi all at 0.0/F while a 53-file toy scored 4.6/A. The fix was
+rates, normalized per dimension, calibrated so the corpus median earns a B.</p>
+<p><strong>State: CLOSED — 2026-09-11, by D16 (the normalizer) and D17 (the corpus,
+the <code>secrets</code> exception, and what the bands can and cannot mean).</strong> The
+history below is kept because the route matters: each narrowing was wrong in a
+way the next measurement caught, and the register is the record of that.</p>
+<p><strong>State (historical): open, and narrowed to one question.</strong> See
+<a href="docs-calibration.html"><code>calibration.md</code></a> for the study and
+<a href="calibration-readme.html"><code>calibration/</code></a> for the harness and pinned corpus.</p>
+<p><strong>What the study found, in the end: most of the floor was our own bug.</strong> The
+corpus median moved <strong>0.00 (F) → 4.37 (A−)</strong>, and every round of that except
+the last was a defect in this tool rather than a property of the code it read.</p>
+<p>The largest single one: <strong>gitleaks reports repository-relative paths and every
+other scanner reports absolute ones</strong>, and every consumer that asked "where is
+this?" resolved a relative path against the process working directory. So
+<code>exclude_patterns</code> silently did not apply to gitleaks findings at all, and
+every gitleaks finding scored as primary-tree wherever it lived — four
+<code>tests/certs/*.key</code> files held <code>requests</code> at F, six documentation examples held
+<code>flask</code> at F. Separately, <code>**/</code> did not match at depth zero, so <code>**/*_test.go</code>
+never matched a root-level <code>context_test.go</code> and three of Gin's four
+"production" secrets were test fixtures. Gin: <strong>F → A+</strong>. (The fix made every
+path absolute. D20 replaces that with repository-relative paths, set once,
+after absolute paths turned out to break suppressions and baseline identity.)</p>
+<p><strong>The inputs are now all answered.</strong> The primary tree is scored; the test tree
+and documentation are reported beside it and gated where the operator names
+the category; dependencies are their own axis, gated but not graded as code
+condition. Secrets are no longer force-scored onto the primary axis — nothing
+static separates a live credential from a test certificate, so they are gated
+from any axis rather than graded from all of them.</p>
+<p><strong>An earlier revision of this entry claimed the residue was all true
+positives and that the remaining question was what a grade should mean. That
+was wrong.</strong> Checking that a construct is present is not checking that a
+defect is present. Django's "hardcoded passwords" are <code>EMAIL_HOST_PASSWORD =
+""</code> and <code>SECRET_KEY = ""</code> — empty defaults. Its "SQL injection" hits include
+an <code>ImproperlyConfigured</code> error message and a parameterised <code>cursor.execute</code>.
+Its 56 <code>mark_safe</code> hits are the admin rendering its own escaped output.</p>
+<p>A tool that grades Django, FastAPI, httpx and Flask all F is measuring how
+talkative Bandit is on large Python codebases. That is the failure this
+decision exists to prevent, and it was a defect to fix rather than a
+judgement call to escalate.</p>
+<p><strong>Fixed: repeats of one rule saturate.</strong> Sorted worst-first, a rule's k-th
+hit counts <code>weight / sqrt(k)</code>. Repositories at F went from four to two, httpx
+F to B-, fastapi F to C, requests B- to B+, and none scored lower. The first
+formulation broke P3 — <code>mean(weight) * sqrt(n)</code> let nine extra LOW findings
+<em>improve</em> a grade — and is pinned against by a monotonicity test.</p>
+<p><strong>Open at the time, and now concrete</strong> — closed by D16. Django and Flask remained at F because of
+<code>sqrt(LOC/1000)</code>, under which the largest repository in the corpus ranks
+worst: django 15.53 normalized against flask 9.12, inverting to 1.29 and 3.17
+per-kLOC. That is size bias in the normalizer meant to remove it.</p>
+<p><strong>Corpus coverage was the blocker, and fixing it largely answered the
+question.</strong> Six of fourteen repositories were scoring near-perfectly because
+they were <em>unexamined</em> rather than clean. Two causes, and only one was
+structural:</p>
+<p><em>Environment.</em> <code>njsscan</code> and <code>rubocop</code> were simply not installed, so
+JavaScript and Ruby had no scanner that reads them. Python repositories were
+producing 712 to 5,107 real findings each against nought to four for
+everything else — three orders of magnitude, none of it about those projects
+being cleaner. Installing both moved <code>axios</code> 5.00 → 4.38, <code>lodash</code>
+4.59 → 4.48 and <code>sinatra</code> 3.10 → 2.79.</p>
+<p><em>Structural, and already decided.</em> D12 records why Go and Java cannot be
+read at all: gosec analyses Go by invoking the target's own build tooling,
+PMD covers none of the patterns, SpotBugs needs compiled bytecode. Four
+repositories stay unreadable.</p>
+<p>Those four were still in the median and holding it up — <strong>their own median is
+5.00</strong>, four perfect scores for repositories nobody looked at. The study now
+applies the product's own rule to itself (P7: score only where enough was
+examined) and reports the distribution over the examined set, naming what it
+left out.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>set</th>
+<th style="text-align: right;">n</th>
+<th>median</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>examined</td>
+<td style="text-align: right;">10</td>
+<td><strong>3.38</strong></td>
+</tr>
+<tr>
+<td>unexamined</td>
+<td style="text-align: right;">4</td>
+<td>5.00</td>
+</tr>
+<tr>
+<td>all fourteen</td>
+<td style="text-align: right;">14</td>
+<td>4.37</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>3.38 is in the B band, which is the target.</strong> <code>maintainability-agent</code>
+calibrates so a mature-OSS corpus medians at a B, this corpus does so
+already, and the spread across the examined ten runs 0.00, 0.44, 2.47, 2.58,
+2.79, 3.98, 4.38, 4.48, 4.61, 5.00 — a distribution rather than the cliff it
+was this morning. No band edge needs moving to achieve that.</p>
+<p><strong>What remains is one repository, not the scale.</strong> Django still reads 0.00
+under <code>sqrt(LOC/1000)</code>, which ranks the largest repository in the corpus
+worst — 15.53 normalized against Flask's 9.12, inverting to 1.29 and 3.17
+per-kLOC. That is size bias in the normalizer meant to remove it, and it is
+now a single identified defect rather than an uncalibrated scale. It is still
+not changed here, because switching to per-kLOC weakens the gate: a synthetic
+1,939-line repository carrying SQL injection, command injection,
+<code>pickle.loads</code>, <code>yaml.load</code>, <code>eval</code>, MD5 and hardcoded credentials scores
+0.00 F today and would land near D.</p>
+<p><strong>Open at the time — band edges</strong> — closed by D17, which found the blocker
+was that this corpus had no bad end to place D and F against. The centre was
+already defensible: 4.37 (A−) against
+MA's 4.0 target. The <em>distribution</em> is not — nine repositories at 4.15 or
+better, four at 0.15 or worse, almost nothing between. That cliff comes from
+clamping a linear slope at zero, not from the inputs.</p>
+<p>Two adjustments were measured and neither is adopted. <strong>√n per rule</strong> — one
+rule firing 81 times as one strongly-evidenced fact rather than 81 defects —
+is the only lever that moves the floored repositories (median 4.56, one at F).
+It must not be adopted to hit a target, because the target is already met and
+√n overshoots it; the argument has to be that repeated identical findings are
+correlated evidence, which is a claim about what a rule count means.</p>
+<p><strong>An earlier version of this study was wrong and is corrected in place.</strong> It
+filtered test findings out of the numerator while still dividing by the whole
+tree's LOC, and reported a median of 3.10 — a B — that the corrected
+measurement does not support. That is the same numerator/denominator mismatch
+<code>exclude_patterns</code> caused once already, reproduced in the tool built to
+measure it. Doing the split inside the product is what makes it unavailable.</p>
+<p>Until band edges are chosen the scale is uncalibrated, and anything consuming
+it (D3, D4) should treat it as such.</p>
+<h2 id="d6-scanner-licences-are-judged-by-mechanism-not-by-name">D6 — Scanner licences are judged by mechanism, not by name</h2>
+<p><strong>Question.</strong> <code>CONTRIBUTING.md</code> required every scanner to be
+<em>"MIT/Apache-2.0/BSD licensed (no GPL — license-surface contamination)"</em>. Two
+shipped tools violated it — TruffleHog is AGPL-3.0, Hadolint is GPL-3.0 — and
+neither caused a problem. A rule that is stated, violated, and harmless is
+worse than no rule: it teaches people that the rules are decorative.</p>
+<p><strong>Was the rule right?</strong> No, for this architecture. Copyleft reaches a combined
+work through linking, vendoring or bundling. This tool does none of those — it
+runs <code>subprocess.run(args=[...], shell=False)</code> and reads JSON back. Separate
+processes exchanging arguments and output are separate programs. The
+"never install anything" principle compounds it: the operator installs the
+scanner, so there is no distribution by us at all, and most copyleft
+obligations attach at distribution.</p>
+<p><strong>Decision.</strong> Three criteria keyed to mechanism:</p>
+<ol>
+<li>Any OSI-approved licence is acceptable for a tool invoked as a subprocess
+   and never distributed. Linking, vendoring or bundling still requires a
+   permissive licence.</li>
+<li>AGPL tools are optional and off by default — so we do not silently hand a
+   hosted-service source-offer obligation to an adopter, and so adopters whose
+   policy excludes AGPL are not blocked.</li>
+<li>Rule content and data are licensed separately from engines and checked
+   separately.</li>
+</ol>
+<p><strong>Criterion 3 exists because of a live case the old rule missed entirely.</strong>
+Semgrep's engine is LGPL-2.1, but Semgrep-maintained registry rules moved to
+the Semgrep Rules Licence in December 2024 — internal, non-competing, non-SaaS
+use only. <code>--config=auto</code> fetches those. A security tool that is arguably a
+competing product, and that someone may run as a service, was pulling rules
+under a licence restricting exactly those two uses. A licence rule about
+engines could never have caught it. The offline ruleset this project ships is
+its own work and is unaffected.</p>
+<p><strong>Consequence.</strong> TruffleHog and Hadolint become documented opt-in choices
+rather than silent violations. This is engineering reasoning about how the
+licences apply to this architecture, not legal advice; the Semgrep rules
+licence in particular is worth confirming with counsel before it is relied on
+commercially.</p>
+<h2 id="d7-the-project-declares-a-minimum-tool-floor-and-defaults-to-it">D7 — The project declares a minimum tool floor, and defaults to it</h2>
+<p><strong>Question.</strong> Every registered scanner defaulted to enabled, <code>require_scanners</code>
+was per-repository config with no floor, and this repository's own audit ran
+three of twelve tools. A tool whose purpose is determining whether code is
+secure was checking itself with Bandit, pip-audit and a regex pack — and
+nothing in the product said that was too few.</p>
+<p><strong>Decision.</strong> <code>scanners/floor.py</code> declares the minimum set, the tools
+deliberately left out, and the reason for each. Two rules keep it honest:</p>
+<ul>
+<li><strong>A floor tool that does not apply is not a gap.</strong> Applicability is declared
+  per tool and evaluated against what the tree actually contains, so a
+  single-language repository is not permanently incomplete. An alarm that is
+  always on is not an alarm.</li>
+<li><strong>Overlap must earn its place.</strong> Four tools reporting one CVE is not four
+  times the assurance; it is one finding counted four times in a score that
+  normalizes over findings.</li>
+</ul>
+<p>The floor: <code>builtin_rules</code>, <code>bandit</code>, <code>semgrep</code>, <code>pip_audit</code>, <code>osv_scanner</code>,
+<code>gitleaks</code>, <code>checkov</code>, <code>trivy</code>, <code>scorecard</code>. Opt-in: <code>trufflehog</code> (duplicates
+gitleaks for detection; AGPL; verification is the genuine gain), <code>hadolint</code>
+(overlaps checkov and trivy; GPL), <code>npm_audit</code> (osv_scanner covers the same
+advisories with fewer false positives and without needing Node).</p>
+<blockquote>
+<p>Membership has changed since: <a href="#d12--the-coverage-check-run-for-the-other-four-languages">D12</a>
+adds <code>njsscan</code> and <code>rubocop</code> to the floor and <code>gosec</code> to the opt-in set.
+<code>scanners/floor.py</code> is the authority; this paragraph is the reasoning at the
+time the floor was declared.</p>
+</blockquote>
+<p><code>gates.require_scanners: ["floor"]</code> requires the declared set without
+enumerating it, so the membership stays maintained here rather than copied
+into every repository's config and left to rot.</p>
+<p><strong>First run found two defects the old three-scanner setup could not expose.</strong>
+Scorecard timed out at the 600s default because it makes dozens of GitHub API
+calls, and its version probe printed <code>Error: unknown flag: --version</code> into the
+version column of a report that otherwise claimed it ran fine. Adapters now
+declare their own timeout default, and a nonzero version probe reports no
+version rather than an error string. That is the floor doing its job on day
+one: more tools running is more of the tool under test.</p>
+<h2 id="d8-floor-tools-have-a-cadence-and-repository-level-ones-arrive-by-import">D8 — Floor tools have a cadence, and repository-level ones arrive by import</h2>
+<p><strong>Question.</strong> The floor's first CI run failed on Scorecard, twice. It timed out
+at 600s, and again at 1800s: against this repository it takes over half an
+hour, because it makes dozens of GitHub API calls. Raising the timeout again
+would have made every pull request wait thirty minutes.</p>
+<p><strong>The timeout was never the problem.</strong> Scorecard answers questions about the
+<em>repository</em> — branch protection, release signing, token scopes, dependency
+pinning. Those answers do not move between commits. Asking them on every change
+is asking the wrong question at the wrong rate, and no timeout value fixes a
+cadence mismatch.</p>
+<p><strong>Decision.</strong> <code>ToolPolicy</code> gains a cadence. <code>commit</code> tools answer questions
+about the code in front of them and run in the per-change gate. <code>repository</code>
+tools run on their own schedule and reach the audit as an imported SARIF —
+which is D3's rule applied to ourselves rather than only to consumers.</p>
+<p>Scorecard is the first repository-cadence tool. It stays <strong>in the floor</strong> —
+demoting it to optional would concede the supply-chain domain by default, which
+is what the floor exists to prevent. <code>.github/workflows/supply-chain.yml</code> runs
+it weekly and on pushes to <code>main</code>, publishes SARIF to code scanning, and
+retains the artifact for <code>--sarif-import scorecard=…</code>.</p>
+<p><strong>Deferred is not silent.</strong> A floor tool a run does not evaluate is named in
+preflight and in the report — <code>· scorecard deferred repository cadence</code> —
+because an omission the reader cannot see is indistinguishable from a pass, and
+that is the failure this project exists to remove.</p>
+<p><strong>Consequence.</strong> Imported Scorecard coverage is <code>unverified</code> per D3: an
+artifact we did not watch being produced. That is the correct label, and it is
+visible in every output.</p>
+<h2 id="d9-our-ruleset-is-the-offline-floor-bounded-to-language-primitives">D9 — Our ruleset is the offline floor, bounded to language primitives</h2>
+<p><strong>Question.</strong> <code>product-intent.md</code> §5 principle 2 said <em>"no parallel ruleset
+competing with Semgrep or Bandit."</em> We ship two rulesets — the built-in regex
+pack and the offline Semgrep profile — so the principle was already violated
+the day it was written. Meanwhile <code>--config=auto</code> fetches registry rules under
+the Semgrep Rules Licence, which permits internal, non-competing, non-SaaS use
+only, and this project is arguably a competing security product.</p>
+<p><strong>Marshall's ruling (2026-09-09):</strong> <em>"Our ruleset is the offline floor, not a
+competitor. Its job is: when there is no network and no registry, you still get
+the highest-consequence patterns."</em> Online, the maintained registries do the
+job, because online is where they are available.</p>
+<p><strong>Why an escape hatch was not available.</strong> OpenGrep is a healthy LGPL-2.1 fork
+of the Semgrep engine, but <code>opengrep/opengrep-rules</code> — the permissively
+licensed rules fork — has six stars and was last touched in November 2025.
+There is no maintained, permissively licensed community ruleset to adopt, so
+authoring is the only path that resolves the licence question.</p>
+<p><strong>The bound, and why it is enforceable.</strong> Maintenance cost is driven by rule
+<em>shape</em>, not rule count:</p>
+<ul>
+<li><strong>Language primitives</strong> — <code>shell=True</code>, <code>eval</code>, <code>pickle.loads</code>,
+  <code>hashlib.md5</code>, <code>verify=False</code> — are constructs the language itself provides.
+  They have not changed in a decade and will not. Sixty of them is an asset.</li>
+<li><strong>Framework APIs</strong> — Django ORM internals, Express middleware, Spring
+  annotations — rot with every framework release. That is where a funded rules
+  team earns its keep and where a one-maintainer project bleeds.</li>
+</ul>
+<p>So the offline profile takes primitives and <strong>refuses framework rules</strong>, and
+<code>test_the_offline_profile_refuses_framework_rules</code> fails the build on a rule
+that names one. A bound enforced only in review is not a bound.</p>
+<p><strong>What makes a small set worth having.</strong> Not count. Every rule carries a CWE,
+an OWASP bucket, a confidence and a version, and every rule has a positive
+fixture it must flag <em>and</em> a negative fixture it must not. Registry rules
+deliver CWEs inconsistently — before this work every Semgrep finding arrived
+with no CWE at all — and a fully mapped 26-rule set is worth more to a
+standards-anchored tool than a partially mapped 3,000-rule one.</p>
+<p><strong>Parity remains a non-goal.</strong> A stale ruleset claiming to be a standard is
+worse than a small one honestly labelled, and <code>docs/scanners.md</code> labels it.</p>
+<h2 id="d10-rules-ship-as-a-versioned-digest-identified-profile">D10 — Rules ship as a versioned, digest-identified profile</h2>
+<p><strong>Question.</strong> "Semgrep found three things" is not a claim anyone can check. A
+result is only reproducible if you can say which rules produced it, and re-run
+against the same baseline later.</p>
+<p><strong>Decision.</strong> The offline rules are a <strong>profile</strong> with an id, a version and a
+digest, cited in scanner provenance as <code>sca-offline@1.0.0 (cff6cb1e5519)</code>.</p>
+<p>This is the STIG benchmark model: a named baseline, a release number, and rules
+that each carry their own version, so a finding can be cited and re-checked.</p>
+<p><strong>The digest is the part that is evidence.</strong> A version is an assertion by
+whoever edited the file. A digest is computed from the bytes that actually ran.
+Someone editing the ruleset inside an installed wheel leaves the version saying
+1.0.0; the digest notices, and a test asserts it does.</p>
+<p><strong>Bump the version when rules are added, removed, or change meaning.</strong> A rule
+whose pattern is broadened has changed meaning even with an unchanged id, and a
+report citing an unchanged version after that claims a comparison it cannot
+support.</p>
+<h2 id="d11-author-a-rule-only-where-no-floor-scanner-already-covers-it">D11 — Author a rule only where no floor scanner already covers it</h2>
+<p><strong>Question.</strong> <code>CONTRIBUTING.md</code> has forbidden "shipping a parallel ruleset to
+Semgrep / Bandit / CodeQL" since the first commit. Marshall asked whether that
+principle still made sense, since nobody remembered writing it.</p>
+<p><strong>It made more sense than we credited, and it had just been violated.</strong> The
+principle's target was never rule-writing as such — it sits in a scope-creep
+list beside "writing a new AST analyzer", "SaaS dashboard" and "telemetry". Its
+target is <strong>duplicating detection a scanner already does</strong>, because then you
+have built a worse version of that scanner and now maintain it.</p>
+<p><strong>Measured, not argued.</strong> Running Bandit against the profile's own fixture:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python rules in the profile</td>
+<td>19</td>
+</tr>
+<tr>
+<td>Fully or partly covered by Bandit</td>
+<td><strong>17</strong></td>
+</tr>
+<tr>
+<td>Genuinely unique</td>
+<td>2</td>
+</tr>
+</tbody>
+</table></div>
+<p>Bandit found 23 distinct test types where the profile had 19 rules, including
+<code>B113 request_without_timeout</code>, which the profile did not cover at all.</p>
+<p><strong>Why the reasoning failed.</strong> The rules were justified as "the offline floor".
+That argument does not survive the observation that <strong>Bandit is itself
+offline</strong> — Apache-2.0, no network, no registry. The offline/online framing was
+imported from the Semgrep Rules Licence problem, which is real, and applied to
+a language where a different tool had already solved it.</p>
+<p><strong>Decision.</strong> Author a rule only where no floor scanner already covers it. In
+practice that means the profile covers what Bandit cannot read: JavaScript,
+TypeScript, Go, Ruby and Java have no offline SAST in the floor at all. Python
+is admitted only for gaps Bandit measurably leaves, and each such rule must
+declare the gap in a <code>covers-gap</code> metadata field.</p>
+<blockquote>
+<p><strong>The second sentence was wrong, and D12 is the correction.</strong> "JavaScript,
+TypeScript, Go, Ruby and Java have no offline SAST in the floor at all" was
+asserted without running any of those tools. njsscan and RuboCop both exist,
+both install offline, and both cover rules this decision let stand. The
+principle here survives intact; only the claim about which languages were
+uncovered was false. See
+<a href="#d12--the-coverage-check-run-for-the-other-four-languages">D12</a>.</p>
+</blockquote>
+<p><strong>Enforced, not remembered.</strong> <code>test_no_python_rule_duplicates_bandit</code> runs both
+tools over the fixtures and fails on any Python rule flagging a line Bandit
+already flags. <code>test_the_profile_covers_languages_the_floor_cannot_read_offline</code>
+asserts the languages that justify the profile existing. A bound enforced only
+in review is not a bound — the same conclusion D9 reached, applied to the
+mistake D9 did not prevent.</p>
+<p><strong>Consequence.</strong> The profile went from 26 rules to 23, and became more valuable:
+2 Python, 7 JavaScript/TypeScript, 5 Go, 4 Ruby, 5 Java. Smaller, no overlap,
+and every rule covering something nothing else in the floor can see.</p>
+<p><strong>A precision defect fell out of the same pass.</strong> The Java command-execution
+rule flagged <code>new ProcessBuilder(new String[]{...})</code> — the <em>recommended fix</em> —
+as the defect. A rule that reports the remediation as the problem trains people
+to ignore the rule. It is now narrowed to <code>Runtime.exec</code>.</p>
+<h2 id="d12-the-coverage-check-run-for-the-other-four-languages">D12 — The coverage check, run for the other four languages</h2>
+<p><strong>Status.</strong> Accepted, 2026-09-09.</p>
+<p>D11 shrank the Python rules because Bandit already covered seventeen of
+nineteen. It then justified the remaining twenty-one rules with a sentence that
+was never tested: <em>"JavaScript, TypeScript, Go, Ruby and Java have no offline
+SAST in the floor at all."</em> That is an assertion about tools that exist, made
+without running any of them. The standing rule is that a built-in detector
+requires a <strong>proven</strong> gap, and that the evidence is produced before the code,
+not after. It was not. This is that check, run late.</p>
+<p><strong>Method.</strong> For each language, install the candidate FOSS tools and run them
+against the same positive and negative fixtures the profile's own suite uses.
+A rule is a duplicate when the tool flags the same line for the same primitive
+with no framework context required. A tool that needs a framework shape, a
+build, or a toolchain we do not provision does not count as coverage.</p>
+<p><strong>Result.</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Language</th>
+<th>Tool</th>
+<th>Licence</th>
+<th>Ran</th>
+<th>Covers</th>
+<th>Leaves</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JavaScript</td>
+<td>njsscan 1.0.0</td>
+<td>LGPL-3.0-or-later</td>
+<td>yes</td>
+<td><code>md5</code>, <code>Math.random</code>, <code>NODE_TLS_REJECT_UNAUTHORIZED</code></td>
+<td><code>child_process.exec</code>, <code>eval</code>, <code>new Function</code>, <code>innerHTML</code></td>
+</tr>
+<tr>
+<td>Ruby</td>
+<td>RuboCop 1.28.2 <code>--only Security</code></td>
+<td>MIT</td>
+<td>yes</td>
+<td><code>eval</code>, <code>Marshal.load</code>, <code>YAML.load</code></td>
+<td><code>system()</code> interpolation, <code>Digest::MD5</code></td>
+</tr>
+<tr>
+<td>Ruby</td>
+<td>Brakeman</td>
+<td>MIT</td>
+<td>no</td>
+<td>—</td>
+<td>Rails-only; does not analyze plain Ruby</td>
+</tr>
+<tr>
+<td>Go</td>
+<td>gosec 2.29.0</td>
+<td>Apache-2.0</td>
+<td><strong>no</strong></td>
+<td>—</td>
+<td>requires the Go toolchain on the host</td>
+</tr>
+<tr>
+<td>Java</td>
+<td>PMD 7.7.0</td>
+<td>BSD-2-Clause</td>
+<td>jar read</td>
+<td><strong>none of the five</strong></td>
+<td>all five</td>
+</tr>
+<tr>
+<td>Java</td>
+<td>SpotBugs / find-sec-bugs</td>
+<td>LGPL-2.1</td>
+<td>no</td>
+<td>—</td>
+<td>requires compiled bytecode</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Two tools cover ground we had written rules for, and both are clean.</strong>
+njsscan and RuboCop each produced zero findings on the negative fixtures, so
+wiring them costs no precision. Under the standing rule the tool wins, so both
+are wired and the rules give way to them: three are deleted outright
+(<code>javascript.weak-hash</code>, <code>javascript.weak-random</code>,
+<code>ruby.unsafe-deserialization</code>) and two are narrowed to the half the tool leaves
+— <code>ruby.code-injection</code> drops plain <code>eval</code> and keeps <code>instance_eval</code> /
+<code>class_eval</code>, and <code>javascript.tls-verification-disabled</code> drops the env-var form
+and keeps the per-request <code>{rejectUnauthorized: false}</code>.</p>
+<p><strong>Three boundaries are real, and each has a mechanism behind it.</strong></p>
+<p><em>njsscan's silence is structural, not incidental.</em> It has rules for <code>eval</code>,
+<code>child_process.exec</code> and DOM XSS — they did not fire because they are taint
+rules gated on an Express handler shape, <code>function ($REQ, $RES, ...)</code> with a
+<code>$REQ.$QUERY</code> source. In a CLI script, a library, a build step or a Lambda
+handler there is no such shape and the rules are quiet. Its TLS rule matches
+only <code>process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'</code>; the far more common
+per-request <code>{rejectUnauthorized: false}</code> is not covered, so that rule of ours
+stays.</p>
+<p><em>gosec cannot read Go source on its own.</em> It loads packages through
+<code>go list</code> and fails outright without the toolchain — <code>go command required, not
+found</code>. The distinction that matters is <strong>running the tool versus reading the
+target</strong>: every floor tool needs some runtime to execute itself, and that is
+unremarkable. gosec is different in that analyzing a target means invoking
+<em>that target's</em> build tooling. This is precisely the boundary MA's ADR-012
+draws for SpotBugs, where needing a build makes a tool unavailable rather than
+silently empty. So gosec is wired as an optional tool that declares why it may
+not run, and njsscan and RuboCop — which parse source directly and need only
+themselves — are in the floor.</p>
+<p><em>Java has no source-level FOSS SAST worth wiring.</em> PMD parses source and needs
+no bytecode, but its entire Java security category is two rules,
+<code>HardCodedCryptoKey</code> and <code>InsecureCryptoIv</code>, and neither touches
+<code>Runtime.exec</code>, <code>readObject</code>, MD5, ECB or <code>java.util.Random</code>. Searching every
+PMD Java category for those primitives returns only false leads — a rule about
+<code>gc()</code>, one about <code>exit()</code>, one about JDBC result sets. Java is a proven gap.</p>
+<p><strong>Consequence.</strong> The profile drops from 23 rules to 20 and the floor gains two
+tools that are better at their own languages than we would be: 5 Java, 5 Go,
+5 JavaScript, 3 Ruby, 2 Python. The gap that remains is now measured rather
+than assumed, and every rule in a language a floor tool can read has to name
+the gap it covers in a <code>covers-gap</code> metadata field or fail the build.</p>
+<p><strong>The lesson is the one D11 already recorded and did not generalize.</strong> D11
+caught the Python error and then repeated it in the same paragraph for four
+other languages. Running the check on one language and asserting the result for
+the rest is not evidence. The check is now automated per language in
+<code>tests/unit/test_offline_ruleset.py</code>, so the next rule added to a language a
+tool covers fails the build instead of surviving to a later audit.</p>
+<h2 id="d13-adapters-state-their-outcome-nothing-infers-it-from-a-name">D13 — Adapters state their outcome; nothing infers it from a name</h2>
+<p><strong>Status.</strong> Accepted, 2026-09-09. Closes <a href="docs-architecture.html"><code>architecture.md</code></a> §2.</p>
+<p><strong>Question.</strong> An adapter used to signal what happened to it by <em>naming a
+finding</em>: <code>bandit.tool_error</code> meant FAILED, <code>bandit.tool_timeout</code> meant
+TIMED_OUT, and anything starting <code>pip_audit.no_</code> meant NOT_APPLICABLE.
+<code>classify_execution</code> then reverse-engineered the intent by prefix matching, and
+counted real findings by <em>exclusion</em> — everything not starting <code>&lt;name&gt;.tool_</code>.</p>
+<p><strong>Why that was worth changing before adding features.</strong> Nothing enforced the
+protocol: no type, no test, no lint. The convention was documented only by
+example, and fifteen adapters had been written at four different times. An
+adapter naming a control finding wrongly produced a <em>security</em> finding
+silently; a real finding whose id began with the scanner's name plus <code>no_</code>
+became a false NOT_APPLICABLE, which a required-scanner gate escalated into a
+hard build failure. The architecture audit ranked this first on
+defect-elimination per hour, and most defects traded during recent review
+cycles were downstream symptoms of it.</p>
+<p><strong>Decision.</strong> <code>Scanner.scan()</code> returns a <code>ScanResult</code> — outcome, findings,
+reason, scope. Outcome constructors (<code>completed</code>, <code>failed</code>, <code>timed_out</code>,
+<code>unavailable</code>, <code>not_applicable</code>) live on the base class and <em>derive</em> the
+control finding from the outcome, so the two cannot disagree. A non-COMPLETED
+result without a reason raises: a failed scanner with no reason reaches a
+report as a blank cell, indistinguishable from one nobody asked about.</p>
+<p><strong><code>classify_execution</code> is deleted, not deprecated.</strong> It still worked, and that
+was the problem — a functioning string-parser left in the tree is an invitation
+to wire the next adapter into it. <code>execution_from_result</code> replaces it and does
+no decoding at all.</p>
+<p><strong>Scope moved onto the adapter.</strong> <code>cli.py</code> carried <code>if name != "pip_audit":
+return None</code> because there was nowhere on an adapter to declare what it
+covered. <code>Scanner.scope()</code> is that place; <code>pip_audit</code> reports its mode and
+inputs, <code>semgrep</code> cites the offline rule profile by digest, everything else
+returns None.</p>
+<p><strong>Two live defects surfaced during the migration</strong>, both of the predicted kind.
+<code>trufflehog</code> and <code>npm_audit</code> could return real findings <em>alongside</em> a control
+finding — twenty parsed secrets and three unreadable lines — and the old
+classifier's early return recorded <code>finding_count=0</code> while those findings still
+reached the report. The count and the report disagreed because neither was the
+source of truth. <code>failed()</code> now takes the partial findings explicitly: they are
+reported, and the outcome stays FAILED, because a partial audit is not an
+audit. Separately, <code>pip_audit._parse</code> returned a control finding from a parsing
+helper, making a leaf function the thing that decided the run's outcome; it
+raises now, and the caller states the outcome.</p>
+<p><strong>A regression I introduced and caught.</strong> Folding per-input timeouts into the
+same failure list cost <code>npm_audit</code> and <code>pip_audit</code> their TIMED_OUT outcome.
+Both fail coverage, so no gate changed — but only one of them tells an operator
+to raise the timeout. Timeouts are tracked separately again.</p>
+<p><strong>Enforced, not remembered.</strong> <code>tests/unit/test_scan_protocol.py</code> asserts every
+registered scanner returns <code>ScanResult</code>, that a non-COMPLETED result carries a
+reason, that a failed run keeps its findings and loses its count, and — by AST
+walk over every adapter — that none of them hand-builds a control finding. The
+last one was verified against a synthetic offender rather than assumed to work.</p>
+<h2 id="d14-parsers-are-tested-against-real-captured-output-and-the-gap-is-declared">D14 — Parsers are tested against real captured output, and the gap is declared</h2>
+<p><strong>Status.</strong> Accepted, 2026-09-09. Closes <a href="docs-architecture.html"><code>architecture.md</code></a> §4.</p>
+<p><strong>Question.</strong> This tool's entire job is parsing fifteen other tools' output
+formats, and every parser was verified against hand-written mock output — which
+means against <em>the author's belief about the format</em>, not the format. Two
+instances of that class had already bitten: the OSV-Scanner v1→v2 CLI change
+and <code>pip-audit --locked</code> semantics, both caught by hand during review.
+<code>tests/integration/</code> was empty, and <code>CONTRIBUTING.md</code> had cited a
+<code>test_scoring_drift.py</code> that never existed.</p>
+<p><strong>Decision.</strong> Commit genuine captured output per scanner under
+<code>tests/fixtures/scanner-output/</code>, and drive each adapter against it. Captures
+are produced by running the real tool against a small deliberately-vulnerable
+tree; local paths are rewritten to <code>/repo</code> and <code>/home/user</code> and nothing else is
+edited. On a scanner upgrade, recapture — a fixture hand-edited to make a test
+pass is precisely the belief this stops trusting.</p>
+<p><strong>Six of fifteen, and the other nine are named.</strong> Only tools installable on the
+capture host could produce real output: njsscan, RuboCop, gitleaks, gosec,
+pip-audit and semgrep. Writing plausible-looking output for the rest would
+recreate the defect being fixed, so the remainder sit in
+<code>SCANNERS_WITHOUT_A_REAL_CAPTURE</code> with a reason each, and a test fails if that
+list drifts out of step with the fixtures directory. A parser with no real
+capture is a known risk; an undocumented one is the same silence this project
+rejects everywhere else.</p>
+<p><strong>The gosec capture is the valuable one.</strong> It is that tool's genuine output on
+a host with no Go toolchain: exit 1, well-formed JSON, <code>"Issues": []</code>,
+<code>"Stats": {"files": 0}</code>, and the failure recorded only under <code>Golang errors</code>.
+The test asserts the capture still demonstrates that shape before asserting the
+adapter handles it — so if a future gosec stops behaving this way, the fixture
+says so rather than the test quietly passing for a new reason.</p>
+<p><strong>Scoring drift is pinned, not calibrated.</strong> The model is a chain of judgement
+calls — severity weights, the <code>sqrt(LOC/1000)</code> dampener, the grade table, the
+letter bands — and changing any of them silently re-grades every repository
+ever scanned, including accepted baselines. The new tests pin the output of
+that chain, plus the properties that must survive any retuning: severity
+ordering is monotonic, informational findings never move the grade, the overall
+grade is the worst category rather than the mean, suppressed findings do not
+count, and more findings never improve the score. A failure there means the
+model changed and should be declared, not that something is broken.</p>
+<p><strong>This is not D5.</strong> Pinning an uncalibrated number does not calibrate it.
+These prove the scale is <em>stable</em>. What establishes it is <em>correct</em> is D17,
+which scores the scale against a corpus carrying both well-maintained code and
+applications written to be vulnerable. Both are needed, and neither
+substitutes for the other: D17 could pass while the scale silently drifted
+between releases, and these pins could pass on a scale that ordered the two
+populations at random.</p>
+<h2 id="d15-a-scanners-severity-is-not-a-measure-of-consequence">D15 — A scanner's severity is not a measure of consequence</h2>
+<p><strong>Status.</strong> Accepted, 2026-09-11.</p>
+<p><strong>Question.</strong> Four separate problems were solved, or attempted, on the
+assumption that a finding's <code>severity</code> says how dangerous it is. All four
+failed the same way, and it took measuring them side by side to see they
+were one problem.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>where</th>
+<th>symptom</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the score</td>
+<td>Django graded F; the number tracked how talkative Bandit is</td>
+</tr>
+<tr>
+<td>triage tiers</td>
+<td><code>B105</code> produced <strong>0</strong> useful hits in 22 across the corpus</td>
+</tr>
+<tr>
+<td>a proposed severity floor</td>
+<td>cannot separate httpx from a planted-vulnerability repo</td>
+</tr>
+<tr>
+<td>proposed default gates</td>
+<td><code>critical</code>-only catches nothing; <code>critical</code>+<code>high</code> fails half of good code</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>What the field actually encodes.</strong> A scanner's severity answers <em>"how
+confident am I that this pattern is present and matters in general"</em>, not
+<em>"how bad is this in your code"</em>. Bandit rates SQL injection <strong>medium</strong> and
+<code>hashlib.md5</code> <strong>high</strong>. Every mechanism built on top of the field inherits
+that, and each rediscovery looked like a fresh problem.</p>
+<p><strong>The evidence, from the examined corpus and four controls.</strong></p>
+<p>Six candidate rules for a severity floor. None separates:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>rule</th>
+<th style="text-align: right;">corpus trips</th>
+<th style="text-align: right;">vulnerable controls caught</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sev&gt;=HIGH</code></td>
+<td style="text-align: right;">5/10</td>
+<td style="text-align: right;">2/4</td>
+</tr>
+<tr>
+<td><code>sev&gt;=HIGH &amp; conf=HIGH</code></td>
+<td style="text-align: right;">3/10</td>
+<td style="text-align: right;">2/4</td>
+</tr>
+<tr>
+<td><code>top25</code></td>
+<td style="text-align: right;">6/10</td>
+<td style="text-align: right;">4/4</td>
+</tr>
+<tr>
+<td><code>top25 &amp; sev&gt;=MEDIUM</code></td>
+<td style="text-align: right;">5/10</td>
+<td style="text-align: right;">4/4</td>
+</tr>
+<tr>
+<td><code>top25 &amp; sev&gt;=HIGH</code></td>
+<td style="text-align: right;">3/10</td>
+<td style="text-align: right;">2/4</td>
+</tr>
+</tbody>
+</table></div>
+<p>Anything catching SQL injection and <code>pickle.loads</code> — both rated <em>medium</em> —
+also catches django, flask, jekyll, lodash and sinatra. A well-maintained
+<code>httpx</code> carries one high-confidence HIGH finding; the deliberately
+vulnerable 200k-line control carries two. <code>B324</code> (<code>hashlib.md5</code>) appears in
+both: RFC-mandated digest authentication in one, an invented token function
+in the other, identical signature.</p>
+<p>Two candidate default gates, same wall:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>default</th>
+<th style="text-align: right;">good repos failed</th>
+<th style="text-align: right;">controls caught</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fail_on_severity: ["critical"]</code></td>
+<td style="text-align: right;">1/10</td>
+<td style="text-align: right;"><strong>0/4</strong></td>
+</tr>
+<tr>
+<td><code>fail_on_severity: ["critical","high"]</code></td>
+<td style="text-align: right;"><strong>5/10</strong></td>
+<td style="text-align: right;">2/4</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Decision.</strong> Nothing may <em>rank consequence</em> by reading a scanner's
+severity. Severity stays a weight in the score and a filter an operator can
+configure — both are honest uses of "how confident is the tool" — but no
+mechanism may claim to identify the dangerous findings from it.</p>
+<p><strong>What works instead, measured.</strong> <code>fail_on_new</code> — ratchet on regressions
+rather than absolute state — does not read severity at all, and therefore
+does not inherit the flaw. Through a full adoption lifecycle on a fixture
+with pre-existing debt:</p>
+<pre><code>first run, no baseline      exit=1   (everything is new)
+after --bump-baseline       exit=0   (debt accepted once)
+SQL injection introduced    exit=1   &lt;- the case severity gates miss
+plus shell=True             exit=1
+reverted                    exit=0
+</code></pre>
+<p>False positives are baselined once and never asked about again, which is
+exactly the property a severity threshold cannot have.</p>
+<p><strong>Not adopted as a default here.</strong> The first run fails for every new
+adopter, and choosing what a tool refuses to build on first contact is an
+operator's decision rather than this register's. Recorded so the option is
+argued from data when it is taken up.</p>
+<p><strong>The consequence for design.</strong> The only consequence-bearing signal in the
+data is CWE Top-25 membership, which caught 4/4 controls — too broad alone
+at 6/10 corpus trips, but it is the one input that is not the scanner's own
+opinion. Anything future that needs to rank danger should start there, and
+must be measured against both the corpus and known-vulnerable controls
+before it ships.</p>
+<hr />
+<h2 id="d16-the-grade-is-a-density-and-the-gate-is-what-catches-a-vulnerability">D16 — The grade is a density, and the gate is what catches a vulnerability</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-11 · supersedes the normalizer half of D5</p>
+<p><strong>Context.</strong> D5 recorded that <code>sqrt(LOC/1000)</code> was "an invented normalizer
+with no corpus behind it", and the calibration study then showed what that
+cost. Under it the ranking followed how <em>big</em> a repository is rather than how
+much is wrong with it:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>repo</th>
+<th style="text-align: right;">kLOC</th>
+<th style="text-align: right;">weighted findings / kLOC</th>
+<th style="text-align: right;"><code>sqrt</code> normalized</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>django</td>
+<td style="text-align: right;">144.5</td>
+<td style="text-align: right;">1.51</td>
+<td style="text-align: right;"><strong>18.18</strong> ← ranked worst</td>
+</tr>
+<tr>
+<td>flask</td>
+<td style="text-align: right;">7.8</td>
+<td style="text-align: right;"><strong>3.35</strong></td>
+<td style="text-align: right;">9.38</td>
+</tr>
+<tr>
+<td>fastapi</td>
+<td style="text-align: right;">23.8</td>
+<td style="text-align: right;">1.60</td>
+<td style="text-align: right;">7.81</td>
+</tr>
+</tbody>
+</table></div>
+<p>Flask carried 2.2× Django's finding density and normalized at half the value.
+Django sat fifth by density and first by penalty. Over the ten examined
+repositories, Spearman correlation of grade against size was <strong>−0.37</strong>, while
+correlation of density against size was <strong>+0.12</strong> — the number was tracking
+size, which is the one thing the dampener exists to remove.</p>
+<p><strong>Decision.</strong> Divide by <code>LOC/1000</code> rather than <code>sqrt(LOC/1000)</code> — a straight
+density, weighted findings per thousand lines of scanned code — and move the
+grade slope from 0.5 to 1.5 with it. The two only mean anything together.</p>
+<p><strong>Why 1.5.</strong> It is the slope that holds D5's calibration target across the
+examined corpus. Four normalizers were measured on the same pinned run:</p>
+<pre><code>  sqrt,   slope 0.5    median 3.36 (B)   F=2   spread 5.00
+  linear, slope 0.5    median 4.40 (A-)  F=0   spread 1.67
+  linear, slope 1.2    median 3.56 (B+)  F=1   spread 4.02
+  linear, slope 1.5    median 3.20 (B)   F=1   spread 5.00   &lt;- adopted
+</code></pre>
+<p>Linear at 0.5 compresses everything into A− and cannot discriminate. 1.5 keeps
+the median in the B band and the full 0-to-5 spread, and fixes the ordering:
+Spearman(LOC, grade) moves <strong>−0.37 → +0.02</strong>, and the worst-ranked repository
+becomes the densest one rather than the largest one.</p>
+<p><strong>The cost, stated rather than discovered later.</strong> A large repository with a
+handful of serious findings scores <em>better</em> than it did. Measured on a control
+built for this — 135,841 lines of benign Python plus one module carrying SQL
+injection, <code>shell=True</code>, <code>pickle.loads</code>, MD5 and <code>eval</code>, seven scored findings
+in all:</p>
+<pre><code>old model (sqrt, slope 0.5)    3.86  B+
+new model (linear, slope 1.5)  4.71  A
+</code></pre>
+<p>A single HIGH finding in a 100,000-line repository now grades 4.91 — A+. That
+is arithmetically correct for a density and useless as an alarm. Note that the
+old model called the same control B+, so this is a worsening of a number that
+was never safe rather than the loss of one that was.</p>
+<p>It is accepted because <strong>the grade was never what catches a vulnerability</strong>,
+and pretending otherwise is what made it dangerous. On that same control, all
+three of the things that do catch it fire — this is the actual output, not a
+description of intent:</p>
+<ul>
+<li>the <strong>work order</strong> puts all seven in §FIX, <code>B602</code> first, each with file and
+  line;</li>
+<li>the report header reads <code>**Worst category:** `code_vulnerabilities`</code>;</li>
+<li>the run exits <code>gate FAIL</code> on the default <code>fail_on_new</code> (D15).</li>
+</ul>
+<p>A grade compresses a repository to one number so it can be compared against
+another repository and against itself last week. D15 already established that
+no severity-derived threshold can rank consequence; this records the
+corresponding limit on the score. <code>docs/scoring.md</code> now says so in the worked
+example, where the repository with a live SQL injection grades A−.</p>
+<p><strong>Consequences.</strong></p>
+<ul>
+<li>Every grade the tool has ever emitted moves. Nothing in the wild consumes
+  them yet, so no migration is provided and <code>history.jsonl</code> is left alone.</li>
+<li><code>tests/integration/test_scoring_drift.py</code> passed unchanged through this,
+  because every assertion in it was relational — <code>&lt; 5.0</code>, <code>&lt;= one</code>, "sorted
+  descending" — and a relational assertion detects inversion, not drift. The
+  model was re-tuned end to end and the drift test said nothing. Pinned
+  values were added; that file's own docstring had promised them.</li>
+<li><code>calibration/calibrate.py</code> carried its own <code>sqrt</code> divisor, its own <code>0.5</code>
+  slope, and a flat per-category sum that predated rank-discount saturation.
+  Its subtotal for Django read 488.06 against the product's 218.5. The
+  divisor and slope are imported now and the saturation is pinned by
+  <code>tests/unit/test_calibration_harness.py</code>.</li>
+<li>The study's headline line reported the median over all fourteen corpus
+  repositories, six of which no scanner can read. That reported 4.58 where
+  the examined set sat at 3.20 — P7 broken inside the study that exists to
+  check the scale. It now reports the examined median and names the
+  exclusion.</li>
+</ul>
+<p><strong>Still open at the time — closed by D17.</strong> The letter bands were still
+borrowed from <code>maintainability-agent</code> without their own study. D17 gives them
+one, and the answer is partly negative: two edges are measured and three bands
+hold no observation at all.</p>
+<hr />
+<h2 id="d17-calibrated-against-both-populations-secrets-is-a-count-and-three-bands-are-unmeasurable">D17 — Calibrated against both populations; <code>secrets</code> is a count, and three bands are unmeasurable</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-11 · amends D16 · <strong>closes D5</strong></p>
+<p><strong>Context.</strong> D16 fixed size bias and I checked it against the only corpus
+there was — fourteen well-maintained OSS projects. <code>corpus.json</code> had stated
+the flaw in that from its first version: <em>"these are all well-maintained OSS
+projects with their own security processes. The distribution measured here is
+cleaner than the population this tool will actually be pointed at."</em></p>
+<p>A scale with no bad end cannot be calibrated. There is nothing to place D and
+F against, and D5's band question had been open for that reason since
+2026-09-08.</p>
+<p><strong>Decision, part one: the corpus gets a bad end.</strong> Five applications written
+to be vulnerable are pinned alongside the maintained half and tagged
+<code>kind: vulnerable-by-design</code> — OWASP PyGoat, NodeGoat, railsgoat, WebGoat and
+Juice Shop. They are cloned and read; none is ever executed. WebGoat is
+included precisely because it stays <strong>unexamined</strong>: D12 records that no
+offline SAST in the floor reads Java, and a deliberately-vulnerable Java
+application reporting a clean score is the sharpest demonstration available of
+why coverage is reported beside the grade and never folded into it.</p>
+<p>Two measures come with them. <strong>AUC</strong> is the probability that a maintained
+repository outscores a vulnerable-by-design one — 1.00 is perfect ordering,
+0.50 is a coin toss. <strong>Separation</strong> is the worst maintained grade minus the
+best vulnerable one; negative means the populations overlap and <em>no</em> band
+table can tell them apart.</p>
+<p><strong>What the anchors immediately showed: D16 had made it worse.</strong></p>
+<pre><code>                        AUC    separation
+sqrt everywhere         0.91      -0.58
+linear everywhere (D16) 0.80      -3.76
+</code></pre>
+<p>Juice Shop carries four hardcoded API keys and three private keys and graded
+<strong>B+</strong>, while Flask — which has no secrets at all — graded <strong>F</strong>. I had
+recommended the density change without this evidence, because the evidence did
+not exist. It does now.</p>
+<p><strong>Decision, part two: <code>secrets</code> is a count, not a rate.</strong> Seven committed
+credentials divided by 115,340 lines is how a training application built to be
+insecure outscored a well-run library. A committed private key is one
+committed private key whether the repository is a thousand lines or a million.
+<code>secrets</code> normalizes by <code>sqrt(LOC/1000)</code>; every other category keeps the
+straight density D16 established. Damped, not exempted — an absolute count
+failed Django on two low-confidence hits:</p>
+<pre><code>variant                     AUC    separation   Spearman(LOC, grade)
+linear everywhere (D16)     0.80      -3.76            +0.14
+sqrt everywhere (pre-D16)   0.91      -0.58            -0.32
+linear; secrets absolute    0.90      +0.00            -0.24
+linear; secrets sqrt        1.00      +0.65            -0.01   &lt;- adopted
+</code></pre>
+<p>The slope moves 1.5 → 1.3 with it. Slope cannot reorder anything, so it is
+chosen on where the median lands and how much of the corpus clamps at 0.0 and
+loses its tail. 1.3 is the largest slope keeping the maintained median inside
+the B band while the populations stay apart.</p>
+<p><strong>A mapping defect found by the same run.</strong> Flask's F was partly doubles.
+Bandit's <code>B102</code> (<code>exec</code>) was mapped to <strong>CWE-78</strong> — <em>OS</em> command injection,
+the shell weakness <code>B602</code> covers — and <code>B307</code> (<code>eval</code>) had no curated entry so
+it inherited the same wrong CWE from Bandit itself. Corroboration merges
+across scanners on a shared CWE, so <code>B102</code> and this project's own
+<code>sca.python.eval</code> never merged and one <code>exec(compile(...))</code> line scored twice.
+Both are now CWE-95, matching the convention semgrep, RuboCop and the built-in
+rules already used. <code>is_top25</code> follows the documented ChildOf relationship to
+CWE-94 so that describing the weakness accurately is not what removes its
+Top-25 weight.</p>
+<p><strong>The result, measured on the pinned corpus.</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AUC (maintained above vulnerable)</td>
+<td style="text-align: right;"><strong>1.00</strong></td>
+</tr>
+<tr>
+<td>separation</td>
+<td style="text-align: right;"><strong>+1.26</strong></td>
+</tr>
+<tr>
+<td>maintained median</td>
+<td style="text-align: right;"><strong>3.41 (B)</strong> — D5's target</td>
+</tr>
+<tr>
+<td>vulnerable median</td>
+<td style="text-align: right;"><strong>0.00 (F)</strong></td>
+</tr>
+<tr>
+<td>Spearman(LOC, grade)</td>
+<td style="text-align: right;"><strong>−0.05</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>All four examined vulnerable-by-design applications grade F. The maintained
+half spans D to A+.</p>
+<p><strong>Decision, part three: three bands cannot be calibrated, and saying so is the
+closure.</strong> Testing every edge against the distribution rather than assuming:</p>
+<ul>
+<li>The <strong>D/F edge at 1.00 falls inside the population gap</strong> (0.00 → 1.26). This
+  is the one edge that carries a decision, and it is measured.</li>
+<li>The <strong>centre is measured</strong>: well-maintained code medians at 3.41, in B.</li>
+<li><strong>A−, B and C contain no observation at all.</strong> Nine bands cannot be
+  supported by ten maintained repositories, and no larger corpus fixes it,
+  because at that end of the scale the difference between two repositories is
+  five findings versus eight in twenty thousand lines. No ground truth says
+  one of those deserves A and the other A+.</li>
+</ul>
+<p>So the band edges above D/F are <strong>presentational granularity, not measured
+thresholds</strong>, and this register now says so. A B+ is not meaningfully better
+than an A−. Reading the letter as though it resolves that finely is the
+failure mode, and it is the same one D15 and D16 describe from other angles:
+the score is second class. The work order is the product.</p>
+<p><strong>Consequences.</strong></p>
+<ul>
+<li><code>calibrate.py</code> reports the two populations apart, with AUC and separation,
+  and refuses to print a pooled median — which would describe neither.</li>
+<li>The corpus is 19 repositories; a run is roughly six minutes.</li>
+<li>Cloning deliberately-vulnerable applications is now part of re-running the
+  study. They are training material, they are never executed, and
+  <code>calibration/.corpus/</code> is gitignored and excluded from the self-audit.</li>
+<li><strong>D5 is closed.</strong></li>
+</ul>
+<hr />
+<h2 id="d18-our-output-is-never-our-input-a-variable-reference-is-not-a-credential">D18 — Our output is never our input; a variable reference is not a credential</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-11 · two precision defects reported from two repositories on one day</p>
+<h3 id="part-one-stored-analysis-output-is-not-source">Part one — stored analysis output is not source</h3>
+<p><code>cli._own_artifacts</code> removes the paths the current run is about to write. That
+already fixed the obvious case: an audit had scored the report it produced —
+446KB of quoted findings, in which gitleaks duly found a "secret" at line
+11,529.</p>
+<p>It cannot see a <strong>copy</strong> kept somewhere else, and two independent reports of
+that arrived on the same day:</p>
+<ul>
+<li>this repository scanned <code>calibration/.corpus</code>: fourteen cloned third-party
+  projects, 556,808 LOC, 550 findings, all about code that is not ours;</li>
+<li><code>maintainability-agent</code> scanned <code>tools/validation/reports/</code>: 957,219 LOC of
+  stored audit output <em>about other repositories</em>, 4,929 findings, which
+  <strong>diluted five genuine criticals to an A−</strong>.</li>
+</ul>
+<p>A stored report is the worst possible input. It quotes findings verbatim —
+snippets, redacted secrets and all — so it manufactures findings about
+findings, and it inflates the LOC denominator that decides the grade at the
+same time. Both halves of the error push in the same direction.</p>
+<p><strong>Decision.</strong> Every default output filename is excluded by default, anywhere
+in the tree, plus the <code>.secure-code/</code> and <code>.maintainability/</code> state
+directories. The patterns are <em>derived from</em> <code>DEFAULT_OUTPUTS</code> rather than
+written out, so adding an output cannot leave a file this tool writes readable
+by the next run; <code>tests/unit/test_output_is_never_input.py</code> enforces that
+structurally, per the standing rule that an identified bug class ships a check
+that blocks its recurrence.</p>
+<p><strong>The deliberate limit.</strong> <code>vendor/</code>, <code>third_party/</code> and their kin are <strong>not</strong>
+excluded. Vendored code is deployed code, and hiding it by default would
+suppress real vulnerabilities in precisely the place nobody is reading.
+Stored analysis output is not code at all; that distinction is the whole
+basis of this decision, and widening it to "things that are not really ours"
+would give away the thing the tool is for.</p>
+<p>An operator with reports under a path we cannot guess still has to configure
+it — which is what MA did.</p>
+<h3 id="part-two-a-variable-reference-is-not-a-credential">Part two — a variable reference is not a credential</h3>
+<p><code>gitleaks.curl-auth-user</code> fires CRITICAL on <code>curl -sS -u "$SONAR_TOKEN:"</code> in a
+GitHub Actions workflow. No credential is present: <code>$SONAR_TOKEN</code> is how you
+write <em>not</em> putting one there, and it is the recommended idiom. Five
+occurrences on one repository. Reproduced here from a clean fixture, where
+this machine's own pre-commit hook blocked the commit — a third independent
+confirmation.</p>
+<p><strong>This became more expensive the same day.</strong> D17 made <code>secrets</code> count-like, so
+one false critical now costs roughly two grade points on a 100,000-line
+repository where it previously cost two tenths. Raising a category's weight
+raises the cost of being wrong in it; this is the matching precision work, and
+it should be read as part of D17 rather than separately.</p>
+<p><strong>Decision.</strong> A <code>secrets</code> finding whose source line holds a variable reference
+and no literal credential is demoted to <strong>§REVIEW</strong>, with the reason stated in
+the work order.</p>
+<p>It reads the file, because gitleaks runs with <code>--redact</code> and the variable name
+is exactly what got redacted — the message reads <code>curl -sS -u REDACTED</code>, so
+the distinction is not recoverable from the finding alone. <code>verify._is_silenced</code>
+already reads source back for a different question.</p>
+<p><strong>Conservative in both directions, deliberately.</strong></p>
+<ul>
+<li><strong>REVIEW, never ACCEPT.</strong> The finding stays in the work order, stays in the
+  report, and still escalates through <code>fail_on_category: [secrets]</code> from any
+  axis. Demotion reorders it; it does not silence it.</li>
+<li><strong>A reference plus a literal is still a leak.</strong> <code>curl -u "$USER:hunter2Passw0rd"</code>
+  is untouched. Half a line done correctly must not launder the other half.</li>
+<li><strong>Unreadable means unchanged.</strong> A missing file, a line past the end, a
+  directory, or a finding out of git history whose line the working tree no
+  longer has — every one of those leaves the finding in §FIX. Absence of
+  evidence is not evidence of a reference.</li>
+</ul>
+<p><strong>Known miss, stated.</strong> The literal test is the same dull shape
+<code>_looks_like_a_credential</code> uses — twelve or more characters with a digit and
+an uppercase letter — so an all-lowercase hex token such as <code>a3f9c2b1d4e5</code> is
+not caught, and a line carrying both it and a variable reference would be
+demoted to REVIEW. The error falls in the safe direction and the finding
+remains visible.</p>
+<p><strong>One note on how it was nearly shipped broken.</strong> The first literal test was
+<code>[A-Za-z0-9+/_-]{12,}</code>, which matches <code>//sonarcloud</code> inside
+<code>https://sonarcloud.io/api</code> — <code>/</code> and <code>+</code> are base64 alphabet and every URL is
+full of them. Every <code>curl</code> line carries a URL, so the demotion would never
+have fired on the one case it was written for. The parametrized test caught it
+on the first run.</p>
+<hr />
+<h2 id="d19-scoring_model-the-instrument-says-when-it-changed">D19 — <code>scoring_model</code>: the instrument says when it changed</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-11 · schema v2 · agreed with the <code>maintainability-agent</code> maintainer</p>
+<p><strong>Context.</strong> D16 and D17 changed what a <code>condition</code> number means without
+changing the shape of the document carrying it. MA stores that number in its
+scan history, and nothing in the document let it tell the two models apart —
+same schema, same fields, a different number for the same repository. MA's
+D155 closed it by keying trend comparability on our <strong>release version</strong>.</p>
+<p>That works and is far too broad. It opens a new series on <em>every</em> release of
+this tool, including ones that change no scoring at all, and a signal that
+fires constantly teaches people to ignore it. Documenting the noise in a
+changelog is documenting a defect rather than closing it.</p>
+<p><strong>Decision.</strong> A top-level <code>scoring_model</code> integer, and <code>schema_version</code> 2.</p>
+<ul>
+<li><strong>Top-level, not inside <code>producer</code>.</strong> <code>producer</code> says <em>who</em>; this says <em>what
+  model</em>. A consumer keying on it should not reach through an identity block.</li>
+<li><strong>An integer, not a version string.</strong> The only question is "same or
+  different". An integer cannot be padded, compared as text, or read as
+  ordering that means more than it does.</li>
+<li><strong>v2 is v1 plus one field.</strong> Every v1 key keeps its name, type and meaning.</li>
+</ul>
+<p><strong>Where the line falls.</strong> Bump when a repository's condition could differ for
+a reason that is not the repository: the normalizer, the slope, any weight
+table, the letter bands, the rank discount, <code>COUNT_LIKE_CATEGORIES</code>, the
+scanner floor, or the built-in rule profile (D10). Do not bump for
+documentation, adapters, CLI flags, output formats, performance, or a parser
+fix that does not change which findings are produced.</p>
+<p><strong>A new rule bumps it, and that was the arguable case.</strong> MA proposed exempting
+rules that "only add findings without rescoring existing ones". That resolves
+the other way by MA's own criterion: a repository containing
+<code>yaml.unsafe_load</code> scores lower the day that rule ships, with no change to the
+repository. Adding findings <em>is</em> rescoring, because the score is a function of
+the finding set, and a user must not read "we can see more now" as "your code
+got worse". D10 already gives the rule profile an id, a version and a digest,
+so this half is identifiable rather than hand-waved.</p>
+<p><strong>1 is reserved and is never emitted.</strong> It denotes every release before the
+field existed, and those releases do not share one model — the corroboration
+merge, the rank discount and D16 all moved the numbers. A v1 document omits
+the field and MA keys it on the release version, which fragments those
+correctly. Nothing may back-fill a 1.</p>
+<p><strong>A hand-maintained integer is a defect waiting to happen, so it is
+enforced.</strong> This project has already shipped exactly that: <code>pyproject.toml</code>
+said 0.4.0 while <code>__version__</code> said 0.3.0, and the release verified the half
+that was right. Here the failure is the invisible kind — every field still
+validates while MA splices two models into one line.</p>
+<p><code>test_scoring_drift.py</code> therefore digests the weight tables, the bonus, the
+slope, the letter bands, the count-like categories <strong>and the output of the
+real <code>score()</code> over a fixed matrix</strong>, and pins that digest to <code>SCORING_MODEL</code>.
+Constants are digested for a legible failure; the outputs are digested because
+a formula can change with no constant moving — <code>normalize()</code> did exactly that
+today. Both mutations were tested against the check before it was trusted:
+changing <code>GRADE_SLOPE</code> and changing the normalizer's exponent each fail it.</p>
+<p>Adding a digest row is how a model change is declared. Editing an existing row
+is redefining what that number meant, which is a lie a reviewer can see.</p>
+<p><strong>Rollout, and why there is no deadlock.</strong> MA's reader accepts v1 and v2 and
+keys on <code>scoring_model</code> when present, the producer version when absent. So
+MA's reader lands first and nothing breaks while this tool still emits v1;
+this tool then ships v2 whenever it is ready. Neither release blocks the
+other — which is better than the strict ordering D18 recorded, and D18's rule
+still governs any future bump where a consumer cannot fall back.</p>
+<p>The v1→v2 transition itself breaks the series once, because the key changes
+shape. That break is honest: it is the boundary where the instrument's
+self-description changed, and it happens once.</p>
+<hr />
+<h2 id="d20-a-findings-path-is-repository-relative-set-in-one-place">D20 — A finding's path is repository-relative, set in one place</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-14 · replaces the absolute-path convention D5 adopted · reported from <code>maintainability-agent</code></p>
+<p><strong>Context.</strong> <code>maintainability-agent</code> runs this tool with an absolute scan
+root. Its <code>.scignore.yaml</code> held a reviewed <code>gitleaks.curl-auth-user</code> entry
+scoped by <code>paths:</code> to two workflow files, and all five findings came back
+<code>suppressed: false</code> — live criticals behind a suppression someone had
+reviewed. Bandit findings did the same. Checkov findings on the same run
+matched their <code>paths:</code> entries.</p>
+<p>The cause was not gitleaks. <code>Finding.file_path</code> had no single convention. D5
+fixed a fail-open exclusion by making paths absolute in
+<code>Scanner._rooted</code>, inside the adapter constructor. The two adapters that
+build findings through SARIF ingest — Checkov and Trivy — never passed
+through it and stayed relative, and so did <code>--sarif-import</code>. Consumers then
+disagreed about what they were holding:</p>
+<ul>
+<li><code>SuppressionRule.matches</code> ran a repository-relative <code>paths:</code> glob against
+  <code>/Users/.../.github/workflows/x.yml</code>. It cannot match. This repository's own
+  <code>.scignore.yaml</code> shows the workaround that grew around it: every glob opened
+  with <code>*/</code> to swallow the checkout prefix.</li>
+<li><code>Finding.make_fingerprint</code> hashed the absolute path. An identical tree at two
+  locations produced different fingerprints for every finding, so a baseline or
+  a <code>fingerprint:</code> suppression recorded on one machine matched nothing on
+  another, or in CI.</li>
+<li>SARIF <code>artifactLocation.uri</code>, the Markdown report and the baseline's
+  <code>file_path</code> published one machine's directory layout.</li>
+<li><code>--changed-only</code>, the own-artifact exclusion and <code>--verify-against</code> scope
+  resolved relative paths — Checkov's and Trivy's — against the process working
+  directory, which is D5's defect arriving by the other door.</li>
+</ul>
+<p><strong>Decision.</strong> After intake, <code>Finding.file_path</code> is a POSIX path relative to the
+repository root (<code>find_repo_root(target)</code>, the root <code>.scignore.yaml</code>, the
+baseline and <code>--changed-only</code> already use), or an absolute path for a location
+outside it. <code>findings.anchor</code> sets it, once, on everything scanners and SARIF
+imports return, before any consumer runs. A relative report is taken as
+relative to the directory the scanner was pointed at; a <code>file://</code> URI is a
+path. The fingerprint is recomputed only when it was derived from the path
+being replaced, so control ids such as <code>unavailable.bandit</code> survive.
+<code>Scanner._rooted</code> is removed: a second place doing path work is how two
+conventions came to coexist.</p>
+<p>Every consumer that reads the disk joins the path onto the root: the D18
+line read-back, the exclusion and own-artifact check, the test and
+documentation classifier (whose patterns are relative to the <em>target</em>, not the
+root), <code>--changed-only</code>, and <code>--verify-against</code> scope.</p>
+<p><strong>Nothing users recorded stops meaning what it meant.</strong></p>
+<ul>
+<li>A <code>paths:</code> glob is also tried against the path with a leading <code>/</code>, so
+  <code>*/src/app.py</code> matches <code>src/app.py</code>. That keeps every <code>*/</code> entry working
+  without making a match depend on where the checkout lives — which matching
+  against the absolute path would have done, letting <code>*/tests/*</code> suppress an
+  entire repository cloned under a directory called <code>tests</code>.</li>
+<li>An absolute <code>file:</code> still matches the file it names.</li>
+<li>A baseline entry or a <code>fingerprint:</code> pin recorded under the absolute-path id
+  is accepted through <code>Finding.legacy_fingerprint(root)</code>. That id only ever
+  matched a checkout at the same path, so accepting it matches nothing it did
+  not match before. It is read and never written: <code>--bump-baseline</code> rewrites
+  entries under the portable id and keeps their <code>first_seen</code>.</li>
+</ul>
+<p><strong>Rejected: keep paths absolute and relativize at each boundary.</strong> That is
+the fingerprint, suppressions, JSON, SARIF, Markdown, the baseline and the
+work order — seven places to pass a root through, and the next output added is
+the eighth that forgets. One conversion at intake makes the portable form the
+only one downstream code can see.</p>
+<p><strong>Rejected: normalize per adapter.</strong> It is what D5 did, and two adapters were
+outside it within the same release. The test population is every registered
+scanner, through the real CLI pipeline, reporting both path shapes; mutating
+<code>anchor</code> to cover gitleaks alone fails it.</p>
+<p><strong>Rejected: break old baselines and document it.</strong> An upgrade that reports
+every acknowledged finding as new trips <code>fail_on_new</code> on a tree nobody
+changed. That is a gate failing for a reason that is not the repository, and a
+migration note does not make it one.</p>
+<p><strong>Not a <code>scoring_model</code> change (D19).</strong> No weight, normalizer, band or rule
+changed, and <code>test_scoring_drift.py</code> holds its digest. Condition moves only
+where an operator's configuration now takes the effect it always claimed — a
+suppression that matches, a test pattern that classifies a subdirectory audit
+correctly — and where a Checkov or Trivy finding and another scanner's finding
+at one line with one CWE now corroborate instead of counting twice, because
+their paths finally compare equal.</p>
+<p><strong>Not included.</strong> <code>paths: ["tests/"]</code>, the form README, <code>design.md</code> and the
+skill all document, has never matched anything: <code>fnmatch</code> gives a trailing
+slash no directory meaning. <code>exclude_patterns</code> does, through
+<code>git_tools._matches</code>. Sharing that matcher would widen what an existing entry
+suppresses, so it is a separate decision rather than a side effect of this one.
+It was taken the same day as D21.</p>
+<hr />
+<h2 id="d21-a-suppression-glob-means-what-an-exclude-pattern-means">D21 — A suppression glob means what an exclude pattern means</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-14 · closes the item D20 left out</p>
+<p><strong>Context.</strong> One configuration had two path-pattern languages. <code>exclude_patterns</code>,
+<code>test_patterns</code> and <code>docs_patterns</code> go through <code>git_tools._matches</code>, where a
+trailing <code>/</code> means "this directory, at any depth", a bare name matches at any
+depth, <code>**/</code> includes the root, and directory components glob — each of those
+found inert once and fixed (<code>test_exclude_patterns_are_live.py</code>).
+<code>.scignore.yaml</code> <code>paths:</code> used bare <code>fnmatch</code>, which has none of them.</p>
+<p>The cost was the documented example. README, <code>design.md</code> and the shipped skill
+all show <code>paths: ["tests/"]</code> for Bandit's <code>B101</code>, and it matched no finding
+under either path convention: <code>fnmatch</code> read <code>tests/</code> as a file literally named
+<code>tests/</code>. Every operator who copied it kept their test tree's <code>assert</code>s live. It
+is the defect D5 and D20 each closed a layer at a time: a setting that reads as
+intent, never errors, and hides nothing.</p>
+<p><strong>Decision.</strong> <code>paths:</code> globs are matched by <code>git_tools.matches_pattern</code>, the
+single public entry to the exclude matcher. D20's leading-slash rule stays, so
+<code>*/src/app.py</code> entries keep matching; it is the one place a suppression may
+match where an exclude would not, and only for an entry already written that
+way.</p>
+<p><strong>What widens, measured rather than asserted.</strong> A trailing-slash entry now
+matches its directory at any depth, and a bare-name entry such as
+<code>conftest.py</code> matches that file name at any depth. Every <code>paths:</code> entry in this
+repository's <code>.scignore.yaml</code> and in <code>maintainability-agent</code>'s selects exactly
+the tracked files it selected before — all of them name one file. The change
+reaches entries that did not work.</p>
+<p><strong>Rejected: a suppression-only syntax that is stricter.</strong> Anchoring patterns
+to the root would keep <code>tests/</code> from reaching <code>src/tests/</code>. It would also make a
+string mean one thing under <code>exclude_patterns</code> and another under <code>paths:</code> in the
+same repository, which is the defect. An operator who wants the root only
+writes the path they mean.</p>
+<p><strong>Rejected: fix the documentation instead.</strong> Rewriting the example as
+<code>tests/*</code> would make the docs true and leave the language split, and the next
+example would find it again.</p>
+<p><strong>Held by</strong> <code>tests/unit/test_suppression_globs_mean_what_excludes_mean.py</code>: a
+suppression and an exclusion must agree on every case the exclude matcher is
+pinned to, every shipped default at three depths, and every <code>paths:</code> pattern
+the documentation shows — which must also suppress what it names. The
+documented entry runs end to end with the real Bandit in
+<code>tests/integration/test_the_documented_suppression_suppresses.py</code>.</p>
+<hr />
+<h2 id="d22-what-reaches-code-scanning-is-what-should-become-an-alert">D22 — What reaches code scanning is what should become an alert</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-14 · narrows the SARIF-suppression decision in <code>sarif._suppressions</code> to the file a person reads</p>
+<p><strong>Context.</strong> <code>sarif._suppressions</code> marks every test-tree and documentation
+finding, and every <code>.scignore.yaml</code> suppression, with the SARIF-standard
+<code>suppressions</code> array, on the reasoning that it is "the field they honour". For
+GitHub code scanning it is not. An upload opens an alert for every result,
+suppressed or not, and GitHub's own <code>advanced-security/dismiss-alerts</code> action
+exists only to dismiss them afterwards.</p>
+<p>It went unseen while finding paths were absolute, because GitHub could not
+place those results on a pull request's lines. D20 made paths relative. The next
+pull request here added two test files and carried fourteen code-scanning review
+threads, twelve for <code>assert</code> in pytest, and branch protection required every one
+resolved before merge. The repository's default branch held over a hundred open
+alerts, all under <code>tests/</code>. Every repository using this project's action with
+SARIF upload gets the same.</p>
+<p><strong>Decision.</strong> Two SARIF files with two readers.</p>
+<ul>
+<li><code>--sarif-output</code> is unchanged: every result, a suppressed one carrying its
+  <code>suppressions</code> entry and reason. Suppressed, not omitted, in the record.</li>
+<li><code>--code-scanning-sarif-output</code> (<code>outputs.code_scanning_sarif_path</code>) is the
+  same document without the results that carry <code>suppressions</code>, and without rules
+  no remaining result uses. The action and this repository's CI upload it; both
+  still keep the record as an artifact.</li>
+</ul>
+<p>Nothing is hidden. The record, the JSON report, the Markdown report and the work
+order all still carry every finding. What changes is which of them becomes
+someone's alert.</p>
+<p><strong>What the build fails on stays in the upload.</strong> A secret on the test-tree or
+documentation axis is marked suppressed in the record, and the gate still
+escalates it from any axis (<code>scoring.GATED_FROM_ANY_AXIS</code>). Omitting it would
+fail a build on a finding the Security tab does not show. The upload therefore
+leaves out a side-axis result only when its category is not escalated, and keeps
+an escalated one without the suppression marker. An operator's reviewed
+<code>.scignore.yaml</code> entry is left out whatever its category: it carries a reason and
+an expiry, and returns as a live critical finding when it lapses. Found by asking
+the question of the first version of this decision, which omitted them; verified
+with gitleaks against a committed secret under <code>tests/</code>.</p>
+<p><strong>What this does not settle.</strong> Which files count as test tree or documentation
+is <code>test_patterns</code> and <code>docs_patterns</code>, and their defaults are broad —
+<code>examples/</code>, <code>**/*.txt</code>. A finding filed there by mistake was already unscored
+and tiered §ACCEPT; now it is also not an alert. The classification is the thing
+to fix if it is wrong, and this decision does not change it.</p>
+<p><strong>The existing alerts close themselves.</strong> Code scanning closes an alert when the
+next analysis in its category no longer contains it, so the first upload of the
+code-scanning file on the default branch retires the test-tree alerts rather than
+leaving them to be dismissed by hand.</p>
+<p><strong>Rejected: dismiss alerts after upload</strong> with <code>advanced-security/dismiss-alerts</code>.
+The review threads are posted when the upload is processed, before any later step
+runs, so pull requests would still block on them, and a second action would need
+<code>security-events: write</code> to rewrite alert state.</p>
+<p><strong>Rejected: stop marking side-axis findings suppressed.</strong> The field is correct
+SARIF and right for the record, and other consumers do read it.</p>
+<p><strong>Rejected: turn off required conversation resolution.</strong> It is how a real
+finding's thread stays unmerged, and it would give that up to silence noise.</p>
+<p><strong>Held by</strong> <code>tests/unit/test_code_scanning_sarif_raises_only_alerts.py</code>: every
+reason <code>_suppressions</code> suppresses is omitted from the upload and every live
+result is kept, through <code>emit</code>, through the CLI with the real Bandit, and in
+every upload step the project ships. The upload path is also held to be one of
+the run's own artifacts, with every other output, by
+<code>test_every_output_the_cli_writes_is_one_of_its_own_artifacts</code>.</p>
+<hr />
+<h2 id="d23-nothing-to-scan-is-not-a-failure-to-scan">D23 — Nothing to scan is not a failure to scan</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-17 · corrects the osv-scanner adapter's reading of its own exit codes</p>
+<p><strong>Context.</strong> The osv-scanner adapter carried this comment:</p>
+<pre><code class="language-text"># osv-scanner exits 1 on findings, 0 on clean, 127 on bad usage,
+# 128 on internal error.
+</code></pre>
+<p>and was written to it: anything outside <code>(0, 1)</code> became <code>failed()</code>. 128 is not
+an internal error. It is <code>No package sources found, --help for usage
+information.</code> — osv-scanner walked the tree and found no lockfile, manifest or
+SBOM to resolve. A repository of pure source with its dependencies declared
+nowhere osv-scanner reads produces it on every run.</p>
+<p><code>FAILED</code> is not a covering outcome, so <code>evaluate_coverage</code> held every such
+repository at <code>PARTIAL</code> permanently, and a partial coverage report is why the
+consuming maintainability-agent reported a security posture of <code>unverified</code>
+rather than a grade. This project is one of those repositories: it has no
+lockfile, so it could never grade its own security posture, and neither could
+any other repository shaped like it. The failure was silent in the sense that
+mattered — the run completed, the report was produced, and the one field that
+would have said why was a status nobody reads as an error.</p>
+<p><strong>Decision.</strong> Exit 128 maps to <code>not_applicable()</code>, with the reason stating what
+was absent. <code>NOT_APPLICABLE</code> already means "nothing here for this scanner to
+read" and is already excluded from what degrades coverage to <code>PARTIAL</code>, so no
+change to the coverage model was needed — only an adapter that reports the
+outcome the model already has. 127 and every other non-zero code remain
+<code>FAILED</code>.</p>
+<p><strong>A required scanner is still required.</strong> <code>NOT_APPLICABLE</code> is not in
+<code>COVERING_OUTCOMES</code>, so naming <code>osv_scanner</code> in <code>gates.require_scanners</code> for a
+repository with no package sources still fails the gate. That is correct and
+deliberate: an operator who requires dependency scanning of a repository that
+declares no dependencies has asserted something the repository does not
+support, and should hear about it. What changes is that a repository which
+never made that assertion is no longer punished for it.</p>
+<p><strong>Rejected: <code>--allow-no-lockfiles</code>.</strong> osv-scanner ships a flag that turns this
+case into exit 0. That would report <code>COMPLETED</code> over a run that read nothing,
+which is the same false assurance in the opposite direction — a clean
+dependency scan that scanned no dependencies. An outcome that names the absence
+is worth more than one that hides it.</p>
+<p><strong>Rejected: matching on the stderr text.</strong> The message is stable today, but
+keying behaviour to a sentence a tool prints makes a cosmetic upstream change
+into a silent regression. The exit code is the documented contract; the reason
+this adapter reports is its own words.</p>
+<p><strong>Held by</strong> <code>test_osv_finding_no_package_sources_does_not_degrade_coverage</code>
+(exit 128 is <code>NOT_APPLICABLE</code> and coverage stays <code>COMPLETE</code>) and
+<code>test_osv_reports_a_genuine_failure_as_a_failure</code> (127 is still <code>FAILED</code> and
+still <code>PARTIAL</code>), and by
+<code>tests/integration/test_osv_without_package_sources_is_not_applicable.py</code>,
+which runs the installed osv-scanner against a tree with no lockfile. The
+integration test exists because the defect was a belief about the tool that no
+mock could contradict: a mocked exit code is written from the same assumption
+as the code it checks.</p>
+<hr />
+<h2 id="d24-a-project-may-declare-what-it-is-and-be-reported-rather-than-scored">D24 — A project may declare what it is, and be reported rather than scored</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-18 · adds <code>capabilities</code> to the configuration</p>
+<p><strong>Context.</strong> A tool that runs external analyzers imports <code>subprocess</code> and
+spawns them. Bandit reports that — B404, B603, B607 — and the report is
+correct. It is also permanent: every run, forever, on a project whose entire
+purpose is to invoke other programs. maintainability-agent carried 62 such
+findings on its primary axis, which held its security condition at 3.76 (B+)
+and tripped <code>fail_on_new</code> with no baseline.</p>
+<p>Nothing in this tool could express "yes, that is what this is".</p>
+<ul>
+<li><code>exclude_patterns</code> stops the scan and leaves no trace in the report.</li>
+<li><code>scanners.bandit.extra_args: ["--skip", "B404"]</code> turns the check off, also
+  silently.</li>
+<li><code>.scignore.yaml</code> states a reason, which is better, but a suppression
+  <strong>expires</strong>. An architectural fact does not stop being true in a year, and
+  renewing it annually teaches people to renew rituals. It is also per-finding:
+  a subprocess call written next month is a new finding needing a new entry.</li>
+</ul>
+<p>The first two are the silence this project counts as a defect when it finds
+<code>NOSONAR</code> in someone else's tree (<code>_conformance</code>). The third is a treadmill.</p>
+<p><strong>Decision.</strong> The configuration may declare what the project does:</p>
+<pre><code class="language-json">&quot;capabilities&quot;: {
+  &quot;spawns_processes&quot;: &quot;Runs the analyzer pool as subprocesses. ADR 006.&quot;
+}
+</code></pre>
+<p>A finding whose rule <em>is</em> that capability being exercised is routed to its own
+axis — <code>declared: spawns_processes</code> — where it is <strong>counted, listed, and not
+scored</strong>. Nothing is hidden, nothing expires, and next month's subprocess call
+is already accounted for.</p>
+<p><strong>Declared, never inferred.</strong> The tool does not decide that a project looks
+like it spawns processes. It is told, in a file a reviewer reads, and the
+report names the declaration beside the findings it accounts for. Inference
+would make the grade depend on a guess about the codebase, which is a property
+this rubric has nowhere else.</p>
+<p><strong>The registry is enumerated and narrow.</strong> <code>CAPABILITY_RULES</code> maps a capability
+to explicit rule ids, so a reader can see exactly which observations a
+declaration accounts for. <strong>B602 (<code>shell=True</code>) is deliberately outside every
+capability</strong>: spawning a process is architecture, handing a string to a shell
+is a decision, and a project that declares the former has not excused the
+latter.</p>
+<p><strong>Path axes win.</strong> The declaration is checked <em>after</em> the test-tree and
+documentation routing. The first cut checked it first, on the reasoning that a
+declaration is about what code does rather than where it lives, and it moved
+492 test-tree findings onto the declaration — inflating what the declaration
+appeared to account for from 62 to 554 while emptying the tree's own axis. A
+subprocess call in the test tree is test tree; it was already unscored.</p>
+<p><strong>Declared axes still gate.</strong> They are passed to <code>gate_set</code> with the path axes,
+so <code>GATED_FROM_ANY_AXIS</code> still escalates. Declaring that this project spawns
+processes does not excuse a credential sitting next to one.</p>
+<p><strong>A declaration is falsifiable, and its cost is disclosed.</strong> Two guards, because
+a mechanism that moves a grade has to be auditable:</p>
+<ul>
+<li>a declaration matching no finding is reported as <code>unexercised</code>, so a config
+  cannot be padded against findings that have not arrived;</li>
+<li>the summary prints the score the same tree earns <strong>with the declarations
+  disregarded</strong>: <code>without declarations 3.76 (B+)</code>. A project that declares its
+  way up a band has to show that on its own report.</li>
+</ul>
+<p>That second guard is the answer to the obvious objection. Declarations move
+grades — maintainability-agent's moved a full band. So does <code>exclude_patterns</code>,
+further, and it has always been able to do so while leaving nothing behind to
+read. The difference this decision holds is not that the grade cannot move; it
+is that the movement is stated.</p>
+<p><strong>What this does not do.</strong> A declaration asserts an architecture, not its
+correctness. <code>parses_untrusted_xml</code> says the project reads XML it did not
+write; it does not say the parser is hardened, and this tool cannot check that.
+The findings stay in the report for exactly that reason.</p>
+<p><strong>Rejected: inferring capabilities from the tree.</strong> Counting subprocess calls
+and deciding a project "is a process-spawning tool" would remove the
+configuration step and the audit trail with it, and would make the grade a
+function of a heuristic.</p>
+<p><strong>Rejected: a <code>severity_overrides</code> entry per rule.</strong> It changes what the
+finding is called rather than what it is about, and leaves no statement of why.</p>
+<p><strong>Held by</strong> <code>tests/unit/test_declared_capabilities.py</code>: the rules a declaration
+claims and the ones it does not, <code>shell=True</code> outside every capability, an
+unexercised declaration named, a misspelled capability refused rather than
+silently declaring nothing, and an empty reason refused.</p>
+<p><em>Mutation:</em> checking the declaration before the path axes passes every
+rule-level test and moves 492 test-tree findings onto the declaration;
+admitting B602 into <code>spawns_processes</code> passes the routing tests and excuses the
+one subprocess finding that is a decision; dropping the <code>unknown_capabilities</code>
+check makes a typo declare nothing, route nothing, and score the findings the
+operator believed were accounted for, with no error anywhere.</p>
+<h2 id="d25-a-declared-axis-states-its-reason-on-the-page-or-it-is-not-a-disclosure">D25 — A declared axis states its reason on the page, or it is not a disclosure</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-18 · fixes D24 as shipped in 0.12.6</p>
+<p><strong>Context.</strong> D24 rests on one claim: a declaration moves a grade <em>in the open</em>,
+where <code>exclude_patterns</code> moves it further and leaves nothing to read. The
+reason the project wrote is the whole of that openness — it is what a reviewer
+reads to decide the declaration is still true.</p>
+<p>0.12.6 never printed it. The reason reached <code>capability_for</code>, routed the
+findings correctly, and stopped there. What a reader got was:</p>
+<pre><code>## Declared: spawns_processes
+
+- **Findings:** 62 — reported, not scored
+- **By severity:** low: 62
+</code></pre>
+<p>A grade moved, a count shown, and no statement of why — which is the shape D24
+exists to be the opposite of. The JSON was worse: <code>"note": ""</code>, an empty string
+in the field every other axis fills, so a consumer could not tell a declared
+axis from one whose note the tool forgot.</p>
+<p>The cause is ordinary. <code>_AXIS_NOTES</code> is a dict keyed by axis name, holding the
+sentence for <code>test tree</code>, <code>documentation</code> and <code>dependencies</code>. Those sentences
+are constants because they are the same for every project. A declared axis's
+sentence is not a constant — it belongs to the audited project — and a constant
+table has no way to hold it. <code>_AXIS_NOTES.get("declared: spawns_processes", "")</code>
+returned the default, exactly as written.</p>
+<p><strong>Decision.</strong> <code>AxisReport</code> carries its own <code>note</code>. Where an axis has one it
+wins; where it does not, the renderer's table answers as before. The CLI builds
+each declared axis with <code>cfg.capabilities[name]</code> verbatim, so the sentence in
+the configuration is the sentence in the report — Markdown and JSON both.</p>
+<p>The fixed axes are unchanged. Their justification is the tool's to write and
+stays where the tool keeps it.</p>
+<p><strong>Held by</strong> <code>tests/unit/test_declared_capabilities.py</code>: the axis carries the
+note, the Markdown section prints it, the JSON block carries it, a fixed axis
+keeps the sentence the tool holds, and — the one that matters — a full run from
+a config with <code>capabilities</code> to a rendered report finds the reason in it.</p>
+<p><em>Mutation:</em> every unit-level piece here passes with the CLI wiring removed.
+That is how 0.12.6 shipped: the renderer could print a note, the axis could
+hold one, and nothing put the project's reason into the axis. The end-to-end
+test is the only one that fails, and it asserts the routing worked first, so
+an empty axis cannot pass it by accident.</p>
+<h2 id="d26-this-tool-stands-alone-feeding-the-sibling-is-an-integration-not-a-purpose">D26 — This tool stands alone; feeding the sibling is an integration, not a purpose</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-18 · records stated product intent</p>
+<p><strong>Context.</strong> The relationship to <code>maintainability-agent</code> was written down in
+several places and the independence behind it was not. The README's second
+paragraph opened <em>"The sibling of maintainability-agent"</em>, <code>design.md</code> defined
+the tool as <em>"the security sibling of"</em> that project, and <code>product-intent.md</code>
+closed its positioning section the same way. Each sentence is true and none of
+them says the thing a reader most needs first: this is a product you install
+and run by itself.</p>
+<p>The gap surfaced as a dependency question. This project's <code>[mcp]</code> extra
+requires <code>mcp&gt;=1.0,&lt;2</code>; MA's MCP server requires <code>mcp&gt;=2</code>. Read as one system
+with two halves, that is an unresolvable conflict and a defect. Read as two
+products, it is neither — it is two independent things pinning independently,
+which is what independent things do. <code>ma-integration.md</code> already carried the
+operational warning; nothing stated the principle it follows from, so the
+warning looked like a workaround.</p>
+<p><strong>Decision.</strong> Stated as product intent: <strong>this tool is designed to be run on
+its own.</strong> Feeding MA's Security pillar is one thing it does (<a href="docs-decisions.html">D3</a>),
+not what it is for.</p>
+<p>The consequence that settles the dependency question: it owns its environment.
+Its constraints are chosen for a tool standing alone, and it is never obliged
+to share an interpreter, a virtualenv or a resolved dependency set with
+anything it integrates with — including its sibling. The integration is a
+<strong>file</strong>, <code>security-pillar.json</code>, precisely so that it never becomes a shared
+dependency graph.</p>
+<p>The asymmetry is worth stating plainly, because it is not symmetric. MA runs
+this tool in its own interpreter and reads its installed version, so
+<code>secure-code-agent</code> does belong in MA's environment. This project's <em>own</em> MCP
+server does not; it belongs in this project's. One document crosses between two
+dependency graphs that never have to agree.</p>
+<p><strong>Recorded in</strong> <code>product-intent.md</code> §5 principle 9 and §7 ("Sibling, not
+component"), <code>README.md</code> (lead and footer), <code>design.md</code> §1, and
+<code>ma-integration.md</code> ("Two products, two environments").</p>
+<p><strong>Not a code change.</strong> Nothing here alters behaviour, so nothing here is held
+by a falsifier. It is a statement of intent, and the honest place for it is the
+register that records intent rather than a test asserting a sentence exists.</p>
+<h2 id="d27-the-work-order-is-available-as-facts-not-only-as-prose">D27 — The work order is available as facts, not only as prose</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-19 · adds <code>--work-order-json</code> and <code>outputs.work_order_json_path</code></p>
+<p><strong>Context.</strong> <code>remediation.generate</code> writes Markdown. That is right for the two
+readers it was built for: the operator, who reads the work order, and the agent,
+which reads the prompt. It is the wrong thing to hand a <em>tool</em>.</p>
+<p><code>maintainability-agent</code> embeds this work order in its HTML report. It had only
+prose, so it wrapped the text in <code>&lt;pre&gt;</code> — and an operator who chose an HTML
+presentation got raw Markdown inside it: <code>##</code> headings, asterisks for bold,
+backticks around code, in a page where everything else was rendered. The
+consumer was not at fault. Prose is the one thing it cannot re-present, and
+parsing another tool's Markdown to draw it is worse than the symptom.</p>
+<p><strong>Decision.</strong> The same work order is emitted as data on request.</p>
+<pre><code>secure-code-agent . --work-order-json secure-code-work-order.json
+</code></pre>
+<p><strong>The same triage, not a second opinion.</strong> <code>as_data</code> calls
+<code>triage.partition</code> exactly as <code>generate</code> does, in the same order, with the
+same <code>_MAX_BLOCKS</code> and <code>_MAX_REVIEW_LINES</code> caps and an <code>omitted</code> count
+carrying the number <code>_overflow</code> prints. The two renderings cannot describe
+different work, which matters because a consumer's own rule is to reproduce
+this work order rather than re-rank it.</p>
+<p><strong>Facts, not the whole record.</strong> A finding carries what a renderer needs —
+what it is, where it is, what to do, and the citation that makes it
+checkable. The fingerprint, the baseline flag and the suppression note stay
+out: they are this tool's bookkeeping, and publishing them would make every
+internal field a contract a consumer could depend on.</p>
+<p><strong>Off unless declared</strong>, like the code-scanning SARIF, because the prompt is
+the artifact an operator reads and a second copy in JSON is only wanted by a
+consumer. The default <em>name</em> is still declared so the file this tool writes
+is excluded from the next scan — the gate that holds that caught the
+omission before release, which is what it is for.</p>
+<p><strong>Markdown is unchanged.</strong> This adds a representation; it replaces nothing.</p>
+<p><strong>Rejected: emitting HTML.</strong> The consumer would embed a second visual
+language in its own report — two stylesheets, two idioms, one page. Data lets
+it draw the work order in its own house style, for every skin it ships.</p>
+<p><strong>Rejected: putting the work order in <code>security-pillar.json</code>.</strong> That document
+is the pillar contract, versioned by its own <code>schema_version</code> and read for a
+practice level and a code condition. Folding a work order into it would make
+one document answer two questions.</p>
+<p><strong>Held by</strong> <code>tests/unit/test_work_order_as_data.py</code>: the tiers match
+<code>triage.partition</code>, a finding carries what a renderer needs, bookkeeping is
+withheld, the caps and <code>omitted</code> match the prose, a demoted finding carries
+its reason, an empty work order is data rather than an error, and the schema
+version is published.</p>
+<p><em>Mutation:</em> building the tiers from a second filter rather than
+<code>triage.partition</code> passes every field test and lets the data disagree with the
+prompt an operator is reading; dropping the caps shows a consumer more work
+than the artifact it is reproducing; emitting the whole <code>Finding</code> passes the
+renderer tests and publishes the fingerprint as a contract.</p>
+<h2 id="d28-a-declared-capabilitys-findings-are-not-patch-targets">D28 — A declared capability's findings are not patch targets</h2>
+<p><strong>Status:</strong> Accepted · 2026-09-20 · routes <code>declared:</code> axes to §ACCEPT</p>
+<p><strong>Context.</strong> One run of this tool said both of these things about the same
+repository, in the same minute:</p>
+<pre><code>security pillar:     5.00 (A+) — &quot;findings: no findings&quot;
+security work order: 68 to fix
+</code></pre>
+<p>The same 68. Every one of them a finding the operator had <strong>declared</strong>:
+<code>B404</code>, <code>B603</code> and <code>B607</code> — <code>subprocess</code> imports and calls in a tool whose
+entire purpose is running other programs — plus the XML and URL findings that
+project had also declared.</p>
+<p>D24 reached the scorer and the renderer and stopped there. <code>_ACCEPT_AXES</code> was
+a hardcoded pair — <code>test tree</code>, <code>documentation</code> — written before declared axes
+existed, and <code>tier_of</code> consulted it before anything else. So a declaration
+moved a finding off the code condition and left it sitting under a heading
+that says <strong>§FIX — patch these</strong>.</p>
+<p>Two costs. A reader of <code>maintainability-agent</code>'s HTML report sees a green
+pillar beside "68 to fix" and has to decide which half of one tool to believe.
+Worse, an agent handed that work order starts rewriting the architecture the
+operator explicitly declared — the exact outcome D24 exists to prevent,
+arriving through the artifact most likely to be acted on without review.</p>
+<p><strong>Decision.</strong> Every <code>declared:</code> axis is a suppression candidate, for the same
+reason the test tree is: where a finding lives outweighs which rule found it.</p>
+<p>Fixed at the axis rather than by adding a third literal to the set. A
+capability added to <code>CAPABILITY_RULES</code> tomorrow is covered without anyone
+remembering this, which is the property the hardcoded pair lacked and is why
+it was possible to ship D24 with this hole in it.</p>
+<p><strong>The primary axis is unchanged.</strong> An undeclared project gets the same finding
+in §FIX, correctly: it has not said this is what it is. The declaration is
+what changes the tier, not the rule.</p>
+<p><strong>Held by</strong> <code>tests/unit/test_declared_findings_are_not_patch_targets.py</code>: every
+declared capability accepts (parametrised over all four), the same finding on
+the primary axis still fixes, <code>partition</code> keeps it out of the fix tier, the
+work order nominates none of them, the pillar and the work order agree as one
+asserted property, and the named axes still accept.</p>
+<p><em>Mutation:</em> adding <code>"declared: spawns_processes"</code> to <code>_ACCEPT_AXES</code> as a
+literal passes every test that names that capability and fails the
+parametrised one the day a fifth capability is declared — which is the shape
+that produced this defect; checking the axis <em>after</em> the rule and confidence
+tests sends a declared low-confidence finding to §REVIEW, where it still asks
+an agent to judge architecture the operator already settled.</p>
+<h2 id="d29-an-untrusted-config-does-not-choose-a-scanners-command">D29 — An untrusted config does not choose a scanner's command</h2>
+<p><strong>Status:</strong> Accepted · 2026-10-02 · closes the argument half of threat-model T1
+· <strong>extended by <a href="#d32--the-audited-tree-does-not-grade-itself">D32</a></strong>, which covers what an in-tree config may claim about the <em>findings</em> rather than about the command</p>
+<p><strong>Context.</strong> The T1 ruling refused a command that an in-tree config named
+<em>from the tree</em>. Nothing refused the arguments. An in-tree
+<code>secure-code-agent.json</code> could set <code>scanners.bandit.command</code> to the system
+Python with <code>-c "&lt;anything&gt;"</code>, and <code>binary_version()</code> ran it during
+<code>--preflight</code>, before any scanner had audited anything. maintainability-agent's
+own audit found it: that tool runs this preflight before its user has said
+"run", so asking it about a hostile repository executed the repository's code.</p>
+<p><strong>Decision.</strong> A config the audited tree supplies — inside the containment
+root, without <code>--trust-target-config</code> — does not choose any scanner's
+command. The scanner resolves as it would with no config (its binary on
+<code>PATH</code>, or its Python module), records <code>ignored_command</code>, and the preflight
+row says so. A config outside the tree, and <code>--trust-target-config</code>, keep the
+command as before.</p>
+<p><strong>Consequences.</strong> A repository that set a command for a reason of its own —
+a tree-local virtualenv, a wrapper — now gets the default scanner unless its
+owner passes <code>--trust-target-config</code>. That is the trade T1 already made for
+executables, extended to the arguments that made the executable check
+decorative.</p>
+<hr />
+<h2 id="d30-an-adapter-judges-its-own-tools-exit-codes-and-_exec-judges-none">D30 — An adapter judges its own tool's exit codes, and <code>_exec</code> judges none</h2>
+<p><strong>Status:</strong> Accepted · 2026-10-02 · answers
+<a href="docs-product-intent.html"><code>product-intent.md</code></a> §8 question 8</p>
+<p><strong>Context.</strong> <code>Scanner._exec</code> took an <code>allowed_exits</code> tuple and did nothing
+with it. Both of its branches returned the <code>CompletedProcess</code> unchanged, so
+the parameter could not affect any run. Fourteen adapters passed one anyway,
+and the knowledge ended up written twice in most of them — <code>_exec(...,
+allowed_exits=(0, 183))</code> sitting beside <code>if r.returncode not in (0, 183)</code> —
+with only the second copy doing anything. This is §3 of
+<a href="docs-architecture.html"><code>architecture.md</code></a>, two sources of truth, with the unusual
+property that one source was inert from the beginning.</p>
+<p>The cost was not theoretical. <code>bandit_scanner.py</code> declared <code>(0, 1)</code> to
+<code>_exec</code> and then checked no exit code at all beyond the timeout sentinel.
+Bandit exits 2 on an internal error and can still emit a JSON envelope, so
+that run was parsed, found to contain no results, and reported <code>COMPLETED</code>
+with zero findings: a clean scan of a tree bandit never finished reading.
+A false green, against §4 criterion 1 — <em>a green gate means something</em>.
+It was found by the first unit tests written directly against
+<code>_execution.py</code>, not by reading the adapters.</p>
+<p><strong>Decision.</strong> Exit-code policy belongs to the adapter. <code>_exec</code> returns what
+the process did and judges nothing; <code>allowed_exits</code> is deleted rather than
+implemented. Each adapter states its own tool's codes once, as a named
+constant where it has more than one, and acts on them itself.</p>
+<p><strong>Why not make <code>_exec</code> enforce it.</strong> That is the tidier-looking option and it
+was rejected on evidence. <code>_exec</code> returns a <code>CompletedProcess</code> because every
+caller needs the stdout; enforcement would need a second channel to say
+"this code is unacceptable" that fifteen call sites must then act on, and
+each would still need its own branch — 1 means <em>findings</em> to bandit, 183 to
+trufflehog, and <em>failure</em> to hadolint. The result is the same number of
+inline checks plus a mechanism. The knowledge is genuinely per-tool, so the
+single source of truth is the adapter, not the helper.</p>
+<p><strong>Consequences.</strong> A scanner that fails in a way its adapter does not
+recognise now fails its coverage instead of reporting a clean scan. For
+bandit specifically, exit 2 becomes <code>FAILED</code> carrying bandit's stderr, where
+it previously became a passing empty result. Repositories where bandit
+errors silently will start reporting failed coverage — which is the point:
+coverage says <em>we do not know</em> rather than <em>nothing is there</em>.</p>
+<hr />
+<h2 id="d31-an-overriding-cwe-decides-the-owasp-category-derived-from-it">D31 — An overriding CWE decides the OWASP category derived from it</h2>
+<p><strong>Status:</strong> Accepted · 2026-10-02 · answers
+<a href="docs-product-intent.html"><code>product-intent.md</code></a> §8 question 9</p>
+<p><strong>Context.</strong> <code>_resolve_standards</code> ranks three sources for a finding's CWE:
+an adapter's <code>cwe_override</code> first, then the curated map, then what the tool
+said about its own rule. OWASP was not ranked at all. It read
+<code>entry.owasp_top10 or owasp_for_cwe(canonical_cwe)</code>, so the curated OWASP id
+survived a CWE that had just overruled the curated CWE.</p>
+<p>Bandit's <code>B608</code> is CWE-89 / A03 in the map. A Semgrep rule asserting CWE-22
+produced a finding carrying <strong>CWE-22 with A03</strong> — path traversal filed under
+Injection. Two standards in one row disagreeing about what kind of defect it
+was, and neither wrong on its own terms. Found by the first unit tests
+written directly against <code>_finding_builder.py</code>, which had pinned the
+behaviour as a documented oddity rather than judging it.</p>
+<p><strong>Decision.</strong> When an adapter overrides the CWE, the OWASP category is
+derived from the override. An adapter asserting a more specific CWE is
+asserting the weakness, not merely its number, and the category computed
+from a weakness must describe that weakness.</p>
+<p>There is <strong>no fallback</strong> to the curated id when the override maps to no Top
+10 bucket. That id describes the CWE the override replaced, so falling back
+would reinstate the same incoherence in the case most likely to be
+misread. <code>None</code> — "no Top 10 category" — is the honest answer, and the
+existing rule that a CWE outside the Top 10 yields no OWASP id already
+establishes it.</p>
+<p>Without an override the curated id still wins. It is reviewed rather than
+computed, and it is the only source that also carries ASVS, SSDF and a fix
+hint, so deriving unconditionally would discard reviewed mapping.</p>
+<p><strong>Consequences.</strong> Semgrep is the only adapter that passes <code>cwe_override</code> —
+verified, not assumed — so this changes the OWASP column for Semgrep
+findings whose rule metadata names a CWE the curated map maps differently,
+and nothing else.</p>
+<p><strong>No score changes, and no corpus re-measurement.</strong> This was expected to move
+D17's published figures and does not: <code>scoring.py</code> never reads
+<code>owasp_top10</code>, the field is not an input to <code>Finding.make_fingerprint</code>, and
+suppression matching does not use it. So the grade, the baseline identity and
+the calibration study are all untouched, and the change is confined to what a
+report shows. Checked before concluding it, because the opposite assumption
+would have cost a corpus run.</p>
+<hr />
+<h2 id="d32-the-audited-tree-does-not-grade-itself">D32 — The audited tree does not grade itself</h2>
+<p><strong>Status:</strong> Accepted · 2026-10-02 · extends <a href="#d29--an-untrusted-config-does-not-choose-a-scanners-command">D29</a>
+to policy</p>
+<p><strong>Context.</strong> D29 settled that a config the audited tree supplies does not
+choose a scanner's <em>command</em>. It said nothing about what that config may
+claim about the findings. <code>severity_overrides</code> and <code>category_overrides</code> were
+applied unconditionally, from any config — including one discovered inside
+the tree being audited, with no <code>--trust-target-config</code>.</p>
+<p>Measured, on a file containing one <code>subprocess.run(cmd, shell=True)</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>run</th>
+<th style="text-align: right;">overall</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>honest</td>
+<td style="text-align: right;"><strong>0.00 (F)</strong></td>
+</tr>
+<tr>
+<td>plus an in-tree <code>secure-code-agent.json</code> with <code>severity_overrides: {B602: informational}</code></td>
+<td style="text-align: right;"><strong>5.00 (A+)</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>Same tree, same finding, same scanner. <code>INFORMATIONAL</code> is weight 0.0 in
+<code>SEVERITY_WEIGHT</code>, so re-labelling a finding removes it from the score while
+leaving it in the report — the number moves and the evidence still looks
+present. The audited party moved its own grade from F to A+.</p>
+<p>This is §4 criterion 1 — <em>a green gate means something</em> — made falsifiable
+by the one actor with a motive to falsify it. It is also promise <strong>P3</strong> from
+the other side: P3 refuses <em>"any input whose removal raises the graded
+field"</em>, and this is an input whose <strong>addition</strong> raises it. The promise was
+written about withholding evidence and the hole was in supplying it.</p>
+<p>The intent was already recorded, which is the part worth noting.
+<code>tests/integration/test_declared_config_is_live.py</code> deliberately writes its
+fixture config <em>outside</em> the tree, with the comment: <em>"the tree's own config
+does not choose a scanner's command (D29) and is not read for policy
+either."</em> The second half of that sentence described no code.</p>
+<p><strong>Decision.</strong> A config inside the containment root, without
+<code>--trust-target-config</code>, does not supply <code>severity_overrides</code> or
+<code>category_overrides</code>. They are dropped immediately after the config is
+loaded — before any consumer reads them, so no later code path can
+reintroduce them — and the run warns on stderr naming the file and both
+routes to applying it.</p>
+<p><strong>Why not refuse the keys outright.</strong> A repository carrying this config for
+its own operator's use is the ordinary case, not the attack. The operator
+says so with <code>--trust-target-config</code>, or by keeping the config outside the
+tree; both already worked, and tests now hold both open. Refusing
+unconditionally would delete a real feature to close a hole that has an
+owner-shaped escape hatch already built.</p>
+<p><strong>Why a warning rather than a failure.</strong> Failing closed would make this
+tool refuse to audit any repository that happens to carry these keys,
+including every repository that set them honestly before this release. The
+grade is correct either way; what the operator needs is to know their
+setting did not apply.</p>
+<p><strong>Consequences.</strong> A repository that set <code>severity_overrides</code> honestly, and
+audits itself without the flag, will see its grade move to the ungraded
+value and a warning saying why. That is the same trade D29 made for
+executables, extended to the field those executables were being pointed at.</p>
+<p><strong>Scope note for the standards overlay.</strong> The operator overlay that §8
+question 3 asks for may add mapping entries and may <strong>not</strong> restate
+<code>severity</code>, <code>confidence</code> or <code>category</code>. Those three are the scoring inputs,
+and an overlay that set them would reopen this exact hole through a second
+door.</p>
+<footer>Rendered from <code>docs/decisions.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

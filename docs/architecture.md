@@ -1,6 +1,6 @@
 # secure-code-agent — Architecture Audit
 
-> Status: **v0.12.10 — 2026-10-02.** Assessment of the system as built.
+> Status: **v0.12.11 — 2026-10-03.** Assessment of the system as built.
 > Companion docs: [`design.md`](design.md) states the intended architecture;
 > this document records where the implementation diverges from it and which
 > divergences are generating recurring defects.
