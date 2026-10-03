@@ -315,6 +315,90 @@ def apply(
     return out
 
 
+def unused_findings(
+    findings_rules: list[SuppressionRule],
+    findings: list[Finding],
+    path: Path,
+    root: Path | None = None,
+) -> list[Finding]:
+    """One informational finding per suppression that matched nothing.
+
+    A suppression is a reviewed decision with a reason and an expiry. One
+    that matches no current finding is none of those things any more: it
+    reads as active protection and protects nothing. Two ways to get there,
+    and only one of them is good news —
+
+    - the underlying finding was fixed, and the entry should be deleted;
+    - the code moved, and the entry silently stopped covering it.
+
+    The second is what happened when `Scanner` was split: the `B404` and
+    `B603` entries named `scanners/base.py`, the subprocess code moved out
+    to `_execution.py` and `_resolution.py`, and four reviewed findings
+    came back as new work while the entries meant to cover them sat there
+    naming a file that still existed and no longer contained any of it.
+
+    `tests/unit/test_no_suppression_path_matches_nothing.py` catches the
+    weaker version of this — a glob whose file is gone — and passed against
+    that incident for exactly the reason above. Only a run holding the
+    findings can answer the real question, so this is computed here rather
+    than linted over the file.
+
+    **Expired rules are excluded.** They do not suppress, so they match
+    nothing by construction, and `expired_findings` already reports them as
+    CRITICAL. One entry must not produce two findings about itself, and
+    expiry is the more specific statement.
+
+    **INFORMATIONAL, so the score cannot move.** `SEVERITY_WEIGHT` prices it
+    at 0.0. A repository is not more vulnerable for holding stale
+    suppressions, and a tidiness finding that changed a grade would be the
+    next thing an operator suppresses.
+    """
+    out: list[Finding] = []
+    for r in findings_rules:
+        if r.expired:
+            continue
+        if any(r.matches(f, root) for f in findings):
+            continue
+        rid = f"suppressions.unused.{r.rule_id}"
+        snippet = f"rule_id: {r.rule_id}; expires {r.expires.isoformat()}; reason: {r.reason}"
+        out.append(
+            Finding(
+                rule_id=rid,
+                scanner="suppressions",
+                fingerprint=Finding.make_fingerprint(
+                    canonical_cwe=None,
+                    rule_id=rid,
+                    file_path=path,
+                    code_snippet=snippet,
+                ),
+                canonical_cwe=None,
+                owasp_top10=None,
+                asvs_section=None,
+                nist_ssdf="PO.4.1",
+                category=Category.POLICY_DOCS,
+                severity=Severity.INFORMATIONAL,
+                confidence=Confidence.HIGH,
+                file_path=path,
+                line_start=0,
+                line_end=None,
+                code_snippet=snippet,
+                message=(
+                    f"Suppression for rule `{r.rule_id}` matched no finding in this "
+                    f'run: "{r.reason}". Either the finding was fixed and this entry '
+                    "should be deleted, or the code it covered moved and the entry no "
+                    "longer protects it."
+                ),
+                short_desc="Suppression with no subject.",
+                fix_hint=(
+                    "Delete the entry if the finding is fixed, or point it at where the "
+                    "code moved. An entry that matches nothing reads as protection and "
+                    "provides none."
+                ),
+            )
+        )
+    return out
+
+
 def expired_findings(rules: list[SuppressionRule], path: Path) -> list[Finding]:
     """One CRITICAL finding per expired suppression — you can't ship
     `reason: 'we'll fix it later'` forever."""

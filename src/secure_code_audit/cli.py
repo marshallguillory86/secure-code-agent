@@ -554,9 +554,22 @@ def _do_audit(args: argparse.Namespace) -> int:
         )
         return 1
     all_findings = suppressions.apply(all_findings, sup_rules, root)
+    # Snapshot the scanner findings before the synthetic ones are appended.
+    # `unused_findings` asks whether each rule still has a subject, and a
+    # wildcard rule with `paths` would happily match the expired-suppression
+    # finding about `.scignore.yaml` itself — reporting itself as used
+    # because it matched a finding about suppressions.
+    scanner_findings = list(all_findings)
     all_findings.extend(
         anchor(
             suppressions.expired_findings(sup_rules, suppression_path),
+            scanned=scanned,
+            root=root,
+        )
+    )
+    all_findings.extend(
+        anchor(
+            suppressions.unused_findings(sup_rules, scanner_findings, suppression_path, root),
             scanned=scanned,
             root=root,
         )

@@ -8,7 +8,13 @@ from pathlib import Path
 import pytest
 
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
-from secure_code_audit.suppressions import apply, expired_findings, load
+from secure_code_audit.scoring import SEVERITY_WEIGHT
+from secure_code_audit.suppressions import (
+    apply,
+    expired_findings,
+    load,
+    unused_findings,
+)
 
 
 def _f(rule_id="B608", file_path=Path("a.py")):
@@ -347,3 +353,106 @@ def test_a_suppression_file_without_pyyaml_is_an_error_not_an_empty_ruleset(tmp_
 
     assert rules == []
     assert any("pyyaml not installed" in e for e in errors), errors
+
+
+def _rule(tmp_path, body: str):
+    """One loaded rule, asserting the fixture itself is valid."""
+    path = tmp_path / ".scignore.yaml"
+    _write(path, body)
+    rules, errors = load(path)
+    assert errors == [], errors
+    assert len(rules) == 1
+    return path, rules
+
+
+def test_a_suppression_that_matches_nothing_is_reported(tmp_path):
+    """A suppression whose subject is gone reads as protection and protects nothing.
+
+    This is the half `test_no_suppression_path_matches_nothing.py` cannot
+    reach. That lint catches a glob whose *file* is gone; it passed against
+    the real incident, where `scanners/base.py` still existed and the
+    subprocess code had moved out of it to two new modules. The `B404` and
+    `B603` entries still named `base.py`, matched a real tracked file, and
+    covered nothing — four reviewed findings came back as new work while
+    the entries meant to cover them sat there looking active.
+
+    Only a run that has the findings in hand can answer this, which is why
+    it belongs here and not in a lint over the file.
+    """
+    path, rules = _rule(
+        tmp_path,
+        "- rule_id: B999\n  reason: covers a scanner we no longer run\n  expires: 2026-12-01\n",
+    )
+
+    found = unused_findings(rules, [_f(rule_id="B608")], path)
+
+    assert len(found) == 1
+    assert "B999" in found[0].message
+    assert found[0].rule_id == "suppressions.unused.B999"
+
+
+def test_a_suppression_that_still_matches_is_not_reported(tmp_path):
+    """The falsifier. Reporting every rule would make the check noise.
+
+    A suppression doing its job is the normal case, and a check that fires
+    on it would be turned off within a week.
+    """
+    path, rules = _rule(
+        tmp_path,
+        "- rule_id: B608\n  reason: parameterized elsewhere\n  expires: 2026-12-01\n",
+    )
+
+    assert unused_findings(rules, [_f(rule_id="B608")], path) == []
+
+
+def test_an_expired_suppression_is_not_also_reported_as_unused(tmp_path):
+    """One entry must not produce two findings about itself.
+
+    An expired rule does not suppress — `apply` skips it — so it matches
+    nothing in practice and would otherwise be reported twice: once as
+    expired, which is CRITICAL and actionable, and once as unused, which
+    would be wrong. Expiry is the more specific statement, so it wins.
+    """
+    path, rules = _rule(
+        tmp_path,
+        "- rule_id: B608\n  reason: ran out of time\n  expires: 2020-01-01\n",
+    )
+
+    assert rules[0].expired
+    assert expired_findings(rules, path) != []
+    assert unused_findings(rules, [_f(rule_id="B608")], path) == []
+
+
+def test_an_unused_suppression_cannot_move_the_score(tmp_path):
+    """INFORMATIONAL carries weight 0.0, and that is load-bearing here.
+
+    Tidiness must not change a grade. A repository with stale suppressions
+    is not more vulnerable for having them, and a finding that moved the
+    number would make this check something operators suppress in turn.
+    """
+    path, rules = _rule(
+        tmp_path,
+        "- rule_id: B999\n  reason: stale\n  expires: 2026-12-01\n",
+    )
+
+    found = unused_findings(rules, [], path)
+
+    assert found[0].severity is Severity.INFORMATIONAL
+    assert SEVERITY_WEIGHT[found[0].severity] == 0.0
+    assert found[0].category is Category.POLICY_DOCS
+
+
+def test_no_findings_at_all_still_reports_every_rule_as_unused(tmp_path):
+    """A clean tree does not excuse a suppression from having a subject.
+
+    Zero findings is the case where every suppression is unused, and the
+    tempting shortcut — treat an empty finding list as "nothing to say" —
+    would hide exactly the repository that has fixed everything and never
+    cleaned up its .scignore.yaml.
+    """
+    path, rules = _rule(
+        tmp_path,
+        "- rule_id: B608\n  reason: parameterized elsewhere\n  expires: 2026-12-01\n",
+    )
+
+    assert len(unused_findings(rules, [], path)) == 1
