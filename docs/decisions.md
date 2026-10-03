@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.10 — 2026-10-02.** The decision register. D1–D31.
+> Status: **v0.12.10 — 2026-10-02.** The decision register. D1–D32.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -44,6 +44,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D29 | An untrusted config does not choose a scanner's command | 2026-10-02 | Accepted |
 | D30 | An adapter judges its own tool's exit codes, and `_exec` judges none | 2026-10-02 | Accepted |
 | D31 | An overriding CWE decides the OWASP category derived from it | 2026-10-02 | Accepted |
+| D32 | The audited tree does not grade itself | 2026-10-02 | Accepted |
 
 ---
 
@@ -1835,6 +1836,7 @@ an agent to judge architecture the operator already settled.
 ## D29 — An untrusted config does not choose a scanner's command
 
 **Status:** Accepted · 2026-10-02 · closes the argument half of threat-model T1
+· **extended by [D32](#d32--the-audited-tree-does-not-grade-itself)**, which covers what an in-tree config may claim about the *findings* rather than about the command
 
 **Context.** The T1 ruling refused a command that an in-tree config named
 *from the tree*. Nothing refused the arguments. An in-tree
@@ -1951,3 +1953,71 @@ suppression matching does not use it. So the grade, the baseline identity and
 the calibration study are all untouched, and the change is confined to what a
 report shows. Checked before concluding it, because the opposite assumption
 would have cost a corpus run.
+
+---
+
+## D32 — The audited tree does not grade itself
+
+**Status:** Accepted · 2026-10-02 · extends [D29](#d29--an-untrusted-config-does-not-choose-a-scanners-command)
+to policy
+
+**Context.** D29 settled that a config the audited tree supplies does not
+choose a scanner's *command*. It said nothing about what that config may
+claim about the findings. `severity_overrides` and `category_overrides` were
+applied unconditionally, from any config — including one discovered inside
+the tree being audited, with no `--trust-target-config`.
+
+Measured, on a file containing one `subprocess.run(cmd, shell=True)`:
+
+| run | overall |
+| --- | ---: |
+| honest | **0.00 (F)** |
+| plus an in-tree `secure-code-agent.json` with `severity_overrides: {B602: informational}` | **5.00 (A+)** |
+
+Same tree, same finding, same scanner. `INFORMATIONAL` is weight 0.0 in
+`SEVERITY_WEIGHT`, so re-labelling a finding removes it from the score while
+leaving it in the report — the number moves and the evidence still looks
+present. The audited party moved its own grade from F to A+.
+
+This is §4 criterion 1 — *a green gate means something* — made falsifiable
+by the one actor with a motive to falsify it. It is also promise **P3** from
+the other side: P3 refuses *"any input whose removal raises the graded
+field"*, and this is an input whose **addition** raises it. The promise was
+written about withholding evidence and the hole was in supplying it.
+
+The intent was already recorded, which is the part worth noting.
+`tests/integration/test_declared_config_is_live.py` deliberately writes its
+fixture config *outside* the tree, with the comment: *"the tree's own config
+does not choose a scanner's command (D29) and is not read for policy
+either."* The second half of that sentence described no code.
+
+**Decision.** A config inside the containment root, without
+`--trust-target-config`, does not supply `severity_overrides` or
+`category_overrides`. They are dropped immediately after the config is
+loaded — before any consumer reads them, so no later code path can
+reintroduce them — and the run warns on stderr naming the file and both
+routes to applying it.
+
+**Why not refuse the keys outright.** A repository carrying this config for
+its own operator's use is the ordinary case, not the attack. The operator
+says so with `--trust-target-config`, or by keeping the config outside the
+tree; both already worked, and tests now hold both open. Refusing
+unconditionally would delete a real feature to close a hole that has an
+owner-shaped escape hatch already built.
+
+**Why a warning rather than a failure.** Failing closed would make this
+tool refuse to audit any repository that happens to carry these keys,
+including every repository that set them honestly before this release. The
+grade is correct either way; what the operator needs is to know their
+setting did not apply.
+
+**Consequences.** A repository that set `severity_overrides` honestly, and
+audits itself without the flag, will see its grade move to the ungraded
+value and a warning saying why. That is the same trade D29 made for
+executables, extended to the field those executables were being pointed at.
+
+**Scope note for the standards overlay.** The operator overlay that §8
+question 3 asks for may add mapping entries and may **not** restate
+`severity`, `confidence` or `category`. Those three are the scoring inputs,
+and an overlay that set them would reopen this exact hole through a second
+door.

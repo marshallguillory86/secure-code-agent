@@ -494,6 +494,8 @@ def _split_axes(
 
 def _do_audit(args: argparse.Namespace) -> int:
     cfg, target, root = _prepare_audit(args)
+    # Before any consumer reads them: the audited tree does not grade itself.
+    cfg = _refuse_target_policy(cfg, target)
     _require_configured_gates(args, cfg)
     # Before anything is resolved or written, and before any scanner runs.
     _assert_config_writes_are_contained(cfg, root, target)
@@ -1138,6 +1140,48 @@ def _write_outputs(
     # is the only output that carries both axes plus the practice level.
     if paths.security_pillar is not None and pillar is not None:
         pillar_mod.write(pillar, paths.security_pillar)
+
+
+#: Config keys that move the grade, and so may not come from the audited tree.
+#: `severity_overrides` sets a finding's weight — `INFORMATIONAL` is 0.0 in
+#: `SEVERITY_WEIGHT`, so re-labelling removes a finding from the score while
+#: leaving it in the report. `category_overrides` moves it between the
+#: per-category rates, and the worst category drives the overall.
+_GRADING_KEYS = ("severity_overrides", "category_overrides")
+
+
+def _refuse_target_policy(cfg: config_mod.Config, target: Path) -> config_mod.Config:
+    """Drop grading keys supplied by the audited tree. Returns the config to use.
+
+    D29 settled that a config the tree supplies does not choose a scanner's
+    command. It said nothing about what that config may claim about the
+    findings, and these two keys were applied from any config, including one
+    discovered inside the tree, with no `--trust-target-config`.
+
+    Measured on one `subprocess.run(cmd, shell=True)`: 0.00/F honestly, and
+    5.00/A+ with an in-tree `severity_overrides` mapping B602 to
+    informational. The audited party moved its own grade, which is §4
+    criterion 1 falsifiable by the one actor with a motive, and promise P3
+    from the other side — P3 refuses an input whose *removal* raises the
+    graded field, and this is one whose *addition* raises it.
+
+    Not silent, and not fatal. A repository may carry this config for its
+    own operator's use, and that operator says so with
+    `--trust-target-config` or by keeping the config outside the tree —
+    exactly the two routes that already work for a command.
+    """
+    if not config_mod.target_config_is_untrusted(cfg, target):
+        return cfg
+    ignored = [key for key in _GRADING_KEYS if getattr(cfg, key)]
+    if not ignored:
+        return cfg
+    for key in ignored:
+        sys.stderr.write(
+            f"WARNING: {key} in {cfg.source_path} is inside the audited tree and "
+            f"changes the grade, so it was ignored. Pass --trust-target-config, or "
+            f"keep the configuration outside the tree, to apply it.\n"
+        )
+    return replace(cfg, severity_overrides={}, category_overrides={})
 
 
 def _apply_overrides(findings: list[Finding], cfg: config_mod.Config) -> list[Finding]:
