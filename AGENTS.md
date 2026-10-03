@@ -1,4 +1,4 @@
-<!-- WORKSPACE-PREAMBLE v4 — managed by [private]. Do not edit below
+<!-- WORKSPACE-PREAMBLE v6 — managed by [private]. Do not edit below
      this line by hand; edit [private]/claude/repo-preamble.md and run
      ./install.sh. Repo-specific rules go AFTER the end marker. -->
 
@@ -36,6 +36,12 @@ never tested at all.
 **Roles.** Claude implements. Codex writes tests and edits docs. Grok audits,
 in personal repos only. Claude is not tests-only, and does not audit its own
 work and call it verified.
+
+**Local models.** First-pass sub-agents on this machine, not a seat and not
+the hostile audit. Call `~/.ai-profiles/bin/ask-local` (absolute path) the
+same way you call `codex exec`. Name the model and the task in the stream
+before the call, and say what came back. Long calls in the background.
+Details: `~/repos/LOCAL-MODELS.md`.
 
 **A repo uses only the AI subscriptions its organisation pays for.** The
 repo's `.ai-profile` marker names the organisation. [private]
@@ -75,6 +81,27 @@ fix. Before 1.0 a feature is a minor bump (0.9.1 → 0.10.0).
   rendered copy follows. Where a repo has a version lint or hook, it enforces
   this; where it does not, you do.
 
+**Docs as code, with an HTML site per repo.** Every repo renders all of its
+documents into one browsable HTML site, committed with them. The rendered copy
+is generated, never hand-edited, and changes in the same commit as its source.
+A repo without one is missing it.
+
+**Every repo runs MA (`maintainability-agent`) for code quality, first.** Secure
+code is integrated into MA and also runs independently as `secure-code-agent`.
+Grok's audits are targeted and supplemental to an MA audit. An LLM audit (Grok
+or a sub-agent), including the full top-down after a class-close, runs only when
+he asks for it.
+
+**Local preview first, then the batched PR.** While developing a feature, show
+him the real artifact before the pipeline, adapted to what the repo produces: a
+local server or `wrangler dev` URL for a web app; for a CLI, library or docs
+repo, before/after of the affected outputs (rendered HTML report or docs on
+localhost, markdown, changed JSON fields, CLI text). The onion, inside out: red
+tests → code → unit tests green → his preview → one batch (branch, gate run,
+PR, CI) → release → his final UAT in production. After a release, confirm the
+version and hand it to him as ready for UAT, not accepted. Each push still
+needs a fresh go.
+
 **Wrap up with: files / tests / still open.**
 
 ## CI/CD — and why some repos deliberately do less of it
@@ -113,6 +140,10 @@ Today `[private]` and `[private]` are the local-gate repos.
 - **`gh pr merge --auto` merges immediately when nothing is required.** Do not
   treat `--auto` as "wait for checks" without confirming protection requires
   them.
+- **Batch changes through the pipeline while developing a feature.** Not one
+  small change per push/PR/CI run: an appropriately sized batch, so Actions
+  time and pipeline wait are both optimized. Local gates and TDD still run on
+  every change; each push still needs a fresh go.
 - **Deploys are separate from checks.** A deploy workflow that only runs on the
   default branch must never be a required check.
 - **Run the checks CI runs, locally, before pushing.** Finding out from a red
