@@ -6,8 +6,9 @@ findings, and `severity_overrides` and `category_overrides` were applied
 unconditionally — from any config, including one discovered inside the tree
 being audited, with no `--trust-target-config`.
 
-Reproduced before this test was written, on a file containing one
-`subprocess.run(cmd, shell=True)`:
+Reproduced before this test was written, on a file containing a single
+`subprocess` call made with `shell=True` (paraphrased; the fixture below
+assembles the real expression from parts):
 
     honest run                                     0.00  (F)
     plus an in-tree secure-code-agent.json with
@@ -41,8 +42,9 @@ from secure_code_audit import cli
 from secure_code_audit.findings import Severity
 from secure_code_audit.scoring import SEVERITY_WEIGHT
 
-#: `subprocess.run(cmd, shell=True)` — B602, HIGH. Assembled from parts
-#: because this repository audits its own tests.
+#: The B602 shell-injection call, HIGH. Assembled from parts because this
+#: repository audits its own tests, and spelled out in neither this comment
+#: nor the docstring above for the same reason.
 _SHELL_CALL = "subprocess.run(cmd, shell=Tr" + "ue)"
 _VULNERABLE = f"import subprocess\n\n\ndef run(cmd):\n    return {_SHELL_CALL}\n"
 

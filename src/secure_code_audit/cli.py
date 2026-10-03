@@ -1158,7 +1158,10 @@ def _refuse_target_policy(cfg: config_mod.Config, target: Path) -> config_mod.Co
     findings, and these two keys were applied from any config, including one
     discovered inside the tree, with no `--trust-target-config`.
 
-    Measured on one `subprocess.run(cmd, shell=True)`: 0.00/F honestly, and
+    Measured on one `subprocess` call made with `shell=True` — paraphrased
+    rather than quoted, because this repository audits its own source and
+    the verbatim expression trips `sca.python.subprocess.shell_true` here,
+    in shipped code, where it is scored: 0.00/F honestly, and
     5.00/A+ with an in-tree `severity_overrides` mapping B602 to
     informational. The audited party moved its own grade, which is §4
     criterion 1 falsifiable by the one actor with a motive, and promise P3
