@@ -1,0 +1,254 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>v0.3.0 Release Blockers — historical, all closed · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#why-this-exists">Why this exists</a></li>
+<li><a href="#release-boundary">Release boundary</a></li>
+<li><a href="#1-critical-fail-on-gate-does-nothing-when-no-gates-are-configured">1. Critical — --fail-on-gate does nothing when no gates are configured</a></li>
+<li><a href="#2-critical-secret-scanners-launder-a-findings-exit-into-a-clean-result">2. Critical — secret scanners launder a findings-exit into a clean result</a></li>
+<li><a href="#3-high-unverified-sarif-can-satisfy-required-scanner-coverage">3. High — unverified SARIF can satisfy required scanner coverage</a></li>
+<li><a href="#4-medium-structurally-malformed-sarif-crashes-the-audit">4. Medium — structurally malformed SARIF crashes the audit</a></li>
+<li><a href="#5-high-online-false-does-not-make-semgrep-offline">5. High — online: false does not make Semgrep offline</a></li>
+<li><a href="#6-medium-ci-skips-code-scanning-upload-on-the-failures-that-matter">6. Medium — CI skips Code Scanning upload on the failures that matter</a></li>
+<li><a href="#7-medium-default-config-resolves-against-the-shells-cwd-not-the-target">7. Medium — default config resolves against the shell's cwd, not the target</a></li>
+<li><a href="#8-low-emitted-sarif-declares-a-broken-schema-url">8. Low — emitted SARIF declares a broken schema URL</a></li>
+<li><a href="#sequencing-note">Sequencing note</a></li>
+<li><a href="#v040-defects-found-after-these-closed">v0.4.0 — defects found after these closed</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">History</div><h1>v0.3.0 Release Blockers — historical, all closed</h1><blockquote>
+<p>Status: <strong>all eight closed, 2026-09-09.</strong> Raised by hostile audit against
+<code>a65527c</code>, 2026-08-10, and each independently verified against the source
+before being recorded. The six release blockers closed in #12–#17; §7 and §8
+closed after. Tagging is now gated on the release prerequisites at the foot
+of this document, not on these findings.
+Related: <a href="docs-architecture.html"><code>architecture.md</code></a> for the structural causes,
+<a href="docs-product-intent.html"><code>product-intent.md</code></a> §4 for the success criteria these
+violate.</p>
+</blockquote>
+<h2 id="why-this-exists">Why this exists</h2>
+<p>Two of these are false-green paths: the gate reports success while the tool has
+either detected a HIGH finding or failed to scan. That contradicts
+<a href="docs-product-intent.html"><code>product-intent.md</code></a> §4 criterion 1 — <em>"a green gate means
+something"</em> — which is the product's central promise. Tagging a release in this
+state would ship the exact failure mode v0.3.0 was written to eliminate.</p>
+<p>Two of these (§3, §4) were introduced by the v0.3.0 SARIF-import work itself.</p>
+<h2 id="release-boundary">Release boundary</h2>
+<p>The minimum set that must close before <code>v0.3.0</code> is tagged. <strong>All six are
+closed.</strong></p>
+<ul>
+<li>[x] <strong>§1</strong> — absent gate configuration cannot read as a passing gate (<a href="https://github.com/marshallguillory86/secure-code-agent/issues/12">#12</a>)</li>
+<li>[x] <strong>§2</strong> — Gitleaks/TruffleHog findings-exit with no parseable findings fails coverage (<a href="https://github.com/marshallguillory86/secure-code-agent/issues/13">#13</a>)</li>
+<li>[x] <strong>§3</strong> — trust model for SARIF imports decided and enforced (<a href="https://github.com/marshallguillory86/secure-code-agent/issues/14">#14</a>)</li>
+<li>[x] <strong>§4</strong> — malformed SARIF contained as failed coverage, not a traceback (<a href="https://github.com/marshallguillory86/secure-code-agent/issues/15">#15</a>)</li>
+<li>[x] <strong>§5</strong> — offline Semgrep is genuinely offline (<a href="https://github.com/marshallguillory86/secure-code-agent/issues/16">#16</a>)</li>
+<li>[x] <strong>§6</strong> — failed-coverage SARIF reaches Code Scanning (<a href="https://github.com/marshallguillory86/secure-code-agent/issues/17">#17</a>)</li>
+</ul>
+<p>This list was duplicated — every row appearing twice, once ticked and once
+not — by a keep-both conflict resolution during a rebase. A checklist that
+says an item is both done and not done is worse than no checklist, and it
+survived several reviews because nobody reads a list they believe they wrote.</p>
+<p>§7 and §8 were not release blockers and landed in the same cycle. Both are closed.</p>
+<hr />
+<h2 id="1-critical-fail-on-gate-does-nothing-when-no-gates-are-configured">1. Critical — <code>--fail-on-gate</code> does nothing when no gates are configured</h2>
+<p><code>config.py</code> defaults <code>gates</code> to an empty mapping; <code>scoring.py</code> treats every
+missing gate as "not configured"; <code>action.yml</code> makes config optional while
+defaulting <code>fail-on-gate</code> to true.</p>
+<p>Reproduced: input containing <code>subprocess.run(user_input, shell=True)</code> produced a
+correct HIGH CWE-78 finding, scored <code>0.0/F</code>, coverage complete — and
+<code>gate.passed</code> was <code>true</code> with exit <code>0</code>.</p>
+<p>The earlier fix rejecting an explicit <code>require_scanners: []</code> does not cover an
+<em>omitted</em> configuration. A naive Action adoption is a green check with no
+security floor.</p>
+<p><strong>Note:</strong> this was identified during the v0.3.0 session and under-rated as
+"residual, CI is protected." That assessment was wrong. The failure is not
+"nothing ran so nothing was found" — it is "a HIGH finding was found and the
+gate passed anyway."</p>
+<p><strong>Bounded fix:</strong> reject <code>--fail-on-gate</code> when no gates are configured, <em>or</em>
+ship documented safe default gates, <em>or</em> require a config in the Action. Prefer
+the first: it fails closed and needs no policy invention.</p>
+<p><strong>Resolved.</strong> <code>scoring.active_gates()</code> reports the gates that can actually
+trip, and the CLI refuses <code>--fail-on-gate</code> with exit 2 when none can. A gate
+key that is present but inert does not count. Report-only audits are
+unaffected. Verified against the original reproduction: the two HIGH CWE-78
+findings now produce exit 2 instead of exit 0.</p>
+<h2 id="2-critical-secret-scanners-launder-a-findings-exit-into-a-clean-result">2. Critical — secret scanners launder a findings-exit into a clean result</h2>
+<p><code>gitleaks_scanner.py</code> accepts exit 1 as "findings present," then returns <code>[]</code>
+when the report is missing or zero-length. <code>trufflehog_scanner.py</code> has the same
+shape for exit 183 with empty stdout.</p>
+<p>Reproduced: Gitleaks exit 1 + empty report → zero findings, outcome
+<code>completed</code>. TruffleHog exit 183 + empty stdout → zero findings, outcome
+<code>completed</code>.</p>
+<p>The scanner told us it found secrets and we recorded a clean scan. When either
+is in <code>require_scanners</code>, this is a false-green gate.</p>
+<p><strong>Bounded fix:</strong> a findings-signaling exit code must require successfully
+parsed, non-empty findings. Otherwise emit a <code>tool_error</code> control finding so the
+outcome is <code>failed</code>. Audit the other adapters for the same pattern — this is a
+class, not two instances.</p>
+<p><strong>Resolved.</strong> <code>Scanner._findings_exit_contradiction()</code> is the single
+implementation, applied in both adapters at every exit from <code>run()</code>. A clean
+exit with no output is still a clean scan; a findings exit with nothing to show
+is a <code>tool_error</code>, which classifies as <code>failed</code> coverage. Gitleaks also stopped
+swallowing a non-array report root, which was a second silent path.</p>
+<p><strong>The other adapters were audited.</strong> Bandit, pip-audit, OSV-Scanner and npm
+audit already emit <code>tool_error</code> on empty output, so the <code>return []</code> shape was
+unique to the two secret scanners. What they do <em>not</em> yet have is the weaker
+variant — a findings exit whose non-empty output parses to zero findings.
+Tracked separately rather than folded into this fix.</p>
+<h2 id="3-high-unverified-sarif-can-satisfy-required-scanner-coverage">3. High — unverified SARIF can satisfy required scanner coverage</h2>
+<p><code>sarif.py::_execution_from_run</code> marks a run <code>failed</code> only when
+<code>executionSuccessful</code> is explicitly <code>false</code>. A run with no <code>invocations</code> at all
+is classified <code>completed</code>.</p>
+<p>Reproduced: a minimal SARIF with a valid tool name, no results, no
+<code>invocations</code>, and no version satisfied a required <code>trivy</code> that was locally
+disabled. Exit <code>0</code>, coverage complete, gate passed, Trivy recorded as completed
+with version <code>unknown</code>.</p>
+<p>"A scanner someone else ran" is being treated as "verified successful scanner
+execution." This was a deliberate v0.3.0 design choice and the critique is
+correct: the trust assumption is undocumented and the default is too generous.</p>
+<p><strong>Bounded fix:</strong> decide the trust model explicitly. Preferred — required
+coverage from an import demands positive invocation evidence, with a distinct
+<code>reported</code> / <code>unverified</code> outcome for imports that lack it. Minimum — document
+the assumption in <code>docs/scanners.md</code> and surface <code>unverified</code> in the report.</p>
+<p><strong>Resolved, with the trigger moved.</strong> Keying on the presence of <code>invocations</code>
+would make our trust depend on an optional SARIF field that most tools omit —
+firing either almost always or almost never depending on which tools an
+operator feeds it. The durable distinction is provenance, not self-description:</p>
+<ul>
+<li>we ran it and watched the process → <code>COMPLETED</code></li>
+<li>someone handed us the artifact → <code>UNVERIFIED</code>, always, even when the file
+  says <code>executionSuccessful: true</code> (a file describing itself proves nothing)</li>
+<li>the artifact declares its own failure → <code>FAILED</code>, regardless of source</li>
+</ul>
+<p><code>UNVERIFIED</code> satisfies <code>require_scanners</code>, because passing
+<code>--sarif-import trivy=x.sarif</code> is an operator assertion of the same kind we
+already trust from <code>scanners.trivy.command</code>. It does not degrade coverage to
+<code>PARTIAL</code>, which keeps <code>PARTIAL</code> meaning "something did not run". Instead every
+report names it: <code>coverage: COMPLETE (1 unverified: trivy)</code>, plus
+<code>coverage.unverified</code> in JSON and <code>unverifiedScanners</code> in the emitted SARIF.
+<code>COMPLETED</code> outranks <code>UNVERIFIED</code> on duplicate names, so our own observation is
+never downgraded by someone else's file.</p>
+<h2 id="4-medium-structurally-malformed-sarif-crashes-the-audit">4. Medium — structurally malformed SARIF crashes the audit</h2>
+<p><code>{"version":"2.1.0","runs":[null]}</code>, or a <code>results</code> object where an array is
+expected, raises an uncaught <code>AttributeError</code> in <code>sarif.py</code>.</p>
+<p>The process does exit nonzero, but emits a traceback instead of a controlled
+failed-coverage report, and produces no evidence artifacts. This violates the
+adapter failure-isolation rule described in <a href="docs-architecture.html"><code>architecture.md</code></a>
+§1 — the same rule the v0.3.0 import work was supposed to extend to imports.</p>
+<p><strong>Bounded fix:</strong> validate run/results shape during ingest and route any
+structural violation to the existing failed-execution path already used for
+unreadable and malformed input.</p>
+<p><strong>Resolved.</strong> A non-object run and a non-array <code>results</code> each produce a failed
+execution naming the offending index and type, so the audit still emits its
+full evidence set. Non-object entries <em>inside</em> a valid <code>results</code> array are
+skipped rather than failing the whole run — they carry nothing to normalize,
+and one malformed row should not discard a scanner's other findings.</p>
+<h2 id="5-high-online-false-does-not-make-semgrep-offline">5. High — <code>online: false</code> does not make Semgrep offline</h2>
+<p><code>semgrep_scanner.py</code> selects <code>p/security-audit</code> when online operation is
+disabled, and the code comment describes it as a bundled offline ruleset. It is
+a Semgrep Registry ruleset and requires retrieval. An offline hostile run
+entered the network path and failed with an X.509 error.</p>
+<p>The comment is not merely imprecise — it asserts a security property the code
+does not have, which is the failure mode <a href="docs-product-intent.html"><code>product-intent.md</code></a>
+§5 principle 8 exists to prevent.</p>
+<p><strong>Bounded fix:</strong> package a local ruleset for offline execution, or reject
+offline Semgrep when no local config is available. Delete the inaccurate comment
+either way.</p>
+<p><strong>Resolved by packaging a ruleset.</strong> <code>src/secure_code_audit/data/semgrep-offline.yaml</code>
+ships in the wheel and is used when <code>online</code> is false; a missing ruleset is a
+<code>tool_error</code> rather than a fallback that reaches the network. It is ten
+high-precision rules, deliberately narrower than the Registry packs, and
+<code>docs/scanners.md</code> says so rather than implying parity.</p>
+<p>Two further defects surfaced only by running the real binary against a
+fixture, neither visible from reading the code:</p>
+<ul>
+<li><strong>Rule ids were path-mangled.</strong> Semgrep derives a rule-id prefix from the
+  config file path, yielding
+  <code>src.secure_code_audit.data.sca.offline.…</code> — ids that vary by install
+  location, so standards lookup would never match and baseline fingerprints
+  would churn between machines. Fixed with <code>--no-rewrite-rule-ids</code>.</li>
+<li><strong>Semgrep never populated <code>properties.cwe</code>.</strong> It folds <code>metadata.cwe</code> into
+  <code>properties.tags</code>. The adapter read only <code>properties.cwe</code>, so <em>every</em> Semgrep
+  finding — Registry rules included, not just the new ones — arrived with no
+  CWE, scored without Top-25 weighting, and mapped to no standard. This was a
+  pre-existing bug in the adapter, unrelated to offline mode.</li>
+</ul>
+<h2 id="6-medium-ci-skips-code-scanning-upload-on-the-failures-that-matter">6. Medium — CI skips Code Scanning upload on the failures that matter</h2>
+<p>In <code>ci.yml</code>, the audit step exits nonzero when required coverage fails. The
+following <code>Upload SARIF to code scanning</code> step's <code>if:</code> contains only the fork
+condition, with no <code>always()</code>, <code>failure()</code>, or <code>!cancelled()</code>. GitHub applies an
+implicit <code>success()</code> when no status-check function is present, so the upload is
+skipped exactly when the SARIF carries <code>executionSuccessful: false</code>.</p>
+<p>The Security tab therefore retains an older clean result. The adjacent artifact
+upload correctly uses <code>always()</code>.</p>
+<p><strong>Bounded fix:</strong> add <code>!cancelled() &amp;&amp;</code> to the existing condition.</p>
+<p><strong>Resolved.</strong> The condition now leads with <code>!cancelled()</code> plus a <code>hashFiles</code>
+guard, parenthesized so <code>&amp;&amp;</code> cannot bind tighter than the fork check. The
+happy path is exercised by every CI run; the failure path is reasoned from
+GitHub's documented implicit <code>success()</code> and cannot be exercised without
+deliberately breaking this repository's own audit.</p>
+<h2 id="7-medium-default-config-resolves-against-the-shells-cwd-not-the-target">7. Medium — default config resolves against the shell's cwd, not the target</h2>
+<p><code>cli.py::_prepare_audit</code> calls <code>config_mod.load(args.config)</code> before resolving
+the audit target, and the default path is cwd-relative.</p>
+<p>Reproduced: auditing <code>/tmp/another-project</code> from this repository without
+<code>--config</code> applied <em>this repository's</em> required scanners rather than the target
+project's configuration. This undermines the one-target-root model and can apply
+the wrong security policy silently.</p>
+<p><strong>Bounded fix:</strong> resolve the target first, then look for the default config
+under the target root.</p>
+<p><strong>Resolved.</strong> <code>_prepare_audit</code> resolves the target before loading, and
+<code>config.load</code> takes a <code>default_root</code>. The default <code>secure-code-agent.json</code> is
+now the <em>audited project's</em> policy rather than whatever the shell was sitting
+in. This composes with D1 rather than fighting it: a default config found in
+the target is repository content, so it already cannot name executables from
+that tree.</p>
+<h2 id="8-low-emitted-sarif-declares-a-broken-schema-url">8. Low — emitted SARIF declares a broken schema URL</h2>
+<p><code>sarif.py</code> emits a <code>$schema</code> pointing at an <code>oasis-tcs</code> path containing
+<code>/schemas/</code>, which 404s; the repository path is singular <code>/schema/</code>. The stable
+official schema lives at
+<code>https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json</code>.</p>
+<p>Both the CI SARIF and a failed-coverage SARIF validate against the official
+schema, so the document shape is sound — only the declared locator is broken.</p>
+<p><strong>Bounded fix:</strong> point <code>$schema</code> at the OASIS canonical URL.</p>
+<p><strong>Resolved.</strong> Both URLs were checked rather than assumed: the <code>oasis-tcs</code> raw
+path returns 404, the OASIS canonical URL returns 200. The emitted <code>$schema</code>
+and the module's own docstring reference now use the canonical one.</p>
+<hr />
+<h2 id="sequencing-note">Sequencing note</h2>
+<p>§1, §2, and §4 are the same class the architecture audit already named:
+outcomes inferred from weak signals (an empty file, an absent key, an absent
+<code>invocations</code> block) rather than asserted by a type.
+<a href="docs-architecture.html"><code>architecture.md</code></a> §2 proposes <code>ScanResult</code> as the structural
+fix. Closing these blockers tactically is correct for the release; doing the
+<code>ScanResult</code> refactor immediately afterward is what stops the class from
+regenerating.</p>
+<p><strong>The refactor was done, 2026-09-09</strong> — see
+<a href="docs-decisions.html#d13--adapters-state-their-outcome-nothing-infers-it-from-a-name">D13</a>.
+It found two more instances of the same class that tactical fixes had not
+reached: adapters returning real findings alongside a control finding, whose
+count was then recorded as zero while the findings still reached the report.</p>
+<hr />
+<h2 id="v040-defects-found-after-these-closed">v0.4.0 — defects found after these closed</h2>
+<p>The v0.4.0 cycle's defects are recorded in <a href="changelog.html"><code>CHANGELOG.md</code></a>
+rather than duplicated here, because this document is the audit of a specific
+commit and re-using it as a running list is how the checklist above got
+corrupted in the first place. Four of them are worth naming here because of
+where they came from: <strong>the tool found them by auditing itself once the floor
+grew.</strong></p>
+<ul>
+<li><code>paths.exclude_patterns</code> was honoured by five of fifteen adapters, and was
+  simultaneously the LOC denominator — so findings from excluded paths were
+  scored against lines that were never counted.</li>
+<li>Every tagged release would have failed at its own preflight: the release
+  workflow's install list fell behind the floor it is required to meet.</li>
+<li>The markdown report and PR comment claimed verified grades the JSON withheld.</li>
+<li>Reports named a category with zero findings as the worst one.</li>
+</ul>
+<p>None of these were reachable by reading the code alone. They surfaced because
+the repository runs its own gate in CI at the floor it declares, which is the
+argument for doing that at all.</p>
+<footer>Rendered from <code>docs/release-blockers.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

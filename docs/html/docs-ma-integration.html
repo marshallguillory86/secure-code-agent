@@ -1,0 +1,242 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>maintainability-agent integration · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#producing-it">Producing it</a></li>
+<li><a href="#consuming-it">Consuming it</a></li>
+<li><a href="#the-contract">The contract</a></li>
+<li><a href="#four-invariants-ma-can-rely-on">Four invariants MA can rely on</a></li>
+<li><a href="#the-practice-rubric">The practice rubric</a></li>
+<li><a href="#what-sits-outside-the-score">What sits outside the score</a></li>
+<li><a href="#versioning">Versioning</a></li>
+<li><a href="#what-this-does-not-do">What this does not do</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Work orders and remediation</div><h1>maintainability-agent integration</h1><blockquote>
+<p>Status: <strong>v0.12.10 — 2026-09-11.</strong> The <code>security-pillar.json</code> contract, schema v2.</p>
+</blockquote>
+<p><code>maintainability-agent</code>'s <a href="https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/adr-007-pillars-and-practice.md">ADR 007</a>
+§1 declares Security a <strong><code>DELEGATED</code></strong> pillar naming this tool, and reports it
+as <code>NotApplicable</code> so that a reader never mistakes silence for safety. This
+document is the other half: the artifact that makes that entry unnecessary.</p>
+<p><a href="docs-decisions.html">D3</a>, <strong>amended 2026-09-13</strong>: this tool writes the artifact, and
+<strong>MA runs this tool to get it</strong> on every audit (MA 3.7.0+). The contract below
+is unchanged. There is no package dependency between the two: MA runs the
+release installed beside it, within the range it supports, and reports a
+missing or unsupported one as the pillar's reason. MA passes no configuration
+of its own and redirects every report out of the audited tree; the one file
+this tool still writes there is its <code>.secure-code/history.jsonl</code> trend.</p>
+<p><strong>Two products, two environments.</strong> This tool is designed to be run on its
+own (<a href="docs-product-intent.html">product-intent.md</a> §5 principle 9), so it pins for a
+tool standing alone and is never obliged to resolve against MA's dependencies.
+The two pin incompatibly today and that is not a defect in either: this
+project's <code>[mcp]</code> extra requires <code>mcp&lt;2</code>, and MA's MCP server requires
+<code>mcp&gt;=2</code>. Do not install this project's <code>[mcp]</code> extra into MA's environment.</p>
+<p>What MA does need beside it is this tool itself, because it runs it in its own
+interpreter and reads its installed version — so <code>secure-code-agent</code> goes in
+MA's environment, and this project's <em>own</em> MCP server, if wanted, goes in its
+own. The integration is a file for exactly this reason: one document crossing
+between two dependency graphs that never have to agree.</p>
+<h2 id="producing-it">Producing it</h2>
+<pre><code class="language-bash">secure-code-agent . --config secure-code-agent.json \
+  --fail-on-gate \
+  --security-pillar security-pillar.json
+</code></pre>
+<p>Standalone use is unaffected. Without the flag nothing is written and every
+other output is identical.</p>
+<h2 id="consuming-it">Consuming it</h2>
+<p>Every MA audit runs this tool itself — no flag needed:</p>
+<pre><code class="language-bash">maintainability-agent --root .
+</code></pre>
+<p>A pipeline that already runs this tool as its own gated step hands MA the
+document instead, and MA does not run the tool a second time:</p>
+<pre><code class="language-bash">maintainability-agent --root . --security-pillar security-pillar.json
+</code></pre>
+<h2 id="the-contract">The contract</h2>
+<pre><code class="language-json">{
+  &quot;schema&quot;: &quot;secure-code-agent/security-pillar&quot;,
+  &quot;schema_version&quot;: 2,
+  &quot;scoring_model&quot;: 2,
+  &quot;producer&quot;: { &quot;tool&quot;: &quot;secure-code-agent&quot;, &quot;version&quot;: &quot;0.10.0&quot; },
+  &quot;generated&quot;: &quot;2026-09-09T20:00:00Z&quot;,
+  &quot;pillar&quot;: &quot;security&quot;,
+  &quot;scope&quot;: &quot;owned&quot;,
+  &quot;practice&quot;: {
+    &quot;level&quot;: 4,
+    &quot;summary&quot;: &quot;gates — CI holds a security line that can be crossed&quot;,
+    &quot;signals&quot;: [
+      { &quot;signal&quot;: &quot;CI runs secure-code-agent&quot;, &quot;path&quot;: &quot;.github/workflows/ci.yml&quot; },
+      { &quot;signal&quot;: &quot;CI enforces --fail-on-gate&quot;, &quot;path&quot;: &quot;.github/workflows/ci.yml&quot; }
+    ],
+    &quot;caps&quot;: []
+  },
+  &quot;condition&quot;: 5.0,
+  &quot;condition_letter&quot;: &quot;A+&quot;,
+  &quot;posture&quot;: &quot;healthy&quot;,
+  &quot;verified_grade&quot;: &quot;A+&quot;,
+  &quot;evidence_status&quot;: &quot;complete&quot;,
+  &quot;evidence_reasons&quot;: [],
+  &quot;coverage&quot;: {
+    &quot;status&quot;: &quot;complete&quot;,
+    &quot;scanners_run&quot;: [&quot;bandit&quot;, &quot;gitleaks&quot;],
+    &quot;scanners_missing&quot;: []
+  },
+  &quot;findings_by_severity&quot;: { &quot;high&quot;: 2 },
+  &quot;reported_not_scored&quot;: {
+    &quot;test_tree&quot;:    { &quot;count&quot;: 0, &quot;loc&quot;: 4436, &quot;worst_severity&quot;: null },
+    &quot;dependencies&quot;: { &quot;count&quot;: 16, &quot;loc&quot;: null, &quot;worst_severity&quot;: &quot;high&quot; }
+  },
+  &quot;loc_scanned&quot;: 12400
+}
+</code></pre>
+<h2 id="four-invariants-ma-can-rely-on">Four invariants MA can rely on</h2>
+<p><strong>1. <code>practice</code> and <code>condition</code> are never averaged.</strong> ADR 007 §2. They answer
+different questions — whether anything <em>prevents</em> the next vulnerability, and
+what the scanners <em>found</em>. No field in the document offers their mean, and
+<code>test_the_pillar_never_averages_its_two_axes</code> parses the module and refuses a
+function that would produce one. It is the same guard MA keeps over
+<code>_pillars.py</code>.</p>
+<p><strong>2. <code>condition</code> is <code>null</code> whenever the evidence cannot support it</strong> — never
+zero, never a default. This tool's failure mode is sharper than MA's: the score
+is a rate over findings, so removing scanners removes findings and the number
+goes <strong>up</strong>. On one tree, disabling them moved it from 0.00/F to 5.00/A+. A
+<code>null</code> here means <em>"nothing measured"</em>, and a consumer must not substitute a
+number for it.</p>
+<p><strong>3. <code>posture</code> uses MA's matrix, cell for cell.</strong> <code>HIGH_PRACTICE = 3</code> and
+<code>GOOD_CONDITION = 3.5</code>, copied by value from <code>_pillars.py</code>. If MA moves either
+threshold, <code>test_posture_matches_mas_matrix</code> fails here and the two tools get
+reconciled rather than drifting into disagreeing about the word "healthy".</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Poor condition</th>
+<th>Good condition</th>
+<th>Not measured</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Practice ≥ 3</strong></td>
+<td><code>managed debt</code></td>
+<td><code>healthy</code></td>
+<td><code>unverified</code></td>
+</tr>
+<tr>
+<td><strong>Practice &lt; 3</strong></td>
+<td><code>unmanaged debt</code></td>
+<td><code>unverified</code></td>
+<td><code>unverified</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>A perfect practice level with no evidence is <code>unverified</code>, never <code>healthy</code> — a
+maturity level may not vouch for code nobody looked at.</p>
+<p><strong>4. Every practice signal names the file that proves it.</strong> A maturity level a
+reader cannot check is a grade with no marking scheme, and this one is a
+judgment about someone's engineering practice made from the outside.</p>
+<h2 id="the-practice-rubric">The practice rubric</h2>
+<p>MA's rubric, its five level definitions and its <code>MAX_WITHOUT_CI</code> cap, read for
+security. Read from <strong>configuration and CI, never from source</strong> — a scan says
+the code is clean today; it cannot say whether anything stops tomorrow's merge
+from committing a private key.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Meaning</th>
+<th>Security evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Nothing detectable</td>
+<td>No scanner configuration, no security job in CI</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Intent</td>
+<td>Scanner configuration exists, but nothing runs it</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Enforcement</td>
+<td>CI runs a security scanner; a bad change can fail a build</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Gates</td>
+<td>CI holds a line — required scanners, a severity ceiling, a finding cap</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Discipline</td>
+<td>Gates plus a disclosure policy, expiring suppressions, pinned versions</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Configuration without CI is capped at 2</strong>, and a capped level says so in
+<code>practice.caps</code>. A repository can hold every scanner config ever written,
+declare every threshold in it, and still merge anything: a threshold nothing
+evaluates is not a gate.</p>
+<h2 id="what-sits-outside-the-score">What sits outside the score</h2>
+<p><code>reported_not_scored</code> carries axes that are real findings and the wrong thing
+to average into a code-condition grade. Both are measured, both are reported,
+neither moves <code>condition</code>.</p>
+<ul>
+<li><strong><code>test_tree</code></strong> — the repository's own tests. Including them moved the
+  calibration corpus median from 4.36 to 50.15 and put ten of fourteen
+  well-maintained projects at F. <code>secrets</code> are the exception and <em>do</em> score,
+  because a committed credential is a leak wherever it lives.</li>
+<li><strong><code>dependencies</code></strong> — advisories against a lockfile. Still <strong>gated</strong>: a
+  critical runtime CVE fails a build exactly as before. Only the code-condition
+  grade stops absorbing them.</li>
+</ul>
+<p>See <a href="docs-calibration.html"><code>calibration.md</code></a> for the measurements.</p>
+<h2 id="versioning">Versioning</h2>
+<p><code>schema_version</code> is <strong>2</strong>. v2 is v1 plus <code>scoring_model</code>; every v1 key keeps
+its name, type and meaning.</p>
+<p><strong>Any shape change bumps it, additions included.</strong> This paragraph previously
+read "a field may be added without a bump", and that was wrong in the
+direction that costs a consumer silently: MA validates the document and
+reports <em>no delegated pillar</em> rather than a partial one, so a v1 document
+that grew a field would be refused with nothing on either side saying why.
+<code>tests/unit/test_pillar_contract.py</code> pins every key and type so an addition
+cannot land without this decision being taken.</p>
+<p><strong>A bump is a two-repository release, in order:</strong> specify the shape, MA lands
+a reader accepting both versions, <em>then</em> this tool emits the new one. v2 was
+cut that way — MA's reader accepts v1 and v2 and falls back to
+<code>producer.version</code> when <code>scoring_model</code> is absent, so neither release blocked
+the other.</p>
+<p><code>scoring_model</code> is an integer naming the scoring model that produced
+<code>condition</code>. A delegated pillar can change its scoring model <strong>without</strong>
+changing its schema — D16 and D17 did exactly that — and MA keys trend
+comparability on this field, so a repository's condition is never compared
+across a model change. It is pinned to a digest of the weights, the slope, the
+bands and the real <code>score()</code> output, so the model cannot move without it.
+<code>1</code> is reserved and never emitted: it would denote every release before the
+field existed, and those do not share one model.</p>
+<p><code>producer.version</code> records which build produced the document. It is
+load-bearing rather than decorative — it is the trend key for any v1 document
+— and is held to <code>__version__</code> by <code>test_pillar_contract.py</code> after drifting
+once and stamping <code>0.3.0</code> into every artifact a v0.4.0 wheel produced.</p>
+<h2 id="what-this-does-not-do">What this does not do</h2>
+<ul>
+<li><strong>MA does not run this tool</strong>, and this tool does not import MA. Two
+  independently releasable packages, which is the property MA's
+  <a href="https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/adr-008-translation-and-decision.md">ADR 008</a>
+  protects when it refuses a combined MCP server.</li>
+<li><strong>No shared library.</strong> MA's constants are copied by value with a test
+  asserting agreement, not imported. A dependency edge between the two would
+  make them releasable only together.</li>
+<li><strong>The condition scale is not yet calibrated</strong> (<a href="docs-decisions.html">D5</a>). MA's is
+  calibrated so the mature-OSS median lands at 4.0; ours is not there yet, and
+  a consumer should treat <code>condition</code> as a relative signal rather than an
+  absolute one until it is.</li>
+</ul>
+<footer>Rendered from <code>docs/ma-integration.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

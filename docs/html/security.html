@@ -1,0 +1,53 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Security policy · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#reporting-a-vulnerability">Reporting a vulnerability</a></li>
+<li><a href="#threat-model">Threat model</a></li>
+<li><a href="#out-of-scope">Out of scope</a></li>
+<li><a href="#supported-versions">Supported versions</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Start here</div><h1>Security policy</h1><h2 id="reporting-a-vulnerability">Reporting a vulnerability</h2>
+<p>If you discover a security vulnerability in <code>secure-code-agent</code> itself (not
+findings the tool emits about <em>your</em> code — those go in your repo's issue
+tracker), please <strong>do not open a public GitHub issue</strong>.</p>
+<p>Instead, use the <a href="https://github.com/marshallguillory86/secure-code-agent/security/advisories/new">private security advisory flow</a>.</p>
+<p>We aim to:</p>
+<ul>
+<li>Acknowledge the report within 72 hours.</li>
+<li>Provide a preliminary assessment within 7 days.</li>
+<li>Coordinate disclosure with the reporter — credit is happily given.</li>
+</ul>
+<h2 id="threat-model">Threat model</h2>
+<p>See <a href="docs-threat-model.html"><code>docs/threat-model.md</code></a> for the full threat model.
+Short version: the agent runs on developer machines and CI runners; it reads
+source files, exec's scanner binaries, emits report artifacts. We consider:</p>
+<ul>
+<li>Malicious repo content (no eval / exec / pickle of repo bytes)</li>
+<li>Output injection (markdown / SARIF / PR-comment escaping)</li>
+<li>Scanner output deception (operator-controlled standards mapping)</li>
+<li>Suppression bypass (mandatory <code>reason</code> + <code>expires</code>)</li>
+<li>Baseline tampering (git-attributable diffs)</li>
+<li>Cleartext secret in report (default <code>--redact</code> for secret scanners)</li>
+<li>Scanner network calls (offline modes by default)</li>
+<li>Resource exhaustion (per-scanner wall-clock timeouts)</li>
+<li>Supply-chain attack on this tool (Sigstore-signed releases, pinnable SHAs)</li>
+</ul>
+<h2 id="out-of-scope">Out of scope</h2>
+<ul>
+<li>Runtime attacks against running services (this is a static tool).</li>
+<li>Operator account compromise (out of our control).</li>
+<li>CI runner compromise (gate output is untrusted by definition in that case).</li>
+<li>Compromise of upstream scanners (Bandit, Semgrep, etc.) — we pin versions
+  but do not audit their source.</li>
+</ul>
+<h2 id="supported-versions">Supported versions</h2>
+<p><code>secure-code-agent</code> is in v0.x pre-release. Only the latest minor version is
+supported with security fixes during the pre-1.0 phase. Once v1.0 ships, we
+will publish an explicit support matrix.</p>
+<footer>Rendered from <code>SECURITY.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

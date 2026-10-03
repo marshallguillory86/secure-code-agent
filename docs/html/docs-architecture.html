@@ -1,0 +1,380 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>secure-code-agent — Architecture Audit · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#0-verdict">0. Verdict</a></li>
+<li><a href="#1-what-is-load-bearing-and-correct">1. What is load-bearing and correct</a></li>
+<li><a href="#2-problem-1-scanner-outcomes-are-encoded-in-strings">2. Problem 1 — scanner outcomes are encoded in strings</a><ul>
+<li><a href="#why-this-generates-defects">Why this generates defects</a></li>
+<li><a href="#fix">Fix</a></li>
+</ul>
+</li>
+<li><a href="#3-problem-2-every-contract-has-two-or-more-sources-of-truth">3. Problem 2 — every contract has two or more sources of truth</a><ul>
+<li><a href="#fix_1">Fix</a></li>
+</ul>
+</li>
+<li><a href="#4-problem-3-no-integration-tests-and-no-real-scanner-fixtures">4. Problem 3 — no integration tests and no real scanner fixtures</a><ul>
+<li><a href="#fix_2">Fix</a></li>
+</ul>
+</li>
+<li><a href="#5-problem-4-the-scores-null-state-is-perfect-closed-2026-09-09">5. Problem 4 — the score's null state is "perfect" — CLOSED 2026-09-09</a><ul>
+<li><a href="#closed">Closed</a></li>
+<li><a href="#open-question">Open question</a></li>
+</ul>
+</li>
+<li><a href="#6-smaller-structural-debt">6. Smaller structural debt</a></li>
+<li><a href="#7-recommended-sequence">7. Recommended sequence</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Decisions and architecture</div><h1>secure-code-agent — Architecture Audit</h1><blockquote>
+<p>Status: <strong>v0.12.10 — 2026-10-02.</strong> Assessment of the system as built.
+Companion docs: <a href="docs-design.html"><code>design.md</code></a> states the intended architecture;
+this document records where the implementation diverges from it and which
+divergences are generating recurring defects.</p>
+</blockquote>
+<h2 id="0-verdict">0. Verdict</h2>
+<p><strong>The core architecture is sound. Do not rewrite it.</strong></p>
+<p>The central abstraction — every scanner normalizes to one frozen <code>Finding</code>, and
+everything downstream reads that single type — is correct and has held up
+across twelve adapters and five output formats. The v0.3.0 separation of
+<em>scanner coverage</em> from <em>findings</em> is a real architectural improvement, not a
+patch.</p>
+<p>Three structural choices, however, account for most of the defects found in
+recent review cycles. They are listed in §2–§4 in the order they should be
+addressed. Until they change, the same shapes of bug will keep recurring,
+because each one makes a class of error undetectable at author time.</p>
+<h2 id="1-what-is-load-bearing-and-correct">1. What is load-bearing and correct</h2>
+<p>Keep these. They are the reason the system is worth repairing rather than
+replacing.</p>
+<ol>
+<li>
+<p><strong><code>Finding</code> as the lingua franca</strong> (<a href="../../src/secure_code_audit/findings.py"><code>findings.py</code></a>).
+   A frozen dataclass with a stable fingerprint, produced by every adapter and
+   consumed by every renderer. Fingerprints hash canonical CWE (falling back to
+   rule id), POSIX-normalized path, and whitespace-collapsed evidence, so a
+   reformat-only edit does not break baseline identity.</p>
+</li>
+<li>
+<p><strong>Adapters must not raise.</strong> <code>Scanner.run()</code> converts every failure into a
+   finding rather than an exception. One broken scanner cannot kill the audit.
+   Correct failure isolation for an orchestrator.</p>
+</li>
+<li>
+<p><strong>Coverage as a second axis</strong>
+   (<a href="../../src/secure_code_audit/scanner_status.py"><code>scanner_status.py</code></a>). "Did the
+   tool run" genuinely is orthogonal to "what did it find," and modelling it
+   separately is what stopped a clean finding set from implying a complete
+   audit.</p>
+</li>
+<li>
+<p><strong>Suppressions with mandatory expiry.</strong> A required <code>expires</code> date, a 365-day
+   cap, and expired entries becoming CRITICAL findings
+   (<a href="../../src/secure_code_audit/suppressions.py"><code>suppressions.py</code></a>). Most tools
+   let suppressions rot indefinitely. This design is better than most
+   commercial equivalents and should be protected in any refactor.</p>
+</li>
+<li>
+<p><strong><code>scoring.py</code>.</strong> Pure functions, no I/O, per-gate evaluators split
+   deliberately to hold cognitive complexity under the standard this project
+   ships. The best-factored module in the repository.</p>
+</li>
+<li>
+<p><strong>Subprocess discipline</strong> (<a href="../../src/secure_code_audit/scanners/base.py"><code>scanners/base.py</code></a>).
+   Argument arrays, <code>shell=False</code>, sanitized environment, explicit
+   <code>allowed_exits</code>. No shell interpolation anywhere in the scanner path.</p>
+</li>
+</ol>
+<h2 id="2-problem-1-scanner-outcomes-are-encoded-in-strings">2. Problem 1 — scanner outcomes are encoded in strings</h2>
+<p><strong>Severity: high. Fix first. — CLOSED 2026-09-09, see D13.</strong></p>
+<p>An adapter signals what happened to it by <em>naming a finding</em>:</p>
+<pre><code class="language-python">rule_id=f&quot;{self.name}.tool_unavailable&quot;     # → ScannerOutcome.UNAVAILABLE
+rule_id=f&quot;{self.name}.tool_timeout&quot;         # → ScannerOutcome.TIMED_OUT
+rule_id=f&quot;{self.name}.tool_error&quot;           # → ScannerOutcome.FAILED
+rule_id=f&quot;{self.name}.parse_error&quot;          # → ScannerOutcome.FAILED
+rule_id=f&quot;{self.name}.no_dependency_input&quot;  # → ScannerOutcome.NOT_APPLICABLE
+</code></pre>
+<p><code>classify_execution</code> then reverse-engineers intent by prefix matching
+(<a href="../../src/secure_code_audit/scanner_status.py#L63"><code>scanner_status.py:63</code></a>,
+<a href="../../src/secure_code_audit/scanner_status.py#L82"><code>:82</code></a>), and counts real
+findings by <em>exclusion</em>
+(<a href="../../src/secure_code_audit/scanner_status.py#L96-L97"><code>:96-97</code></a>):</p>
+<pre><code class="language-python">security_findings = sum(
+    1 for finding in findings if not finding.rule_id.startswith(f&quot;{name}.tool_&quot;)
+)
+</code></pre>
+<h3 id="why-this-generates-defects">Why this generates defects</h3>
+<p>Nothing enforces the protocol. No type, no test, no lint. An adapter that names
+a control finding incorrectly silently becomes a security finding; one that
+happens to emit a rule starting <code>no_</code> becomes a false <code>NOT_APPLICABLE</code>, which a
+required-scanner gate then escalates into a hard failure. The convention is
+documented only by example, and the twelve adapters were written at three
+different times.</p>
+<p>The same missing abstraction shows up in
+<a href="../../src/secure_code_audit/cli.py#L488"><code>cli.py:488</code></a>, where the orchestrator
+special-cases a single scanner by name because there is nowhere on the adapter
+to declare its own audit scope:</p>
+<pre><code class="language-python">def _scanner_scope(name: str, cfg: ScannerConfig) -&gt; str | None:
+    if name != &quot;pip_audit&quot;:
+        return None
+</code></pre>
+<h3 id="fix">Fix</h3>
+<p>Adapters return a structured result rather than smuggling outcome through
+<code>rule_id</code>:</p>
+<pre><code class="language-python">@dataclass(frozen=True)
+class ScanResult:
+    outcome: ScannerOutcome
+    findings: list[Finding]
+    reason: str | None = None
+    scope: str | None = None
+</code></pre>
+<p><code>classify_execution</code> stops parsing strings and becomes a trivial mapping.
+Control findings become a <em>rendering</em> concern derived from the outcome, rather
+than the source of truth for it. Scope moves onto the adapter, deleting the
+name check in the orchestrator.</p>
+<p>Estimated cost: one focused session across twelve adapters. This is a
+prerequisite for cleanly fixing §3.</p>
+<p><strong>Done.</strong> All fifteen adapters return <code>ScanResult</code>; the outcome constructors
+live on <code>Scanner</code> so the control finding is derived from the outcome rather
+than being the thing an outcome is inferred from. <code>classify_execution</code> is
+deleted — not deprecated — because a working string-parser left in the tree is
+an invitation to wire the next adapter into it. <code>_scanner_scope</code>'s name check
+is gone: adapters answer <code>scope()</code> for themselves. <code>tests/unit/test_scan_protocol.py</code>
+is the lint that blocks the class, including an AST check that fails any
+adapter hand-building a control finding.</p>
+<p>Two live defects fell out of the migration. <code>trufflehog</code> and <code>npm_audit</code> could
+return real findings <em>alongside</em> a control finding; the old classifier's early
+return then recorded <code>finding_count=0</code> for a run whose findings did reach the
+report, so the count and the report disagreed. And <code>pip_audit._parse</code> returned
+a control finding from a parsing helper, which made a leaf function the thing
+that decided the run's outcome. Both are structurally impossible now.</p>
+<h2 id="3-problem-2-every-contract-has-two-or-more-sources-of-truth">3. Problem 2 — every contract has two or more sources of truth</h2>
+<p><strong>Severity: high. Fix second.</strong></p>
+<p>The same failure mode appears in four places. In each case a contract is
+written down more than once, with no mechanism keeping the copies in sync, and
+in each case the copies have already drifted.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Contract</th>
+<th>Sources of truth</th>
+<th>Observed drift</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Config shape</td>
+<td><a href="../../src/secure_code_audit/config.py#L99-L118"><code>config.py:99-118</code></a> hand validation (264 lines) <strong>and</strong> <code>secure-code-agent.schema.json</code>, not connected at runtime</td>
+<td>The schema rejected its own <code>$schema</code> key; <code>require_scanners</code> minimum had to be enforced separately in both</td>
+</tr>
+<tr>
+<td>Score qualification when coverage is incomplete</td>
+<td>Five sites: <a href="../../src/secure_code_audit/cli.py#L453"><code>cli.py:453</code></a>, <a href="../../src/secure_code_audit/renderers.py#L35"><code>renderers.py:35</code></a>, <a href="../../src/secure_code_audit/renderers.py#L169"><code>:169</code></a>, <a href="../../src/secure_code_audit/renderers.py#L348"><code>:348</code></a>, <a href="../../src/secure_code_audit/sarif.py#L69"><code>sarif.py:69</code></a></td>
+<td>Each was implemented separately; the SARIF site was missed entirely on the first pass</td>
+</tr>
+<tr>
+<td>Agent guidance</td>
+<td><code>instructions.py::_BODY</code>, <code>skills/secure-code-agent/SKILL.md</code>, <code>skills/secure-code-agent/copilot/*.prompt.md</code>, <code>skills/secure-code-agent/agents/*.yaml</code>, <code>README.md</code>, <code>docs/</code></td>
+<td>Drifted twice in opposite directions: the <code>--changed-only</code> deprecation updated four locations and missed two, then shipping the flag in 0.12.0 left six saying it exits 2. <code>test_agent_guidance.py</code> now fails on either wording</td>
+</tr>
+<tr>
+<td>Packaging</td>
+<td><code>pyproject.toml</code> <code>package-data</code> globs <strong>and</strong> the directory actually existing</td>
+<td>The globs once matched nothing at all; now <code>test_the_offline_ruleset_is_declared_as_package_data</code> fails if a shipped data file is not matched by one</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="fix_1">Fix</h3>
+<p>One source each.</p>
+<ul>
+<li><strong>Config:</strong> generate <code>secure-code-agent.schema.json</code> from the config
+  dataclasses as a build/test step, and assert in CI that the committed schema
+  matches. Runtime <code>jsonschema</code> validation is the alternative but adds a
+  dependency to a tool that currently ships with one.</li>
+<li><strong>Score qualification:</strong> compute a single <code>ScoreVerdict</code> view-model once in
+  the pipeline and have all five renderers consume it. No renderer should
+  decide independently how to caveat a number.</li>
+<li><strong>Agent guidance:</strong> make <code>instructions.py</code> the source and generate <code>skills/</code>
+  from it, or vice versa. Two hand-maintained copies of the same instructions
+  will drift again.</li>
+</ul>
+<p><strong>Partly closed by enforcement, 2026-09-09.</strong> Generation is still the right
+  end state and is a larger change than it looks — these are different formats
+  for different consumers and the prose in each is shaped for its audience. But
+  the half that actually caused harm is now mechanical:
+  <code>tests/unit/test_agent_guidance.py</code> extracts every flag from every line in
+  the shipped guidance that invokes one of our console scripts, and fails if
+  the CLI would reject it. Invocation lines rather than all prose, so the docs
+  can still name another tool's flags — <code>--only-verified</code> is TruffleHog's. It
+  also fails if <code>--changed-only</code> is described as reserved or as exiting 2 —
+  the flag shipped in 0.12.0, and that sentence is now the one that is wrong.
+- <strong>Packaging:</strong> delete the <code>package-data</code> line, or restore the <code>data/</code>
+  directory if the standards map moves back to data files (see §5).</p>
+<h2 id="4-problem-3-no-integration-tests-and-no-real-scanner-fixtures">4. Problem 3 — no integration tests and no real scanner fixtures</h2>
+<p><strong>Severity: high. Fix third — cheapest of the three. — CLOSED 2026-09-09, see D14.</strong></p>
+<p><code>tests/fixtures/</code> and <code>tests/integration/</code> <strong>exist and are empty.</strong>
+<code>CONTRIBUTING.md</code> mandates per-scanner fixtures ("at least one HIGH true
+positive, one false positive that should be suppressible, and one parse-failure
+case") and cites <code>tests/integration/test_scoring_drift.py</code>, which does not
+exist. All 151 tests live in <code>tests/unit/</code> and drive adapters with hand-written
+mock subprocess output.</p>
+<p>For a tool whose entire purpose is parsing eleven other tools' output formats,
+every parser is currently verified against <em>the author's belief about the
+format</em> rather than the format. Two concrete instances of this class already
+occurred: the OSV-Scanner v1→v2 CLI change, and <code>pip-audit --locked</code> semantics,
+both of which had to be checked against the real tools during review rather
+than being caught by a test.</p>
+<h3 id="fix_2">Fix</h3>
+<p>Commit one real captured output per scanner under <code>tests/fixtures/&lt;scanner&gt;/</code>,
+refreshed deliberately when a scanner is upgraded. Add the scoring-drift
+regression test that <code>CONTRIBUTING.md</code> already promises. This converts a whole
+class of "the upstream format changed" defect from a production surprise into a
+test failure.</p>
+<p><strong>Done, partially and explicitly so.</strong> <code>tests/fixtures/scanner-output/</code> holds
+genuine output from njsscan, RuboCop, gitleaks, gosec, pip-audit and semgrep,
+captured against a deliberately-vulnerable tree with local paths rewritten and
+nothing else edited. <code>tests/integration/test_scanner_output_fixtures.py</code> drives
+each adapter against its real capture.</p>
+<p>Six of fifteen scanners are covered, because only tools installable on the
+capture host could produce real output — fabricating the rest would recreate
+the exact defect this fixes. The remainder are named in
+<code>SCANNERS_WITHOUT_A_REAL_CAPTURE</code> with the reason, and a test fails if that
+list drifts out of step with the directory, so the gap stays visible rather
+than becoming folklore.</p>
+<p><code>tests/integration/test_scoring_drift.py</code> now exists. It pins the letter bands,
+the severity ordering, the worst-category rule, and the property that a perfect
+score sits beside failed coverage without either deriving from the other. It
+proves the scale is <em>stable</em>; D17 is what establishes it is <em>correct</em> — the
+corpus now carries vulnerable-by-design anchors and the scale orders the two
+populations perfectly (AUC 1.00). D5 is closed.</p>
+<h2 id="5-problem-4-the-scores-null-state-is-perfect-closed-2026-09-09">5. Problem 4 — the score's null state is "perfect" — CLOSED 2026-09-09</h2>
+<p><strong>Severity: medium. Design decision required before any code changes.</strong></p>
+<p>With zero findings, every category grades 5.0, and
+<a href="../../src/secure_code_audit/scoring.py#L152"><code>scoring.py:152</code></a> takes
+<code>overall = min(per_category.values())</code> → 5.0 → <strong>A+</strong>. A repository where seven
+scanners failed to resolve still reports A+.</p>
+<p>The score is structurally incapable of expressing "we did not look." That is
+precisely why coverage had to be introduced as a parallel axis, and why five
+renderers now carry qualification logic (§3). The current arrangement is
+defensible, but it asks every reader to mentally combine two numbers.</p>
+<p>Two smaller consequences of the same model:</p>
+<ul>
+<li><code>worst_category</code> is <code>min()</code> over ties
+  (<a href="../../src/secure_code_audit/scoring.py#L150"><code>scoring.py:150</code></a>), so it reports
+  the first category in enum order whenever grades are level. Reports currently
+  say <em>"Worst category: <code>secrets</code>"</em> on repositories with zero secrets findings.</li>
+<li>Every category is normalized by <em>total</em> scanned LOC
+  (<a href="../../src/secure_code_audit/scoring.py#L96"><code>scoring.py:96</code></a>), and
+  <code>paths.exclude_patterns</code> is simultaneously the scan scope and that
+  denominator. Narrowing scan scope therefore moves the grade in a direction
+  that is not obvious from the config.</li>
+</ul>
+<h3 id="closed">Closed</h3>
+<p><code>security-pillar.json</code> reports <code>condition: null</code> whenever coverage is
+incomplete, so the artifact <code>maintainability-agent</code> reads can never present an
+unscanned repository as measured — a perfect practice level with no evidence
+reports <code>unverified</code>, never <code>healthy</code>. That is MA's own rule
+(<a href="https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/adr-007-pillars-and-practice.md">ADR 007</a>
+§2) applied at the seam between the two tools.</p>
+<p><strong>And internally.</strong> <code>ScoreReport.per_category</code> grades <code>None</code> where no scanner
+in the run could read that category, <code>overall</code> is <code>None</code> when nothing was
+measurable, and <code>letter</code> is <code>None</code> beside it. Never zero — a 0.0 would claim
+knowledge of poor quality nobody has.</p>
+<p>Measurability is computed in the orchestrator, not in <code>scoring</code>. Working it out
+means knowing which scanners ran and what each reads, and a rubric that can
+reach into the scanner layer is a rubric that can grow a special case for a
+particular repository — MA keeps the same boundary. A scanner counts only if it
+<em>covered</em> its ground, and a category with findings is measurable by definition
+whatever the domain table says, because scanners report outside their declared
+domain routinely.</p>
+<p><strong>This closed the half of P3 that survived.</strong> The P3 test used to assert that
+removing a scanner <em>raises</em> the raw estimate — 0.00/F to 5.00/A+ — and then
+that the grade was withheld anyway. The estimate no longer rises. It
+disappears: the run that looked at nothing reports no number at all, and
+<code>min_score</code> refuses it rather than passing by default.</p>
+<h3 id="open-question">Open question</h3>
+<p>Should the deliverable be a single verdict rather than a score plus a coverage
+status the reader must combine? Resolve this before touching the scoring code;
+it is a product decision, not a refactor.</p>
+<h2 id="6-smaller-structural-debt">6. Smaller structural debt</h2>
+<p><strong>No line counts here.</strong> They were hand-copied into this prose and drifted
+badly — <code>cli.py</code> was recorded as 501 lines when it had reached 1577, and
+<code>standards.py</code> as 523 when it had reached 705. The audit reports both live and
+accurately on every run, so a number transcribed here is a second source of
+truth for something already measured, which is §3's own problem appearing in
+the document that describes it. Sizes below are named as <em>shapes</em>, and the
+current figures come from the audit.</p>
+<ul>
+<li><strong><code>cli.py</code> is orchestrator, pipeline, and presenter.</strong> Extracting
+  <code>_prepare_audit</code>, <code>_run_scanners</code>, <code>_ingest_sarif_imports</code>, <code>_write_outputs</code>,
+  and <code>_exit_code</code> brought <code>_do_audit</code>
+  (<a href="../../src/secure_code_audit/cli.py#L218"><code>cli.py:218</code></a>) under this project's
+  own complexity standard, but there is still no <code>Audit</code> object. The pipeline is
+  a straight-line function threading a dozen locals, and load-bearing ordering —
+  classification must happen <em>before</em> suppression, or a suppressed
+  <code>tool_unavailable</code> would read as a successful scan — is recorded only in a
+  comment.</li>
+<li><strong><code>standards.py</code> is mostly one table</strong> — roughly 390 lines of hand-written
+  <code>(scanner, rule_id) → StandardsEntry</code> dict beginning at
+  <a href="../../src/secure_code_audit/standards.py#L95"><code>standards.py:95</code></a>. Adding a
+  mapping requires a package release, operators cannot extend it (the module
+  docstring says so), and Semgrep alone publishes thousands of rules. This wants
+  to be shipped data with an operator overlay. The <code>(scanner, "*")</code> wildcard
+  fallback is currently absorbing the coverage gap.</li>
+<li>~~<strong><code>--changed-only</code> is a flag that always exits 2.</strong>~~ <strong>Closed in 0.12.0</strong>
+  by implementing it with the property that made it unsafe: the whole tree is
+  scanned, the report is scoped, and the grade is withheld.</li>
+<li><strong>Two console scripts</strong> (<code>secure-code-agent</code>, <code>secure-code-audit</code>) for one
+  entry point — both point at <code>cli:main</code>. A third, <code>secure-code-agent-mcp</code>, has
+  since been added, and that one is a genuinely different entry point.</li>
+<li>~~<strong><code>secure-code-report.json</code> is not gitignored</strong> while <code>secure-code-report.md</code>
+  is, so a CI-shaped local run leaves an untracked file behind.~~ <strong>Closed</strong> —
+  both are ignored now.</li>
+<li><strong><code>environment: name: pypi</code></strong> in <code>release.yml</code> requires that environment to
+  exist in repository settings before the first tagged release will publish.</li>
+</ul>
+<h2 id="7-recommended-sequence">7. Recommended sequence</h2>
+<ol>
+<li>~~<strong><code>ScanResult</code> for adapters</strong> (§2).~~ <strong>Done 2026-09-09</strong> (D13). Highest
+   defect-elimination per hour, and a prerequisite for §3.</li>
+<li>~~<strong>Real scanner fixtures and the scoring-drift test</strong> (§4).~~ <strong>Done
+   2026-09-09</strong> (D14), for the six scanners installable on the capture host.</li>
+<li>~~<strong>Single <code>ScoreVerdict</code> view-model</strong> (§3, row 2).~~ <strong>Done 2026-09-09.</strong>
+   <code>Verdict</code> existed but two renderers were never wired to it and kept a weaker
+   condition, so the markdown report and PR comment claimed grades the JSON
+   withheld. All outputs read the one verdict, and
+   <code>tests/integration/test_verdict_consistency.py</code> asserts they agree.</li>
+<li>~~<strong>Generate the config schema from the dataclasses</strong> (§3, row 1).~~
+   <strong>Reconsidered and closed by enforcement, 2026-09-09.</strong> The schema is nested
+   where <code>Config</code> is flat, so generating either from the other needs a mapping
+   layer that would itself be a third source of truth.
+   <code>tests/unit/test_contract_sync.py</code> holds them in step instead.</li>
+<li>~~<strong>Decide the score model</strong> (§5).~~ <strong>Closed 2026-09-11 by D16 and D17.</strong>
+   The model is a per-kLOC density, <code>secrets</code> excepted as a count, worst
+   category drives the overall, and the grade is explicitly second class to
+   the work order. Every number in it is now chosen from a measurement.</li>
+<li>~~<strong>Calibrate the condition scale</strong> (D5).~~ <strong>Closed 2026-09-11 by D16 and
+   D17.</strong> Method delivered 2026-09-09, narrowed 2026-09-10, and finished when
+   the corpus grew a bad end. The nineteen-repository pinned corpus carries
+   both populations — fourteen maintained projects and five written to be
+   vulnerable — and re-derives exactly
+   (<a href="calibration-readme.html"><code>calibration/</code></a>, <a href="docs-calibration.html"><code>calibration.md</code></a>).
+   The scale orders them perfectly: AUC 1.00, separation +1.26, maintained
+   median 3.41 (B), every vulnerable-by-design application at F.
+   <code>test_scoring_drift.py</code> now pins actual values as well as properties.
+   Three bands (A−, B, C) hold no observation and D17 records that they are
+   presentational granularity rather than measured thresholds.</li>
+<li>Resume feature work and defect fixing.</li>
+</ol>
+<p>Steps 1–4 are done as of 2026-09-09. Most defects traded during recent review
+cycles were downstream symptoms of §2 and §3, and closing them did end that
+pattern — the defects found since came from a different place entirely: the
+repository running its own gate in CI at the floor it declares, which surfaced
+four that no amount of reading the code would have.</p>
+<p>Steps 5 and 6 are the two open <strong>decisions</strong>, not defects. Both are about
+whether the number this tool reports means anything, and neither can be settled
+by a refactor.</p>
+<footer>Rendered from <code>docs/architecture.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

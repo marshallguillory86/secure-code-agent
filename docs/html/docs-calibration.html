@@ -1,0 +1,657 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Calibration study — 2026-09-10 · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#result-in-one-line">Result in one line</a></li>
+<li><a href="#run-of-record-2026-09-10-pinned">Run of record — 2026-09-10, pinned</a></li>
+<li><a href="#what-each-fix-was-worth">What each fix was worth</a><ul>
+<li><a href="#the-path-bug-was-the-largest-single-input-error">The path bug was the largest single input error</a></li>
+<li><a href="#two-rules-of-our-own-were-wrong">Two rules of our own were wrong</a></li>
+<li><a href="#merging-duplicates-was-worth-nothing-and-was-done-anyway">Merging duplicates was worth nothing, and was done anyway</a></li>
+</ul>
+</li>
+<li><a href="#what-is-left-is-not-a-bug">What is left is not a bug</a></li>
+<li><a href="#what-the-correction-bought-and-what-is-still-wrong">What the correction bought, and what is still wrong</a><ul>
+<li><a href="#what-was-wrong-the-normalizer-resolved-see-d16">What was wrong: the normalizer — resolved, see D16</a></li>
+<li><a href="#corpus-coverage-was-the-blocker-and-fixing-it-answered-the-question">Corpus coverage was the blocker, and fixing it answered the question</a></li>
+</ul>
+</li>
+<li><a href="#two-candidate-adjustments-measured">Two candidate adjustments, measured</a></li>
+<li><a href="#limits-of-this-study-stated">Limits of this study, stated</a></li>
+<li><a href="#status">Status</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Scoring and calibration</div><h1>Calibration study — 2026-09-10</h1><blockquote>
+<p>Status: <strong>v0.12.10 — 2026-09-11.</strong> The D5 calibration study, closed by D16 and D17.</p>
+</blockquote>
+<p>The study <a href="docs-decisions.html">D5</a> has owed since 2026-09-08. The letter bands were
+borrowed from <code>maintainability-agent</code> without its calibration study, and the
+dampener was an invented normalizer with no corpus behind it.</p>
+<p>Method, corpus and harness: <a href="calibration-readme.html"><code>calibration/</code></a>.
+Raw data: <a href="../../calibration/results.json"><code>calibration/results.json</code></a>.</p>
+<h2 id="result-in-one-line">Result in one line</h2>
+<p><strong>Most of the floor was our own bug.</strong> The corpus median went from <strong>0.00 (F)</strong>
+to <strong>4.37 (A−)</strong> across three rounds of fixes, and all but the last round were
+defects in this tool rather than properties of the code it was reading. Four
+repositories remain at F, every one of them on findings that were checked
+individually and are <strong>true positives</strong>. Band edges are now a question about
+what a grade should <em>mean</em>, not about arithmetic.</p>
+<h2 id="run-of-record-2026-09-10-pinned">Run of record — 2026-09-10, pinned</h2>
+<p>Fourteen repositories pinned by commit; one shared config; ten scanners;
+Semgrep pinned to <code>sca-offline@1.2.0 (e861a891559f)</code> rather than the online
+registry, so <strong>this run is exactly reproducible</strong> and P6 is met.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>repo</th>
+<th>lang</th>
+<th style="text-align: right;">primary LOC</th>
+<th style="text-align: right;">findings</th>
+<th>score</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>django</td>
+<td>python</td>
+<td style="text-align: right;">145,456</td>
+<td style="text-align: right;">260</td>
+<td>0.00 <strong>F</strong></td>
+</tr>
+<tr>
+<td>fastapi</td>
+<td>python</td>
+<td style="text-align: right;">35,655</td>
+<td style="text-align: right;">167</td>
+<td>0.00 <strong>F</strong></td>
+</tr>
+<tr>
+<td>httpx</td>
+<td>python</td>
+<td style="text-align: right;">7,585</td>
+<td style="text-align: right;">35</td>
+<td>0.13 <strong>F</strong></td>
+</tr>
+<tr>
+<td>flask</td>
+<td>python</td>
+<td style="text-align: right;">8,284</td>
+<td style="text-align: right;">20</td>
+<td>0.15 <strong>F</strong></td>
+</tr>
+<tr>
+<td>requests</td>
+<td>python</td>
+<td style="text-align: right;">5,965</td>
+<td style="text-align: right;">21</td>
+<td>2.54 B-</td>
+</tr>
+<tr>
+<td>sinatra</td>
+<td>ruby</td>
+<td style="text-align: right;">7,135</td>
+<td style="text-align: right;">7</td>
+<td>3.10 B</td>
+</tr>
+<tr>
+<td>commons-lang</td>
+<td>java</td>
+<td style="text-align: right;">97,561</td>
+<td style="text-align: right;">8</td>
+<td>4.15 A-</td>
+</tr>
+<tr>
+<td>lodash</td>
+<td>javascript</td>
+<td style="text-align: right;">25,944</td>
+<td style="text-align: right;">7</td>
+<td>4.59 A</td>
+</tr>
+<tr>
+<td>jekyll</td>
+<td>ruby</td>
+<td style="text-align: right;">14,590</td>
+<td style="text-align: right;">6</td>
+<td>4.61 A</td>
+</tr>
+<tr>
+<td>axios</td>
+<td>javascript</td>
+<td style="text-align: right;">26,788</td>
+<td style="text-align: right;">5</td>
+<td>5.00 A+</td>
+</tr>
+<tr>
+<td>express</td>
+<td>javascript</td>
+<td style="text-align: right;">4,497</td>
+<td style="text-align: right;">5</td>
+<td>5.00 A+</td>
+</tr>
+<tr>
+<td>gin</td>
+<td>go</td>
+<td style="text-align: right;">7,146</td>
+<td style="text-align: right;">5</td>
+<td>5.00 A+</td>
+</tr>
+<tr>
+<td>gson</td>
+<td>java</td>
+<td style="text-align: right;">21,784</td>
+<td style="text-align: right;">5</td>
+<td>5.00 A+</td>
+</tr>
+<tr>
+<td>logrus</td>
+<td>go</td>
+<td style="text-align: right;">2,964</td>
+<td style="text-align: right;">5</td>
+<td>5.00 A+</td>
+</tr>
+</tbody>
+</table></div>
+<p>Median reported score <strong>4.37 (A−)</strong>. Median <code>worst_normalized</code> <strong>1.27</strong>,
+against 50.15 when this study began.</p>
+<h2 id="what-each-fix-was-worth">What each fix was worth</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>median score</th>
+<th style="text-align: right;">at F</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>everything scored, Semgrep online</td>
+<td>0.00 <strong>F</strong></td>
+<td style="text-align: right;">10/14</td>
+</tr>
+<tr>
+<td>test tree separated</td>
+<td>0.00 <strong>F</strong></td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>dependencies separated, Semgrep pinned offline</td>
+<td>1.87 <strong>D</strong></td>
+<td style="text-align: right;">6/14</td>
+</tr>
+<tr>
+<td>documentation axis; secrets gated rather than force-scored</td>
+<td>1.34 <strong>D</strong></td>
+<td style="text-align: right;">7/14</td>
+</tr>
+<tr>
+<td><strong>finding paths anchored to the audited tree</strong></td>
+<td><strong>4.37 A−</strong></td>
+<td style="text-align: right;">4/14</td>
+</tr>
+<tr>
+<td>corroborating duplicates merged</td>
+<td>4.37 A−</td>
+<td style="text-align: right;">4/14</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="the-path-bug-was-the-largest-single-input-error">The path bug was the largest single input error</h3>
+<p>Two defects in this tool, both fail-open, both silent:</p>
+<p><strong>gitleaks reports repository-relative paths; every other scanner reports
+absolute ones.</strong> Every consumer that asks <em>"where is this?"</em> resolved a
+relative path against the <strong>process working directory</strong> — wherever the
+operator happened to invoke the CLI — so <code>relative_to(root)</code> raised and the
+answer came back "no". Consequences:</p>
+<ul>
+<li><code>exclude_patterns</code> <strong>did not apply to gitleaks findings at all</strong>. An
+  operator excluding <code>vendor/</code> still had vendor secrets scored.</li>
+<li>Every gitleaks finding was scored as primary-tree regardless of where it
+  lived. <code>requests</code> was held at F by four <code>tests/certs/*.key</code> files its own
+  suite generates; <code>flask</code> by six documentation examples.</li>
+</ul>
+<p><strong><code>**/</code> did not include depth zero.</strong> The pattern carries a literal <code>/</code>, so
+<code>**/*_test.go</code> matched <code>router/context_test.go</code> and never <code>context_test.go</code>.
+Gin keeps its tests beside the code they test, so three of its four
+"production" secrets were root-level test fixtures. Gin went <strong>F → A+</strong>, and
+its measured LOC fell from 16,823 to 7,146 once <code>testdata/</code> was recognised.</p>
+<p>Both now ship a structural block:
+<a href="../../tests/unit/test_finding_paths.py"><code>test_finding_paths.py</code></a> anchors paths at
+<code>Scanner._make_finding</code> — the one constructor every adapter passes through —
+and asserts no adapter bypasses it.</p>
+<h3 id="two-rules-of-our-own-were-wrong">Two rules of our own were wrong</h3>
+<p><code>sca.python.eval</code> matched <code>eval("literal")</code>. <code>sca.offline.ruby.code-injection</code>
+matched <code>class_eval(&amp;block)</code> — Ruby's <strong>safe</strong> form, where a proc is handed
+over and nothing is ever parsed. Four of Sinatra's five code-injection
+findings were that single expression; Sinatra went <strong>F → B</strong>.</p>
+<p>Narrowing a rule changes its meaning, which under <a href="docs-decisions.html">D10</a> requires
+a profile version bump. It did not get one, and nothing caught that, so
+<a href="../../tests/unit/test_ruleset_version.py"><code>test_ruleset_version.py</code></a> now pins the
+ruleset digest to <code>PROFILE_VERSION</code>.</p>
+<h3 id="merging-duplicates-was-worth-nothing-and-was-done-anyway">Merging duplicates was worth nothing, and was done anyway</h3>
+<p>Bandit ships <code>mark_safe</code> as both <code>B308</code> and <code>B703</code>; Django carried 56 and 51 of
+them sharing 50 lines. Merging changed <strong>no repository's grade</strong> — Django was
+already clamped at 0 — and it is fixed because a report that lists one line
+twice is wrong about the code, and a work order built from it asks for the
+same fix twice. The second check is recorded as <code>corroborated_by</code> rather than
+discarded: two scanners agreeing is stronger evidence, not weaker.</p>
+<h2 id="what-is-left-is-not-a-bug">What is left is not a bug</h2>
+<p>Four repositories remain at F. Every contributing finding was inspected.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>repo</th>
+<th style="text-align: right;">normalized</th>
+<th>dominant rule</th>
+<th style="text-align: right;">share</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>django</td>
+<td style="text-align: right;">33.4</td>
+<td><code>B703</code> <code>mark_safe</code></td>
+<td style="text-align: right;">31%</td>
+</tr>
+<tr>
+<td>fastapi</td>
+<td style="text-align: right;">20.3</td>
+<td><code>B101</code> bare <code>assert</code></td>
+<td style="text-align: right;">50%</td>
+</tr>
+<tr>
+<td>httpx</td>
+<td style="text-align: right;">9.7</td>
+<td><code>B101</code> bare <code>assert</code></td>
+<td style="text-align: right;">76%</td>
+</tr>
+<tr>
+<td>flask</td>
+<td style="text-align: right;">9.7</td>
+<td><code>sca.python.eval</code></td>
+<td style="text-align: right;">32%</td>
+</tr>
+</tbody>
+</table></div>
+<p>They floor at <code>normalized = 10</code>.</p>
+<p><strong>An earlier version of this section called these true positives. That was
+wrong, and it is the error that kept the floor in place for a day.</strong></p>
+<p>Checking that a construct is present is not checking that a defect is
+present, and the two were conflated. Inspecting the actual matches:</p>
+<ul>
+<li>Django's <code>B105 hardcoded password</code> hits are <code>EMAIL_HOST_PASSWORD = ""</code> and
+  <code>SECRET_KEY = ""</code> — <strong>empty strings</strong>, the framework's own defaults.</li>
+<li>Django's <code>B608 SQL injection</code> hits include
+  <code>raise ImproperlyConfigured('Cannot determine PostGIS version for …')</code>, an
+  error message containing no SQL, and
+  <code>cursor.execute("SELECT %s, %s, %s FROM %s …")</code>, which is parameterised.</li>
+<li>Django's 56 <code>mark_safe</code> hits are the admin rendering its own escaped
+  output, in the framework that <em>defines</em> <code>mark_safe</code>.</li>
+</ul>
+<p>Some are genuine — Flask's <code>exec()</code> config loader, Django's <code>exec()</code> in
+<code>commands/shell.py</code>, the MD5 in <code>auth/hashers.py</code>. Most are not. Reporting
+them all as real defects and then reasoning about what F "means" was
+answering the wrong question: a tool that grades Django, FastAPI, httpx and
+Flask all F is measuring how talkative Bandit is on large Python codebases,
+which is the exact failure D5 was raised to prevent.</p>
+<p>The product already has the mechanism for that distance: a baseline, and
+suppressions with a required note. What it does not have is a decision about
+whether an <em>untriaged</em> run of a framework should read F. That is a product
+decision, not an arithmetic one.</p>
+<h2 id="what-the-correction-bought-and-what-is-still-wrong">What the correction bought, and what is still wrong</h2>
+<p>Repeats of one rule now saturate: sorted worst-first, the k-th hit of a rule
+counts <code>weight / sqrt(k)</code>. One rule firing 56 times is one fact observed 56
+times, not 56 independent defects. Distinct rules still add in full.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>repo</th>
+<th>before</th>
+<th>after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>httpx</td>
+<td>0.13 <strong>F</strong></td>
+<td>2.58 B-</td>
+</tr>
+<tr>
+<td>fastapi</td>
+<td>0.00 <strong>F</strong></td>
+<td>2.47 C</td>
+</tr>
+<tr>
+<td>requests</td>
+<td>2.54 B-</td>
+<td>3.98 B+</td>
+</tr>
+<tr>
+<td>flask</td>
+<td>0.00 <strong>F</strong></td>
+<td>0.44 <strong>F</strong></td>
+</tr>
+<tr>
+<td>django</td>
+<td>0.00 <strong>F</strong></td>
+<td>0.00 <strong>F</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>Repositories at F: four, then two. No repository scored lower. Median 4.48.</p>
+<p><strong>The first attempt at this broke P3 and the tests caught it.</strong> Scoring a rule
+as <code>mean(weight) * sqrt(n)</code> is also saturating, and under it one CRITICAL plus
+nine LOW hits of one rule scored 6.88 against 15.0 for the CRITICAL alone —
+deleting nine real findings would have <em>raised</em> the grade. The rank discount
+cannot do that: the worst hit always lands at k=1 at full weight.</p>
+<p><strong>A regression was found the same way.</strong> Reading Bandit's CWEs silently
+disabled the <code>mark_safe</code> de-duplication, because Bandit files B308 as CWE-79
+and B703 as CWE-80 and the merge key preferred the CWE over the alias table.
+Django went back to counting <code>mark_safe</code> twice. Every unit test passed
+throughout — they all used rules with no CWE — and the corpus caught it.</p>
+<h3 id="what-was-wrong-the-normalizer-resolved-see-d16">What was wrong: the normalizer — resolved, see D16</h3>
+<p>Django and Flask remained at F, and the cause was isolated here. Under
+<code>sqrt(LOC/1000)</code>, <strong>the largest repository in the corpus ranked worst</strong>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">kLOC</th>
+<th style="text-align: right;">sqrt-normalized</th>
+<th style="text-align: right;">per-kLOC</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>django</td>
+<td style="text-align: right;">145.5</td>
+<td style="text-align: right;">15.53 (<strong>F</strong>)</td>
+<td style="text-align: right;">1.29 (A-)</td>
+</tr>
+<tr>
+<td>flask</td>
+<td style="text-align: right;">8.3</td>
+<td style="text-align: right;">9.12 (<strong>F</strong>)</td>
+<td style="text-align: right;">3.17 (B)</td>
+</tr>
+<tr>
+<td>fastapi</td>
+<td style="text-align: right;">35.7</td>
+<td style="text-align: right;">5.06 (C)</td>
+<td style="text-align: right;">0.85 (A)</td>
+</tr>
+</tbody>
+</table></div>
+<p>That is size bias — the precise thing the dampener exists to remove, and
+which D5 already records as "an invented normalizer with no corpus behind
+it". One HIGH finding costs a full grade point in an 8k-line repository and a
+quarter of that in Django.</p>
+<p><strong>It was not changed at the time, for three reasons.</strong> It moves every grade
+the tool has ever emitted. The slope would need recalibrating and this corpus
+could not support that (below). And it weakens the gate: a synthetic
+1,939-line repository carrying SQL injection, command injection,
+<code>pickle.loads</code>, <code>yaml.load</code>, <code>eval</code>, MD5 and hardcoded credentials scored
+0.00 F and would land near D under per-kLOC.</p>
+<p><strong>All three were then answered, and the change was made — D16.</strong> Corpus
+coverage was fixed first (below), which made the slope recalibratable: four
+normalizers were measured on one pinned run and <code>linear, slope 1.5</code> was the
+one that held the D5 target. Nothing in the wild consumes a grade yet, so
+"moves every grade ever emitted" cost nothing. The third reason was the real
+one and it stands — the weakening is genuine, and it is why D16 records that
+the gate and the work order, not the number, are what catch a vulnerability.</p>
+<p>Re-measured over the same corpus after the change:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">before (sqrt, 0.5)</th>
+<th style="text-align: right;">after (linear, 1.5)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>examined median</td>
+<td style="text-align: right;">3.36 (B)</td>
+<td style="text-align: right;">3.20 (B)</td>
+</tr>
+<tr>
+<td>Spearman(LOC, grade)</td>
+<td style="text-align: right;">−0.37</td>
+<td style="text-align: right;"><strong>+0.02</strong></td>
+</tr>
+<tr>
+<td>worst-ranked repository</td>
+<td style="text-align: right;">django (largest)</td>
+<td style="text-align: right;"><strong>flask (densest)</strong></td>
+</tr>
+<tr>
+<td>spread</td>
+<td style="text-align: right;">0.00–5.00</td>
+<td style="text-align: right;">0.00–5.00</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>This was measured against a corpus with no bad end in it, and that mattered.</strong>
+Adding vulnerable-by-design anchors showed straight density had cost
+discriminative power — AUC 0.91 → 0.80 — because it divided committed
+credentials by repository size. D17 amends it: <code>secrets</code> normalizes by
+<code>sqrt(LOC/1000)</code> and the slope is 1.3. The size-bias fix above stands; the
+figures in this table are superseded by the result section at the end of this
+document.</p>
+<h3 id="corpus-coverage-was-the-blocker-and-fixing-it-answered-the-question">Corpus coverage was the blocker, and fixing it answered the question</h3>
+<p>Six of the fourteen were scoring near-perfectly because they were
+<strong>unexamined</strong>, not clean. Python repositories produced 712 to 5,107 real
+findings each; everything else produced nought to four. Three orders of
+magnitude, and none of it about those projects being thirty times cleaner
+than Django.</p>
+<p><strong>Two causes, and only one was structural.</strong></p>
+<p><code>njsscan</code> and <code>rubocop</code> were simply not installed on the machine running the
+study, so JavaScript and Ruby had no scanner that reads them. Installing
+both is all it took:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>repo</th>
+<th>before</th>
+<th>after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>axios</td>
+<td>5.00 A+</td>
+<td>4.38 A-</td>
+</tr>
+<tr>
+<td>lodash</td>
+<td>4.59 A</td>
+<td>4.48 A-</td>
+</tr>
+<tr>
+<td>sinatra</td>
+<td>3.10 B</td>
+<td>2.79 B-</td>
+</tr>
+<tr>
+<td>express</td>
+<td>5 findings</td>
+<td>90 findings</td>
+</tr>
+</tbody>
+</table></div>
+<p>Go and Java cannot be fixed that way, and <a href="docs-decisions.html">D12</a> already says
+why: gosec analyses Go by invoking the target's <em>own</em> build tooling and
+fails without the toolchain on the host; PMD covers none of the patterns and
+SpotBugs needs compiled bytecode. <code>gin</code>, <code>logrus</code>, <code>gson</code> and <code>commons-lang</code>
+are unreadable by this floor.</p>
+<p><strong>Those four were holding the median up.</strong> Their own median is 5.00 — four
+perfect scores for repositories nobody looked at. The product refuses to
+grade what it did not examine (P7); a study computing percentiles over
+repositories in the same position is doing the thing the product refuses to
+do. <code>summarize()</code> now reports the examined set separately and names what it
+excluded.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>set</th>
+<th style="text-align: right;">n</th>
+<th>median</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>examined</td>
+<td style="text-align: right;">10</td>
+<td><strong>3.38</strong></td>
+</tr>
+<tr>
+<td>unexamined</td>
+<td style="text-align: right;">4</td>
+<td>5.00</td>
+</tr>
+<tr>
+<td>all fourteen</td>
+<td style="text-align: right;">14</td>
+<td>4.37</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>3.38 is in the B band, and the B band is the target.</strong>
+<code>maintainability-agent</code> calibrates so a mature-OSS corpus medians at a B.
+This corpus already does, and the examined spread — 0.00, 0.44, 2.47, 2.58,
+2.79, 3.98, 4.38, 4.48, 4.61, 5.00 — is a distribution rather than the cliff
+it was that morning. <strong>No band edge needs moving to achieve it.</strong></p>
+<p>What remains is one repository rather than the scale: Django still reads
+0.00, for the normalizer reason above.</p>
+<h2 id="two-candidate-adjustments-measured">Two candidate adjustments, measured</h2>
+<p>Neither is adopted. Both are recorded so the choice is argued rather than
+discovered.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">median</th>
+<th style="text-align: right;">at F</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>as run</td>
+<td style="text-align: right;">4.37 A−</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr>
+<td>√n per rule (diminishing returns on repeats)</td>
+<td style="text-align: right;">4.56 A</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td>drop LOW severity entirely</td>
+<td style="text-align: right;">4.80 A+</td>
+<td style="text-align: right;">—</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>√n per rule</strong> treats 81 instances of one rule as one strongly-evidenced fact
+rather than 81 independent defects. It is the only lever that moves the four
+floored repositories — fastapi 0.00 → 3.41, httpx 0.13 → 3.10, requests 2.54 →
+4.39 — and Django stays at F under it regardless.</p>
+<p>It should not be adopted to reach a target, because <strong>the target is already
+met</strong>: <code>maintainability-agent</code> calibrates so a mature-OSS median earns a B, and
+this corpus medians at A−. √n would move it to A, further past the mark rather
+than toward it. The argument for it has to be that repeated identical findings
+are correlated evidence — which is a claim about what a rule count means, and
+is arguable on its merits.</p>
+<p>The real remaining distortion is <strong>spread, not centre</strong>: nine repositories sit
+at 4.15 or better and four at 0.15 or worse, with almost nothing between. That
+is a cliff produced by clamping a linear slope at zero, and it is a
+slope-and-bands question.</p>
+<h2 id="limits-of-this-study-stated">Limits of this study, stated</h2>
+<ul>
+<li><strong>Corpus bias.</strong> Fourteen well-maintained OSS projects with their own
+  security processes. A median calibrated here means "as clean as a well-run
+  OSS project", not "average code". <code>maintainability-agent</code> has the same
+  limitation.</li>
+<li><strong>Untriaged.</strong> No repository has a baseline or suppressions. This measures
+  first-run output, which is the worst case by construction.</li>
+<li><strong>Reproducible, at the cost of breadth.</strong> Semgrep is pinned to
+  <code>sca-offline@1.2.0 (e861a891559f)</code>, so the run re-derives exactly — that is
+  what P6 requires. The cost is real: the offline profile is 20 rules against
+  the registry's thousands, so the corpus looks cleaner than an online run
+  would. <strong>Bands chosen here do not transfer to an online run.</strong> If the tool's
+  default stays online, a second calibration is owed for that mode.</li>
+<li><strong>Shallow clones.</strong> <code>--depth 1</code>, so gitleaks sees one commit rather than full
+  history. Uniform across the corpus, but it understates secret findings.</li>
+<li><strong>Fourteen is small.</strong> Enough to show saturation, not enough to place a band
+  edge precisely.</li>
+<li><strong>One language dominates the floor.</strong> All four floored repositories are
+  Python, which is also the language with the most talkative floor scanner.</li>
+</ul>
+<h2 id="status">Status</h2>
+<p>D5 stays <strong>open</strong>, narrowed to one question.</p>
+<p><strong>Answered — test directories.</strong> Separated, not excluded: the primary tree is
+scored, the test tree reported beside it and gated where the operator names
+the category.</p>
+<p><strong>Answered — documentation.</strong> Its own axis, on the same terms.</p>
+<p><strong>Answered — dependencies.</strong> Their own axis, still gated. A critical runtime
+CVE fails a build; it no longer sinks a code-condition grade.</p>
+<p><strong>Answered — secrets.</strong> No longer force-scored onto the primary axis. Nothing
+static separates a live credential from a test certificate, so they are gated
+from any axis rather than graded from all of them.</p>
+<p><strong>Answered — which mode to calibrate.</strong> Offline and pinned, so the study
+re-derives. P6 is met.</p>
+<p><strong>Answered — is the residue noise?</strong> No. It was measured finding by finding
+and it is true positives.</p>
+<p><strong>Closed — band edges, and what a grade means. See D17.</strong> The blocker was
+that this corpus had no bad end: every repository in it was a well-maintained
+OSS project, so there was nothing to place D and F against. Five
+vulnerable-by-design applications are now pinned alongside them (OWASP PyGoat,
+NodeGoat, railsgoat, WebGoat, Juice Shop), cloned and read but never executed.</p>
+<p>With both populations present the scale can be scored rather than admired:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AUC (maintained above vulnerable)</td>
+<td style="text-align: right;"><strong>1.00</strong></td>
+</tr>
+<tr>
+<td>separation (worst maintained − best vulnerable)</td>
+<td style="text-align: right;"><strong>+1.26</strong></td>
+</tr>
+<tr>
+<td>maintained median</td>
+<td style="text-align: right;"><strong>3.41 (B)</strong></td>
+</tr>
+<tr>
+<td>vulnerable median</td>
+<td style="text-align: right;"><strong>0.00 (F)</strong></td>
+</tr>
+<tr>
+<td>Spearman(LOC, grade)</td>
+<td style="text-align: right;"><strong>−0.05</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>Two edges are measured: <strong>D/F at 1.00 falls inside the population gap</strong>, and
+the centre lands in B. <strong>A−, B and C contain no observation at all</strong>, and no
+larger corpus fixes that — at that end the difference between two
+repositories is five findings versus eight in twenty thousand lines, and
+nothing says one deserves A and the other A+. Those edges are presentational
+granularity, not measured thresholds.</p>
+<p>The old worry here — that the bottom of the distribution was frameworks being
+graded on constructs they exist to provide — turned out to be two things. Part
+was real (Django's <code>mark_safe</code>, Flask's <code>exec(compile(...))</code> in
+<code>config.from_pyfile</code>), and the rank discount and triage tiers address it. Part
+was a defect: Bandit's <code>B102</code>/<code>B307</code> were mapped to CWE-78, so they never
+merged with the built-in <code>sca.python.eval</code> finding on the same line and one
+defect scored twice. Flask carried four such pairs.</p>
+<footer>Rendered from <code>docs/calibration.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

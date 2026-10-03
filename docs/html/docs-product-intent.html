@@ -1,0 +1,534 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>secure-code-agent — Product Intent · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#1-intent-in-one-sentence">1. Intent in one sentence</a></li>
+<li><a href="#2-the-problem">2. The problem</a></li>
+<li><a href="#3-who-this-is-for">3. Who this is for</a></li>
+<li><a href="#4-what-success-looks-like">4. What success looks like</a></li>
+<li><a href="#4a-what-it-promises">4a. What it promises</a></li>
+<li><a href="#5-product-principles">5. Product principles</a></li>
+<li><a href="#6-scope-boundaries">6. Scope boundaries</a></li>
+<li><a href="#7-positioning">7. Positioning</a></li>
+<li><a href="#8-open-product-questions">8. Open product questions</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Product and intent</div><h1>secure-code-agent — Product Intent</h1><blockquote>
+<p>Status: <strong>v0.12.10 — 2026-10-02.</strong> The single source of truth for
+<em>why this exists, who it serves, and what it refuses to become.</em>
+Companion docs: <a href="docs-design.html"><code>design.md</code></a> for how it is built,
+<a href="docs-architecture.html"><code>architecture.md</code></a> for where the build diverges from the
+design, <a href="docs-threat-model.html"><code>threat-model.md</code></a> for what it defends against.</p>
+</blockquote>
+<h2 id="1-intent-in-one-sentence">1. Intent in one sentence</h2>
+<p><strong>Give a repository with AI coding agents in the loop a deterministic security
+gate, and give the agent a bounded task brief so that fixing a finding does not
+become an unreviewed rewrite of the security-critical code around it.</strong></p>
+<p>Every part of that sentence constrains the product. <em>Deterministic</em> rules out
+an LLM in the audit path. <em>Gate</em> rules out an advisory dashboard. <em>Bounded task
+brief</em> is the differentiator — it is the thing no existing scanner ships.</p>
+<h2 id="2-the-problem">2. The problem</h2>
+<p>Security scanners are a solved-enough problem. Semgrep, Bandit, CodeQL, Trivy,
+Gitleaks, and OSV are mature, well-maintained, and better at finding defects
+than anything this project would write. The problem is not detection.</p>
+<p>The problem is what happens <em>after</em> detection, once an AI agent is the one
+holding the patch. Pointed at a security finding, agents exhibit a consistent
+and documented set of failure modes:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Anti-pattern</th>
+<th>What the agent actually does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Crypto roulette</strong></td>
+<td>"Replace MD5 with SHA-256" → rewrites the hashing module using a library it saw in training data.</td>
+</tr>
+<tr>
+<td><strong>Auth-flow rewrite</strong></td>
+<td>"Fix the IDOR" → refactors the session model. Now there is an unaudited new auth path.</td>
+</tr>
+<tr>
+<td><strong>Validation softening</strong></td>
+<td>"Make the tests pass after the fix" → weakens the regex or removes the bounds check.</td>
+</tr>
+<tr>
+<td><strong>Test deletion</strong></td>
+<td>"The security test is failing" → deletes the test.</td>
+</tr>
+<tr>
+<td><strong>Lint disable</strong></td>
+<td>"This rule fires repeatedly" → <code># nosec</code>, <code># noqa</code>, <code>eslint-disable</code> everywhere.</td>
+</tr>
+<tr>
+<td><strong>Scope creep</strong></td>
+<td>"I fixed the SQLi" → followed by 600 lines of unrelated refactoring.</td>
+</tr>
+<tr>
+<td><strong>Dependency thrash</strong></td>
+<td>"Bumping the vulnerable package" → introduces twelve unrelated new dependencies.</td>
+</tr>
+<tr>
+<td><strong>Silent behavior change</strong></td>
+<td>"It works now" → same input, different output. Downstream callers break.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Each of these turns a <em>known, scoped, one-line defect</em> into an <em>unknown,
+unscoped, unreviewed change to security-critical code</em>. The net security
+posture can be worse after the fix than before it, and the review burden lands
+on a human who was already saturated — which is why the agent was doing it.</p>
+<p>Existing scanners stop at "here is a list of findings." None of them ship a
+prompt back to the agent that says <em>fix only these findings, do not touch
+crypto, auth, validation, or logging, preserve behavior, add a test that fails
+before and passes after.</em></p>
+<p>That gap is the product.</p>
+<h2 id="3-who-this-is-for">3. Who this is for</h2>
+<p><strong>Primary: the engineer who owns a repository where agents write code.</strong> They
+need a CI gate that fails honestly, and an artifact they can hand to Claude
+Code, Codex, Cursor, Copilot, or an SDK agent that constrains the fix. They are
+not a security specialist and should not need to be.</p>
+<p><strong>Secondary: the security engineer standardizing multiple repositories.</strong> They
+care about the standards anchoring — CWE, OWASP Top 10, OWASP ASVS, NIST SSDF —
+because they report against frameworks, not scanner rule ids. They need SARIF
+out and plain files in git, not a SaaS they must procure.</p>
+<p><strong>Secondary: the platform/CI owner.</strong> They care that it is one binary, runs the
+same locally and in CI, has a meaningful exit code, and never phones home.</p>
+<p><strong>Explicitly not for:</strong> teams looking for a SAST engine, a runtime defense, a
+vulnerability management SaaS, or a compliance dashboard. See §6.</p>
+<h2 id="4-what-success-looks-like">4. What success looks like</h2>
+<p>The product is working when all of the following hold. These are the criteria
+the design already implies; they are written down here so future features can
+be judged against them.</p>
+<ol>
+<li><strong>A green gate means something.</strong> The gate cannot pass while a required
+   scanner failed to run. A clean finding set with a broken toolchain must be
+   reported as incomplete, never as safe. This is non-negotiable and was the
+   subject of the v0.3.0 coverage-integrity work.</li>
+<li><strong>The audit is reproducible.</strong> Same inputs, same commit, same scanner
+   versions → same score, same exit code. No LLM in the audit path, no network
+   dependency in scoring, no wall-clock dependence except suppression expiry.</li>
+<li><strong>The remediation prompt actually bounds the agent.</strong> The patch that comes
+   back touches the named findings and little else, preserves behavior, and
+   carries a test that fails pre-fix and passes post-fix.</li>
+<li><strong>A finding survives a reformat.</strong> Baseline identity is stable across
+   whitespace-only edits, so adopting the tool on an existing repository does
+   not produce a wall of false "new" findings.</li>
+<li><strong>Suppressions cannot rot.</strong> Every suppression carries a reason and an
+   expiry, and an expired one becomes a hard failure rather than silently
+   continuing to hide a defect.</li>
+<li><strong>The tool is honest about its own limits.</strong> Documented behavior matches
+   executable behavior. Claims that cannot be substantiated are removed rather
+   than softened.</li>
+</ol>
+<p>Criterion 3 is currently <strong>unmeasured</strong>. We assert the prompt bounds the agent
+because it encodes the anti-patterns in §2 as explicit constraints, but no
+empirical evaluation has been run. This is stated as an open question in §8
+rather than claimed as a result.</p>
+<h2 id="4a-what-it-promises">4a. What it promises</h2>
+<p>Adopted from <code>maintainability-agent</code>'s
+<a href="https://github.com/marshallguillory86/maintainability-agent/blob/main/docs/product-intent.md">product intent</a>,
+in the same shape and with the same second column, because a promise that
+cannot be falsified is a slogan. Where a promise reads differently here, it is
+because the failure mode differs — most sharply at P3, where this tool's score
+is a <em>rate over findings</em>, so withholding a scanner makes the number go <strong>up</strong>.</p>
+<p>The pair is deliberate: MA's ADR-007 delegates the Security pillar to this
+tool, and two tools whose promises are worded differently cannot be read
+together.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Promise</th>
+<th>Violated by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>P1</strong></td>
+<td>The audit is deterministic: same tree, same config, same pinned scanner versions in — same findings, coverage and score out. The analysis invokes no language model.</td>
+<td>Two runs disagreeing on identical inputs, or a model in the gate path</td>
+</tr>
+<tr>
+<td><strong>P2</strong></td>
+<td>The same rubric applies to every repository, and the rubric is readable in source</td>
+<td>A repository-specific code path changing a weight or a band</td>
+</tr>
+<tr>
+<td><strong>P3</strong></td>
+<td><strong>Neither withholding nor supplying evidence can improve the reported grade.</strong> The score is a rate over findings, so removing a scanner removes findings and the raw number rises — coverage is a separate axis for exactly this reason, and a grade is withheld when it cannot be supported. The audited tree's own configuration is not evidence: it cannot re-label a finding's severity or category (D32)</td>
+<td>Any input whose removal <strong>or addition</strong> raises the graded field. Measured twice at 0.00/F to 5.00/A+ — once by disabling scanners, and once by an in-tree <code>severity_overrides</code>, which is what added the second half of this promise</td>
+</tr>
+<tr>
+<td><strong>P4</strong></td>
+<td>The overall score is the worst category printed beside it, never their mean</td>
+<td>A report where the arithmetic does not check</td>
+</tr>
+<tr>
+<td><strong>P5</strong></td>
+<td>The remediation prompt names only findings the audit actually produced</td>
+<td>A prompt instruction with no corresponding finding</td>
+</tr>
+<tr>
+<td><strong>P6</strong></td>
+<td>Every empirical claim in this repository is reproducible from checked-in pinned inputs</td>
+<td>A quoted number that cannot be re-derived offline</td>
+</tr>
+<tr>
+<td><strong>P7</strong></td>
+<td>A score is issued only where enough was examined to support it, and never as a consequence of not looking</td>
+<td>A number a reader with the repository in front of them would call absurd</td>
+</tr>
+<tr>
+<td><strong>P8</strong></td>
+<td>Every report states what examined it — which scanners ran, which did not, at what version, and over what scope</td>
+<td>A reported value with no attributable source, or a run whose coverage cannot be recovered from its output</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>P6 was unmet and now is not.</strong> The calibration study
+(<a href="docs-calibration.html"><code>calibration.md</code></a>) originally ran Semgrep in its default
+online mode, so its registry rules were unpinned and its numbers could not be
+re-derived. It has been re-run against <code>sca-offline@1.1.0 (357b8d7e6652)</code> and
+now re-derives exactly, at the cost of breadth — a note the study carries,
+because bands chosen from a pinned offline run do not transfer to an online
+one.</p>
+<p><strong>P3 and P7 are why the pillar artifact withholds a condition.</strong> A repository
+where nothing could run reports zero findings, and zero findings grades 5.0.
+Handing that number to <code>maintainability-agent</code> would launder an unscanned
+repository into a pillar report that looks measured, so <code>condition</code> is <code>null</code>
+whenever coverage is incomplete. See <a href="docs-ma-integration.html"><code>ma-integration.md</code></a>.</p>
+<h2 id="5-product-principles">5. Product principles</h2>
+<p>Each principle exists to settle a class of future argument. When a proposed
+feature conflicts with one, the principle wins unless it is explicitly revised
+here.</p>
+<ol>
+<li>
+<p><strong>Deterministic first, AI optional.</strong> The audit never calls an LLM. The
+   remediation prompt is a generated file the operator chooses to hand to an
+   agent. <em>Consequence:</em> no "AI triage" of findings, no LLM-assisted severity
+   scoring, no model in the gate path.</p>
+</li>
+<li>
+<p><strong>Orchestrate, do not reimplement.</strong> We shell out to best-in-class scanners
+   and normalize their output. <em>Consequence:</em> no custom AST analysis, and no
+   parallel ruleset competing with Semgrep or Bandit.</p>
+</li>
+</ol>
+<p><strong>Amended 2026-09-09 — the line is a bound, not a refusal.</strong> This read as a
+   blanket ban on authoring rules, and we author rules: the built-in regex pack,
+   and the offline Semgrep ruleset that exists because the registry rules an
+   online run fetches are licensed for internal, non-competing, non-SaaS use
+   only. Left unqualified, the principle would have been violated the moment we
+   shipped either.</p>
+<p>The bound that replaces the ban: <strong>our ruleset is the offline floor, not a
+   competitor.</strong> Online, the maintained registries do the job, because online is
+   where they are available. Offline, our rules answer the highest-consequence
+   patterns so that "no network" does not mean "no coverage."</p>
+<p>That bound is enforceable because it is about rule <em>shape</em>: the offline set
+   takes <strong>language primitives</strong> — <code>shell=True</code>, <code>eval</code>, <code>pickle.loads</code>,
+   <code>hashlib.md5</code>, <code>verify=False</code> — and <strong>refuses framework-specific rules</strong>.
+   Primitives do not change and cost almost nothing to keep correct. Framework
+   rules rot with every framework release, and framework breadth is exactly what
+   the online path is for. See <a href="docs-decisions.html">D9</a>.</p>
+<p>Parity with a registry remains a non-goal. A one-maintainer project cannot
+   maintain thousands of rules, and a stale ruleset claiming to be a standard is
+   worse than a small one honestly labelled.</p>
+<ol start="3">
+<li>
+<p><strong>Never overstate coverage.</strong> Findings and scanner coverage are separate
+   axes and are reported separately. A scanner that was unavailable, timed out,
+   crashed, produced unparseable output, or was excluded from the run fails
+   coverage rather than reading as clean. <em>Consequence:</em> the honest answer is
+   sometimes "we do not know," and the product must be able to say it.</p>
+</li>
+<li>
+<p><strong>Never install anything.</strong> A security gate that downloads and executes
+   binaries to satisfy its own coverage requirement is the supply-chain risk it
+   exists to catch. Acquisition stays with the operator's package manager or a
+   pinned CI action. <em>Consequence:</em> onboarding friction is accepted as the price
+   of not being a malware delivery vector.</p>
+</li>
+<li>
+<p><strong>Standards-anchored, not scanner-anchored.</strong> Findings map to CWE, OWASP Top
+   10, OWASP ASVS, and NIST SSDF. <em>Consequence:</em> operators see which standard is
+   failing rather than which scanner shouted, and reports survive swapping one
+   scanner for another.</p>
+</li>
+<li>
+<p><strong>Plain files, no lock-in.</strong> Markdown, JSON, SARIF 2.1.0, PR comment,
+   baseline — all plain files in the repository. <em>Consequence:</em> no hosted
+   service, no account, no telemetry, ever.</p>
+</li>
+<li>
+<p><strong>Bounded remediation.</strong> The prompt forbids touching crypto, auth,
+   validation, logging, and tests unless a finding names them as the defect.
+   <em>Consequence:</em> the product deliberately refuses to help an agent do a large
+   refactor, even when the refactor might be correct.</p>
+</li>
+<li>
+<p><strong>Say the true thing.</strong> Documentation describes shipped behavior. When a
+   claim cannot be substantiated it is removed, not hedged. <em>Consequence:</em>
+   release notes will sometimes read as retractions, and that is correct.</p>
+</li>
+<li>
+<p><strong>Standalone first, delegate second.</strong> This tool is designed to be run on
+   its own. Feeding <code>maintainability-agent</code>'s Security pillar is one thing it
+   does (<a href="docs-decisions.html">D3</a>), not what it is for: a repository that has never
+   heard of that project installs this one, runs it, and gets the whole
+   product. <em>Consequence:</em> it owns its own environment. Its dependency
+   constraints are chosen for a tool standing alone, and it is never obliged to
+   share an interpreter, a virtualenv, or a resolved dependency set with
+   anything it integrates with — including its sibling.</p>
+</li>
+</ol>
+<p>The concrete case, so the consequence is not abstract: this project's <code>mcp</code>
+   extra requires <code>mcp&gt;=1.0,&lt;2</code> and <code>maintainability-agent</code> requires <code>mcp&gt;=2</code>.
+   Those cannot both be satisfied in one environment, and that is not a defect
+   in either. Two independent products pin independently. The integration
+   between them is a <strong>file</strong> — <code>security-pillar.json</code> — precisely so that it
+   never becomes a shared dependency graph. An environment that needs both
+   installs both, separately.</p>
+<h2 id="6-scope-boundaries">6. Scope boundaries</h2>
+<p><strong>In scope.</strong> Static analysis orchestration; dependency and supply-chain
+posture; secret detection; IaC and container configuration; standards mapping;
+deterministic scoring and gating; baseline and suppression lifecycle; SARIF in
+and out; bounded remediation prompt generation; per-agent standing-instruction
+files.</p>
+<p><strong>Out of scope, permanently.</strong></p>
+<ul>
+<li><strong>Not a SAST engine.</strong> No custom AST analysis.</li>
+<li><strong>Not a runtime defense.</strong> No WAF, IDS, or agent in the request path.</li>
+<li><strong>Not a SaaS dashboard.</strong> Findings live as files in the repository.</li>
+<li><strong>Not a license scanner.</strong> License compliance is a separate concern.</li>
+<li><strong>Not an exploit generator.</strong> No DAST, no fuzzing, no proof-of-concept
+  generation.</li>
+<li><strong>No telemetry.</strong> Not opt-in, not anonymized, not "just crash reports."</li>
+</ul>
+<p><strong>Deferred, not rejected.</strong> These are tracked so that "not yet" is not confused
+with "never," and so a contributor knows what a good proposal looks like. This
+is the product roadmap: a shipped entry is struck through and says so rather
+than being deleted, because what was once deferred and why is part of the
+record. Two entries below had shipped without being struck, which is how a
+roadmap stops being one.</p>
+<ul>
+<li>Additional language SAST adapters — ~~gosec~~, Brakeman, SpotBugs/FindSecBugs
+  — added when a repository that needs them is actually being dogfooded, not
+  speculatively. <strong>gosec shipped</strong>; it is registered in <code>SCANNERS</code> and carries
+  an adapter. Brakeman and SpotBugs/FindSecBugs remain deferred on the same
+  terms.</li>
+<li>~~Ingest-only integrations for tools we will not invoke ourselves: CodeQL
+  (runs in GitHub-hosted analysis) and Snyk (license and auth burden).~~
+  <strong>Shipped.</strong> <code>--sarif-import</code> ingests either, and D3 settled the trust model
+  for imported SARIF; the quickstart documents both by name.</li>
+<li>Cross-scanner deduplication. Overlapping SCA adapters can currently
+  double-count one advisory. Fingerprints are stable enough to support this; the
+  scorer does not yet do it.</li>
+<li>~~Operator-defined standards rule packs. The mapping table is currently
+  compiled into the package.~~ <strong>Shipped 2026-10-02.</strong> The table is
+  <code>data/standards.yaml</code>, and <code>standards_overlay</code> layers an operator's own
+  mapping over it. The overlay carries the standards fields only — it cannot
+  set severity, confidence or category, because those are the scoring inputs
+  (D32). §8 question 3.</li>
+<li>~~Scoped changed-file audits.~~ <strong>Shipped in 0.12.0.</strong> <code>--changed-only REF</code>
+  scans the whole tree, scopes the <em>report</em> to files changed since <code>REF</code>, and
+  withholds the grade — a run that looks at less must not score better.</li>
+<li>SBOM generation and signature verification — better served by dedicated tools
+  this agent can be paired with.</li>
+<li>Full OASIS schema validation of emitted SARIF in CI. The output is
+  SARIF 2.1.0-shaped, structurally unit-tested and round-tripped, and <code>README.md</code>
+  §Versioning says validation "is not yet part of CI" — which was the only place
+  it was written down. Recorded here so the claim has a home in the roadmap
+  rather than living in a versioning footnote.</li>
+</ul>
+<h2 id="7-positioning">7. Positioning</h2>
+<p>This is <strong>not</strong> a competitor to Semgrep, Bandit, Trivy, or CodeQL. It is a
+layer above them, and it is strictly worse than any of them at finding defects.
+Its value is in four things they do not do together:</p>
+<ol>
+<li>Normalizing many scanners into one standards-anchored finding schema.</li>
+<li>Turning that into a deterministic, configurable gate with a real exit code.</li>
+<li>Reporting scanner coverage as a first-class result, so a green build cannot
+   silently mean an empty one.</li>
+<li>Emitting a bounded remediation prompt for the agent that will do the fix.</li>
+</ol>
+<p>It is the security sibling of
+<a href="https://github.com/marshallguillory86/maintainability-agent"><code>maintainability-agent</code></a>:
+same shape — deterministic CI gate, plain-file outputs, per-host skill bundle —
+different concern.</p>
+<p><strong>Sibling, not component.</strong> That sentence describes a family resemblance, not a
+dependency. This tool is not the security half of that one: it installs, runs,
+gates and reports with that project absent, and most of its users will never
+install it. Where the two are used together, one writes a file and the other
+reads it — see principle 9 in §5 and <a href="docs-decisions.html">D3</a>.</p>
+<h2 id="8-open-product-questions">8. Open product questions</h2>
+<p>Recorded rather than resolved. Each of these should be answered deliberately
+rather than settled by whichever feature lands first.</p>
+<p><strong>An answered question keeps its number, its original text and its verdict.</strong>
+The numbers are cited from source comments and test docstrings, so renumbering
+would silently break them; and the reasoning that made something a question is
+worth keeping beside the answer. A verdict of <em>declined</em> or <em>deferred</em> is an
+answer — the failure mode here is a question that stays open because nobody
+wanted to be the one to close it.</p>
+<ol>
+<li><strong>Should the deliverable be one verdict or two numbers?</strong> Today a report
+   carries a letter grade <em>and</em> a coverage status, and the reader must combine
+   them. The score's null state is "perfect" — a repository where nothing ran
+   still grades A+ — which is why coverage had to be added beside it. See
+   <a href="docs-architecture.html"><code>architecture.md</code> §5</a>.</li>
+</ol>
+<p><strong>Deferred 2026-10-02.</strong> D16 and D17 settled the score model on
+   measurement three weeks ago; reopening how it is <em>presented</em> now would churn
+   the one part of this that is finally calibrated. It belongs at v1.0, when the
+   config schema locks and the output contract is the thing being frozen.
+2. <strong>Does the remediation prompt measurably bound agent behavior?</strong> Criterion 3
+   in §4 is asserted from first principles and has never been evaluated.
+   An honest answer needs a fixture repository, a set of seeded findings, and
+   patches from several agents scored against the constraint list.</p>
+<p><strong>Scheduled 2026-10-02</strong>, as feature-sized work rather than a backlog
+   line. <strong>Design fixed 2026-10-03</strong> in
+   <a href="docs-remediation-prompt-evaluation.html"><code>remediation-prompt-evaluation.md</code></a>:
+   hypothesis, fixture requirements, the two arms, the scoring rubric (which
+   is <code>remediation.md</code>'s own ten constraints), blinding, and — written before
+   any run — the four ways the result would be worthless. Not yet run; the
+   method is fixed in advance so that it cannot be chosen to suit the answer. It is the only success criterion in §4 with no evidence behind it, and
+   it is the central one. The deliverable is a fixture repository, a seeded
+   finding set, and patches from several agents scored against the constraint
+   list — a measurement, not an argument.
+3. <strong>Who owns the standards mapping?</strong> It is compiled into the package today,
+   so adding a rule requires a release and operators cannot extend it. Shipping
+   it as data with an operator overlay is a product decision about how much
+   customization to invite.</p>
+<p><strong>Answered 2026-10-02 — ship it as data, with an operator overlay.</strong>
+   <strong>Built the same day</strong>: <code>data/standards.yaml</code> plus a <code>standards_overlay</code>
+   config key. The overlay may add or correct a rule's CWE, OWASP id, ASVS
+   section, SSDF practice and prose, and is refused if it names severity,
+   confidence or category — see D32's scope note, which this is.
+   Decided together with <code>standards.py</code>'s size finding, which is this same
+   problem seen from the other side: 705 lines, roughly 390 of them a
+   hand-written table that needs a package release to extend, with the
+   <code>(scanner, "*")</code> wildcard absorbing the coverage gap. One change answers the
+   product question and clears the file finding.
+4. <strong>How far does "never install anything" extend?</strong> It is settled for scanner
+   binaries. It is not settled for whether the tool should offer to <em>verify</em>
+   installed scanner versions against pinned expectations, which is adjacent to
+   supply-chain assurance and might belong here.</p>
+<p><strong>Deferred 2026-10-02.</strong> Nothing is pulling on it — no operator has
+   asked, and no finding depends on it. Recorded so it is not mistaken for
+   settled.
+5. <strong>What is the adoption path for a repository with thousands of existing
+   findings?</strong> Baseline plus expiring suppressions is the current answer, but it
+   has not been exercised on a large legacy codebase.</p>
+<p><strong>Deferred 2026-10-02</strong>, on this document's own terms: §6 refuses to
+   build for a repository that is not actually being dogfooded, and no large
+   legacy codebase is. The answer arrives with the first one that is.
+6. <strong>Should preflight advise on a required scanner the operator switched off?</strong>
+   <code>--preflight --json</code> builds a row per <em>selected</em> scanner, each carrying a
+   <code>remedy</code> from the adapter's own <code>unavailable_fix_hint()</code>. A scanner that is
+   required but <strong>not selected</strong> never gets a row: it appears only as a name in
+   <code>required_not_selected</code>, with no advice attached. A host that wants to tell
+   its user what to do must therefore write that advice itself — which is the
+   thing this tool exists to stop other tools having to invent.</p>
+<p>Raised by <code>maintainability-agent</code>, whose Decision 14 puts scanner knowledge
+   in this tool, so MA deliberately wrote no remedy of its own and Grok's audit
+   of MA 4.0.0 flagged MA as silent in that case. Verified here against
+   <code>cli.py</code>: the row loop covers <code>selected</code> only.</p>
+<p>Undecided, and the shape of an answer is not obvious. "Switched off" is an
+   operator's choice, so advice about it reads closer to <em>your config and your
+   gate disagree</em> than to <em>install this tool</em> — which may make it a
+   gate-reporting concern rather than a preflight one.</p>
+<p><strong>Deferred 2026-10-02.</strong> By its own text the shape of an answer is not
+   obvious, and nothing since has changed that. It stays open rather than being
+   closed for tidiness.
+7. <strong>Should a host be able to ask for a preflight that never reads the target's
+   config?</strong> There is <code>--config</code> and there is <code>--trust-target-config</code>, but
+   nothing that declines the audited tree's configuration outright: with
+   <code>--config</code> omitted, <code>config_mod.load</code> discovers <code>secure-code-agent.json</code>
+   inside the target.</p>
+<p>A host asking <em>before</em> its user has consented to a run — MA's chat door does
+   exactly this — cannot let the target's config decide anything. So MA writes
+   an empty <code>{}</code> file and points <code>--config</code> at it. That works, and it is a
+   workaround for a gap in this tool's surface. D29 closed the execution half
+   of the same concern; this is the half that remains.</p>
+<p>Raised by <code>maintainability-agent</code> (4.0.1 / D222). Verified here against
+   <code>cli.py</code>. A flag of this tool's own — MA suggests <code>--ignore-target-config</code> —
+   would replace the workaround <em>if</em> it belongs in the product.</p>
+<p>Undecided, and <strong>not urgent on the consumer's own account.</strong> Asked directly
+   whether the empty-file route is painful or merely inelegant, MA answered
+   inelegant: a few lines in its <code>_security_delegate.py</code>, written to a temp
+   directory outside the target, working against every release from 0.12.10.
+   So this is a question about whether a cleaner surface is worth a third
+   config mode, not about unblocking anything — recorded that way so nobody
+   later reads it as a consumer waiting on us.</p>
+<p><strong>Answered 2026-10-02 — declined.</strong> Asked directly, the consumer called
+   the empty-file route inelegant rather than painful: a few lines in its own
+   <code>_security_delegate.py</code>, working against every release from 0.12.10. A third
+   config mode is not worth a cleaner surface for a single caller, and declining
+   a question is as much of an answer as building the flag. Reopen if a second
+   host hits the same edge.
+8. <strong>Does exit-code policy belong in <code>_exec</code> or in each adapter?</strong> <code>_exec</code>
+   takes an <code>allowed_exits</code> tuple and does nothing with it: both branches
+   return the <code>CompletedProcess</code> unchanged, so the parameter has no effect on
+   any run. Fourteen adapters pass it, and several then write the same tuple a
+   second time as a live check — <code>allowed_exits=(0, 183)</code> sitting beside <code>if
+   r.returncode not in (0, 183)</code>. That is the two-sources-of-truth shape this
+   repository keeps finding, except here one of the two sources is inert.</p>
+<p>The cost is visible in <code>bandit_scanner.py</code>, which declares <code>(0, 1)</code> to
+   <code>_exec</code> and then checks no exit code at all beyond the timeout sentinel. A
+   bandit internal error is caught only indirectly, by the JSON parse failing
+   — which it probably does, but that is luck rather than a guard, and the
+   adapter reads as though it had one.</p>
+<p>Two coherent answers, and they differ in where knowledge lives. Delete the
+   parameter, and each adapter keeps stating its own exit codes, which is what
+   already happens; or make <code>_exec</code> enforce it, and the fourteen inline checks
+   collapse into the one declaration. The second is the stronger design and the
+   larger change: <code>_exec</code> returns a <code>CompletedProcess</code>, so enforcement needs a
+   way to say "this exit code is not acceptable" that fifteen call sites can
+   act on without each re-deriving it.</p>
+<p>Found by the test seat while writing the first direct tests for
+   <code>_execution.py</code>, which is the kind of thing a paired test finds and an
+   indirect one does not. The docstring now states the truth; the parameter and
+   its call sites are untouched pending this answer.</p>
+<p><strong>Answered 2026-10-02 — delete the parameter.</strong> Recorded as
+   <a href="docs-decisions.html">D30</a>. The inline checks are
+   what actually run, and each is correct for its own tool. Making <code>_exec</code>
+   enforce the tuple means inventing a way to say "this exit code is not
+   acceptable" that fifteen call sites must then act on, for no change in
+   behaviour. So the parameter goes — and <code>bandit_scanner.py</code> gains the
+   returncode guard it never had, because removing a false guard without adding
+   the real one loses information rather than clarifying it.
+9. <strong>Should a curated OWASP id outrank one derived from an overriding CWE?</strong>
+   <code>_resolve_standards</code> lets an adapter's <code>cwe_override</code> beat the curated map
+   for the CWE, but takes OWASP as <code>entry.owasp_top10 or
+   owasp_for_cwe(canonical_cwe)</code> — so the curated entry still supplies OWASP
+   even when its CWE was just overruled. With <code>cwe_override="CWE-22"</code> on
+   bandit's B608, the finding reports CWE-22 (path traversal) alongside
+   A03:2021-Injection, where the overriding CWE would have derived
+   A01:2021-Broken Access Control.</p>
+<p>It may be right: the curated row is reviewed and the derivation is a lookup
+   table, so preferring the reviewed value is defensible. It may equally be a
+   seam nobody chose, where an override is honoured for one field and ignored
+   for the field computed from it. Either way a reader of the report sees a CWE
+   and an OWASP category that disagree about what kind of defect it is.</p>
+<p>Pinned by <code>test_curated_owasp_wins_over_the_one_derived_from_an_overriding_cwe</code>
+   so the behaviour cannot drift while the question is open. Semgrep is the
+   adapter that uses <code>cwe_override</code>, so it is the one whose output this decides.</p>
+<p><strong>Answered 2026-10-02 — the override wins both fields.</strong> Recorded as
+   <a href="docs-decisions.html">D31</a>. A finding
+   reporting CWE-22 beside A03 Injection is incoherent to whoever reads it, and
+   an adapter asserting a more specific CWE is asserting the weakness rather
+   than just its number. Semgrep is the only caller, so the change is small.
+   The pinned corpus was going to be re-measured before and after, on the
+   assumption that moving findings between OWASP categories moves D17's
+   published figures. Checked instead of assumed, and it does not:
+   <code>scoring.py</code> never reads <code>owasp_top10</code>, it is not an input to
+   <code>make_fingerprint</code>, and suppressions do not match on it. The grade, the
+   baseline identity and the calibration study are all untouched, so no
+   corpus run was needed.</p>
+<footer>Rendered from <code>docs/product-intent.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

@@ -1,0 +1,243 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Scoring model · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#inputs">Inputs</a></li>
+<li><a href="#weights">Weights</a></li>
+<li><a href="#finding-score">Finding score</a></li>
+<li><a href="#category-subtotal">Category subtotal</a></li>
+<li><a href="#overall-score">Overall score</a><ul>
+<li><a href="#secrets-is-the-exception">secrets is the exception</a></li>
+</ul>
+</li>
+<li><a href="#letter-grade">Letter grade</a></li>
+<li><a href="#worked-example">Worked example</a></li>
+<li><a href="#configurable-hard-gates">Configurable hard gates</a></li>
+<li><a href="#why-a-single-worst-category-drives-the-grade">Why a single worst-category drives the grade</a></li>
+<li><a href="#drift-testing">Drift testing</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Scoring and calibration</div><h1>Scoring model</h1><blockquote>
+<p>Status: <strong>v0.12.10 — 2026-09-11.</strong> The scoring model, currently model 2.</p>
+<p>Letter-grade A+ → F, mapped from a 0.0 → 5.0 axis. Mirrors <code>maintainability-agent</code> so operators have one mental model for both gates.</p>
+</blockquote>
+<h2 id="inputs">Inputs</h2>
+<p>For each unsuppressed canonical <code>Finding</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>severity</code></td>
+<td>Scanner-emitted or override map (CRITICAL / HIGH / MEDIUM / LOW / INFO)</td>
+</tr>
+<tr>
+<td><code>confidence</code></td>
+<td>Scanner-emitted (HIGH / MEDIUM / LOW)</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>Map from <code>canonical_cwe</code> (one of nine categories — see design.md §6)</td>
+</tr>
+<tr>
+<td><code>cwe_top25</code></td>
+<td>Boolean — does the CWE appear on the MITRE Top 25 (2025)?</td>
+</tr>
+<tr>
+<td><code>suppressed</code></td>
+<td>Boolean — has the operator acknowledged this finding in <code>.scignore.yaml</code>?</td>
+</tr>
+</tbody>
+</table></div>
+<p>Suppressed findings are excluded from scoring (they still appear in the report under "acknowledged").</p>
+<h2 id="weights">Weights</h2>
+<pre><code class="language-python">SEVERITY_WEIGHT = {
+    &quot;critical&quot;:      10.0,
+    &quot;high&quot;:           4.0,
+    &quot;medium&quot;:         1.5,
+    &quot;low&quot;:            0.5,
+    &quot;informational&quot;:  0.0,
+}
+
+CONFIDENCE_WEIGHT = {
+    &quot;high&quot;:           1.00,
+    &quot;medium&quot;:         0.75,
+    &quot;low&quot;:            0.50,
+}
+
+CATEGORY_WEIGHT = {
+    &quot;secrets&quot;:               1.5,
+    &quot;code_vulnerabilities&quot;:  1.5,
+    &quot;auth_authz&quot;:            1.5,
+    &quot;crypto&quot;:                1.5,
+    &quot;dependencies&quot;:          1.0,
+    &quot;config_iac&quot;:            1.0,
+    &quot;supply_chain&quot;:          0.8,
+    &quot;logging_observability&quot;: 0.8,
+    &quot;policy_docs&quot;:           0.5,
+}
+
+CWE_TOP25_BONUS = 1.25  # multiplier when finding hits a Top-25 CWE
+</code></pre>
+<h2 id="finding-score">Finding score</h2>
+<pre><code class="language-python">finding_score = (
+    SEVERITY_WEIGHT[severity]
+    * CONFIDENCE_WEIGHT[confidence]
+    * CATEGORY_WEIGHT[category]
+    * (CWE_TOP25_BONUS if cwe_top25 else 1.0)
+)
+</code></pre>
+<blockquote>
+<p><strong>What <code>severity</code> is, and is not.</strong> It is the scanner's answer to <em>"how
+confident am I that this pattern is present and matters in general"</em> — not
+<em>"how bad is this in your code"</em>. Bandit rates SQL injection <strong>medium</strong> and
+<code>hashlib.md5</code> <strong>high</strong>. It is a legitimate weight here and a legitimate
+filter in <code>fail_on_severity</code>, because both are honest uses of a confidence
+signal. It must not be used to <em>identify</em> the dangerous findings:
+<a href="docs-decisions.html">D15</a> records six candidate rules that tried, and the
+measurements showing none of them separate well-maintained code from a
+repository with planted vulnerabilities.</p>
+</blockquote>
+<h2 id="category-subtotal">Category subtotal</h2>
+<pre><code class="language-python">category_subtotal = sum(finding_score for f in findings_in_category)
+</code></pre>
+<p>Each category's subtotal is normalized by <strong>scanned code volume</strong> so a 100k-LOC repo isn't penalized for naturally having more lines of code than a 1k-LOC one:</p>
+<pre><code class="language-python">category_normalized = category_subtotal / (loc_scanned / 1000)
+</code></pre>
+<p>This is a straight <strong>density</strong>: weighted findings per thousand lines of scanned code.</p>
+<p>It was <code>sqrt(LOC/1000)</code> — borrowed from <code>maintainability-agent</code> — and that under-corrected, so the ranking followed how <em>big</em> a repository is rather than how much is wrong with it. Measured on the calibration corpus:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>repo</th>
+<th style="text-align: right;">LOC</th>
+<th style="text-align: right;">weighted findings / kLOC</th>
+<th style="text-align: right;"><code>sqrt</code> normalized</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>django</td>
+<td style="text-align: right;">144,473</td>
+<td style="text-align: right;">1.51</td>
+<td style="text-align: right;"><strong>18.18</strong> ← ranked worst</td>
+</tr>
+<tr>
+<td>flask</td>
+<td style="text-align: right;">7,841</td>
+<td style="text-align: right;"><strong>3.35</strong></td>
+<td style="text-align: right;">9.38</td>
+</tr>
+<tr>
+<td>fastapi</td>
+<td style="text-align: right;">23,764</td>
+<td style="text-align: right;">1.60</td>
+<td style="text-align: right;">7.81</td>
+</tr>
+</tbody>
+</table></div>
+<p>Flask carried 2.2× Django's density and normalized at half the value. Spearman correlation of grade against size was −0.37; of density against size, +0.12. The number was tracking the wrong variable. See <a href="docs-decisions.html">decisions.md</a> D16.</p>
+<h2 id="overall-score">Overall score</h2>
+<p>Map the worst category to a 0.0–5.0 axis. The <strong>worst category drives the overall grade</strong>, not an average — one CRITICAL secret in git history shouldn't be offset by a clean dependency tree.</p>
+<pre><code class="language-python">category_grade = clamp(5.0 - (category_normalized * 1.3), 0.0, 5.0)
+overall_score  = min(category_grade for category in categories)
+</code></pre>
+<p>The slope moves with the normalizer, because the two only mean anything together. Slope cannot reorder anything, so it is chosen on where the median lands and how much of the corpus clamps at 0.0 and loses its tail. 1.3 is the largest slope that keeps well-maintained code medianing inside the B band while the two populations stay apart — see <a href="docs-decisions.html">decisions.md</a> D17.</p>
+<h3 id="secrets-is-the-exception"><code>secrets</code> is the exception</h3>
+<pre><code class="language-python">secrets_normalized = secrets_subtotal / sqrt(loc_scanned / 1000)
+</code></pre>
+<p>One committed private key is one committed private key whether the repository is a thousand lines or a million. It is a count, not a rate.</p>
+<p>This was found the hard way. OWASP Juice Shop — a training application written to be insecure — carries four hardcoded API keys and three private keys, and under straight density graded <strong>B+</strong>, because 115,340 lines of surrounding code divided seven committed credentials down to nothing. Flask, with no secrets at all, graded F.</p>
+<p><code>sqrt</code> rather than an absolute count, because a larger codebase genuinely does carry more configuration surface, and an absolute count failed Django on two low-confidence hits. Damped, not exempted.</p>
+<h2 id="letter-grade">Letter grade</h2>
+<pre><code class="language-python">def letter(score: float) -&gt; str:
+    if score &gt;= 4.85: return &quot;A+&quot;
+    if score &gt;= 4.50: return &quot;A&quot;
+    if score &gt;= 4.00: return &quot;A-&quot;
+    if score &gt;= 3.50: return &quot;B+&quot;
+    if score &gt;= 3.00: return &quot;B&quot;
+    if score &gt;= 2.50: return &quot;B-&quot;
+    if score &gt;= 2.00: return &quot;C&quot;
+    if score &gt;= 1.00: return &quot;D&quot;
+    return &quot;F&quot;
+</code></pre>
+<h2 id="worked-example">Worked example</h2>
+<p>A repo with:</p>
+<ul>
+<li>1 HIGH SQL-injection finding (<code>CWE-89</code>, high confidence, top-25, category <code>code_vulnerabilities</code>)</li>
+<li>3 MEDIUM dependency CVEs (<code>CWE-1104</code>, medium confidence, not top-25, category <code>dependencies</code>)</li>
+<li>0 of everything else</li>
+</ul>
+<p>Scanned LOC: 12,000.</p>
+<pre><code class="language-text">SQLi:        4.0 (HIGH)  × 1.00 (HIGH conf)  × 1.5 (code_vulns)  × 1.25 (top25) = 7.50
+Dep #1:      1.5 (MED)   × 0.75 (MED conf)   × 1.0 (deps)        × 1.00         = 1.13
+Dep #2:      1.5 (MED)   × 0.75 (MED conf)   × 1.0 (deps)        × 1.00         = 1.13
+Dep #3:      1.5 (MED)   × 0.75 (MED conf)   × 1.0 (deps)        × 1.00         = 1.13
+
+code_vulnerabilities subtotal = 7.50
+dependencies subtotal         = 3.39
+
+Normalizer: 12000 / 1000 = 12.0   (secrets would use sqrt(12) = 3.46 — none here)
+
+code_vulnerabilities normalized = 7.50 / 12.0 = 0.625 → grade = 5.0 - (0.625 × 1.3) = 4.19
+dependencies normalized         = 3.39 / 12.0 = 0.283 → grade = 5.0 - (0.283 × 1.3) = 4.63
+
+Overall = min(4.19, 4.63) = 4.19 → &quot;A-&quot;
+</code></pre>
+<p><strong>Read that last line carefully, because it is the honest cost of a density.</strong> This repository has a live SQL injection and grades A−. One serious defect in twelve thousand lines <em>is</em> a low density, and the grade is reporting the density correctly.</p>
+<p>The grade is therefore not the thing that catches it. Three other outputs are, and all of them fire here:</p>
+<ul>
+<li>The <strong>work order</strong> puts the SQLi in §FIX, first, with the file and line.</li>
+<li><code>code_vulnerabilities</code> is named as the worst category in the report header.</li>
+<li>The default <strong><code>fail_on_new</code> gate</strong> fails the build, because the finding is new.</li>
+</ul>
+<p>A grade compresses a repository to one number so it can be compared against another repository and against itself last week. That is all it is for. If you are looking to the letter to tell you whether you have a vulnerability, look at the work order instead — <a href="readme.html">product intent</a> puts it first class and the score second for exactly this reason.</p>
+<h2 id="configurable-hard-gates">Configurable hard gates</h2>
+<p>The score itself is informational — the <strong>gates</strong> are what fail CI. Default gates (override via config):</p>
+<pre><code class="language-json">&quot;gates&quot;: {
+  &quot;fail_on_severity&quot;:    [&quot;critical&quot;, &quot;high&quot;],
+  &quot;fail_on_category&quot;:    [&quot;secrets&quot;, &quot;auth_authz&quot;],
+  &quot;fail_on_new&quot;:         true,
+  &quot;min_score&quot;:           4.0,
+  &quot;max_unsuppressed&quot;:    { &quot;high&quot;: 0, &quot;medium&quot;: 10 }
+}
+</code></pre>
+<p>Gates compose with OR semantics. Any tripped gate = nonzero exit.</p>
+<h2 id="why-a-single-worst-category-drives-the-grade">Why a single worst-category drives the grade</h2>
+<p>Two designs were considered:</p>
+<ol>
+<li><strong>Average across categories</strong> — easy to game (one perfect category masks a wholly broken one).</li>
+<li><strong>Min across categories (chosen)</strong> — hard to game; an operator who wants A+ must fix every category. Mirrors <code>maintainability-agent</code>'s pattern.</li>
+</ol>
+<p>A future config option will allow <code>score_mode: "average"</code> for teams who prefer it, but <strong><code>min</code> is the default</strong> because security gates should reward thoroughness, not pretty averages.</p>
+<h2 id="drift-testing">Drift testing</h2>
+<p><code>tests/unit/test_scoring.py</code> locks the scoring arithmetic and gate semantics.</p>
+<p>Since 2026-09-09 the repository also ships
+<code>tests/integration/test_scoring_drift.py</code>, the drift suite <code>CONTRIBUTING.md</code>
+had cited for far longer than it existed. It pins the letter bands and the
+properties that must survive any retuning: severity ordering is monotonic,
+informational findings never move the grade, the overall grade is the worst
+category rather than the mean, suppressed findings do not count, more findings
+never improve the score, and a perfect score sits beside failed coverage
+without either deriving from the other.</p>
+<p><strong>It proves the scale is stable. D17 is what establishes it is correct</strong> —
+to the extent anything can. The corpus now carries both populations, and the
+scale orders them perfectly: AUC 1.00, separation +1.26, every
+vulnerable-by-design application at F and well-maintained code medianing at
+3.41 (B).</p>
+<p>What that does <strong>not</strong> establish is the edges between adjacent letters above
+D/F. A−, B and C contain no corpus observation at all, and no larger corpus
+fixes that: at the top of the scale the difference between two repositories is
+five findings versus eight in twenty thousand lines, and nothing says one of
+those deserves A and the other A+. Treat those edges as presentational
+granularity. A B+ is not meaningfully better than an A−. Changes in scanner
+output distributions still require release review.</p>
+<footer>Rendered from <code>docs/scoring.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

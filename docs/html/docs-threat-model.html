@@ -1,0 +1,211 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Threat model · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#trust-boundaries">Trust boundaries</a></li>
+<li><a href="#threats-considered">Threats considered</a><ul>
+<li><a href="#t1-malicious-repo-content">T1 — Malicious repo content</a></li>
+<li><a href="#the-tree-does-not-choose-where-the-host-writes-either">The tree does not choose where the host writes, either</a></li>
+<li><a href="#the-tree-does-not-grade-itself-either">The tree does not grade itself, either</a></li>
+<li><a href="#what-trust-target-config-grants">What --trust-target-config grants</a></li>
+<li><a href="#t2-output-injection-report-or-pr-comment">T2 — Output injection (report or PR-comment)</a></li>
+<li><a href="#t3-scanner-output-deception">T3 — Scanner output deception</a></li>
+<li><a href="#t4-suppression-bypass">T4 — Suppression bypass</a></li>
+<li><a href="#t5-baseline-tampering">T5 — Baseline tampering</a></li>
+<li><a href="#t6-cleartext-secret-in-report">T6 — Cleartext secret in report</a></li>
+<li><a href="#t7-exfiltration-via-scanner-network-calls">T7 — Exfiltration via scanner network calls</a></li>
+<li><a href="#t8-resource-exhaustion">T8 — Resource exhaustion</a></li>
+<li><a href="#t9-supply-chain-attack-on-the-agent-itself">T9 — Supply-chain attack on the agent itself</a></li>
+</ul>
+</li>
+<li><a href="#out-of-scope">Out of scope</a></li>
+<li><a href="#reporting-vulnerabilities-in-this-tool">Reporting vulnerabilities in this tool</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Security and standards</div><h1>Threat model</h1><blockquote>
+<p>Status: <strong>v0.12.10 — 2026-10-02.</strong> What this tool trusts, and where the lines are.</p>
+</blockquote>
+<p><code>secure-code-agent</code> runs on developer machines and CI runners. The tool reads source files, exec's scanner binaries, emits report artifacts. Threats below are considered in design; the listed mitigation is what we ship in v0.1.</p>
+<h2 id="trust-boundaries">Trust boundaries</h2>
+<pre><code>┌────────────────────────────────────────────────┐
+│ Operator (trusted)                             │
+│   · Authors config, runs CLI, reads reports    │
+│   · Approves baseline + suppressions           │
+└─────┬──────────────────────────────────────────┘
+      │
+┌─────▼──────────────────────────────────────────┐
+│ secure-code-agent CLI (trusted — our code)     │
+│   · PyYAML for safe suppression parsing        │
+│   · subprocess scanners with bounded env       │
+└─────┬──────────────────────────────────────────┘
+      │
+┌─────▼──────────────────────────────────────────┐
+│ Scanner binaries (semi-trusted — external)     │
+│   · Operator-installed; versions reported      │
+│   · Run with cwd=target, shell=False           │
+└─────┬──────────────────────────────────────────┘
+      │
+┌─────▼──────────────────────────────────────────┐
+│ Repo content (UNTRUSTED — may be malicious)    │
+│   · Filenames, manifests, config, source       │
+│   · Passed to semi-trusted external scanners   │
+└────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="threats-considered">Threats considered</h2>
+<h3 id="t1-malicious-repo-content">T1 — Malicious repo content</h3>
+<p><strong>Threat:</strong> A repo contains crafted filenames, source files, or config that triggers code execution in the agent.</p>
+<p><strong>The ruling, and why it was needed.</strong> This document called repository content
+untrusted <em>and</em> called the operator the author of the config, while
+<code>secure-code-agent.json</code> normally lives in the audited tree. Both could not be
+true, and the code took the permissive reading: <code>scanners.&lt;name&gt;.command</code>
+accepted a relative path, resolved it under the audit target, and executed it.
+A repository could choose what the auditing host ran — T1, realised by the
+tool.</p>
+<p><strong>The line is drawn at executing what the tree supplies, not at distrusting
+repositories wholesale.</strong> A config the operator keeps <em>outside</em> the tree is an
+operator artifact and may still name a tree-local interpreter, which is the
+documented <code>.audit-tools/bin/python</code> workflow. A config found <em>inside</em> the tree
+is repository content, and a command it names that also resolves inside the
+tree is refused — the scanner reports <code>unavailable</code>, which fails required
+coverage rather than silently skipping. Auditing a repository you own with a
+tree-local toolchain takes <code>--trust-target-config</code>, which is a command-line
+flag by design: a config file cannot grant itself the trust the flag exists to
+withhold.</p>
+<p>The containment check runs on the resolved path from <strong>every</strong> route, not just
+the relative one, because <code>PATH</code> may contain <code>.</code> or a tree-local directory.</p>
+<p><strong>The line above was drawn at the executable, and the arguments walked past
+it (D29, 2026-10-02).</strong> A config inside the tree could not name an executable
+inside the tree, but it could name any program on <code>PATH</code> and give it any
+arguments — and <code>python -c "&lt;code&gt;"</code> is any program. Preflight's <code>--version</code>
+probe ran it before a single scanner had audited anything, and
+maintainability-agent, which runs preflight before its user has said "run",
+made that a zero-click execution. <strong>An untrusted config no longer chooses a
+scanner's command at all</strong>: the scanner resolves as it would with no config,
+the preflight row carries <code>ignored_command</code>, and <code>--trust-target-config</code>
+restores the tree's choice for a repository you own. A config outside the
+tree keeps its command, as before.</p>
+<p><strong>A file target's boundary is its parent directory.</strong> Nothing lives beneath a
+regular file, so <code>secure-code-agent app.py</code> made every containment test false
+at once and the single-file shape silently opted out of the guard above. A
+configured executable beside the file was executed without the flag. Both
+checks now normalise a file target to its parent.</p>
+<h3 id="the-tree-does-not-choose-where-the-host-writes-either">The tree does not choose where the host writes, either</h3>
+<p>The line above is about <em>executing</em> what the tree supplies, and for a while it
+was the only line. The tree could still choose <strong>paths</strong>: the default config is
+loaded from the audit target, and <code>outputs.*_path</code>, <code>baseline_path</code> and
+<code>history_path</code> were resolved with no containment check at all. A repository
+shipping <code>{"outputs": {"markdown_path": "../../../../.bashrc"}}</code> had an
+ordinary audit overwrite that file with the report's own content. Arbitrary
+write is not a lesser thing than arbitrary execute; it is usually a slower
+route to the same place.</p>
+<p>A config supplied by the tree may now only write beneath the audit root, with
+<code>..</code> traversal, absolute paths and <strong>symlinks inside the tree pointing out of
+it</strong> all refused — the last is why the check resolves before comparing rather
+than inspecting the string. The run exits 2 before any scanner starts.</p>
+<p>Explicit CLI output flags are untouched: <code>--output /tmp/report.md</code> is the
+operator speaking.</p>
+<h3 id="the-tree-does-not-grade-itself-either">The tree does not grade itself, either</h3>
+<p><strong>Threat:</strong> the audited repository supplies the numbers its own audit reports.</p>
+<p><code>severity_overrides</code> and <code>category_overrides</code> map a rule id to a severity or
+a category, and they were applied from any config — including one discovered
+inside the audited tree, with no <code>--trust-target-config</code>. <code>INFORMATIONAL</code> is
+weight 0.0, so re-labelling a finding removes it from the score while leaving
+it visible in the report.</p>
+<p>Measured on one <code>subprocess.run(cmd, shell=True)</code>: <strong>0.00 (F)</strong> honestly, and
+<strong>5.00 (A+)</strong> with an in-tree <code>severity_overrides</code> naming that rule. Nothing
+was hidden; the weight was.</p>
+<p>This is the same shape as the T1 ruling one step removed. T1 was about what
+the tree may make the host <em>run</em>; this is about what the tree may make the
+host <em>report</em>. An auditing tool whose grade is settable by the audited party
+has no product left, so it is a trust-boundary question rather than a
+configuration one. <a href="docs-decisions.html">D32</a> records it.</p>
+<p><strong>Ruling.</strong> A config inside the containment root, without
+<code>--trust-target-config</code>, does not supply either key. They are dropped before
+any consumer reads them, and the run warns on stderr naming the file. A
+config kept outside the tree, and the flag, both still apply them — the
+operator auditing their own repository is the ordinary case, and that case
+has an owner-shaped escape hatch already.</p>
+<h3 id="what-trust-target-config-grants">What <code>--trust-target-config</code> grants</h3>
+<p>It says: <em>treat this tree's config as though you wrote it.</em> That is <em>three</em>
+grants, and all three are real:</p>
+<ol>
+<li>the config may name executables from that tree, which this host will run;</li>
+<li>the config may direct outputs, baseline and history to paths outside the
+   tree;</li>
+<li>the config may re-label a finding's severity and category, which moves the
+   grade.</li>
+</ol>
+<p>One flag rather than three because it is one judgement — whether this
+repository's config is an operator artifact. But it is worth being plain that
+saying yes hands over all three, not just the first.</p>
+<p><strong>Mitigations:</strong>
+- All scanner invocations are <code>subprocess.run(args=[...], shell=False, cwd=target, env=_sanitized_env())</code>.
+- Repository-supplied configuration cannot select an executable inside the audited tree; see the ruling above.
+- Repository-supplied configuration cannot set a finding's severity or category, so the audited tree cannot move its own grade (D32).
+- Unknown top-level configuration keys are rejected rather than ignored, so a config asserting a privilege this tool does not read fails loudly instead of appearing accepted.
+- The orchestrator does not <code>eval()</code>, <code>exec()</code>, <code>pickle.load()</code>, or import target source. <code>.scignore.yaml</code> uses <code>yaml.safe_load</code>; PyYAML is a bounded runtime dependency.
+- File paths are passed via argv, never via shell interpolation.
+- <code>.scignore.yaml</code> is parsed with <code>yaml.safe_load</code>; deserializing it cannot construct arbitrary Python objects.
+- Built-in rules read source files as UTF-8 with decoding errors ignored. External scanners have their own parsers and trust models; project dependency resolution may process package metadata and access configured indexes. Run audits of untrusted repositories in an isolated runner.</p>
+<h3 id="t2-output-injection-report-or-pr-comment">T2 — Output injection (report or PR-comment)</h3>
+<p><strong>Threat:</strong> A finding's code snippet or message contains characters that escape the report formatting and inject content into operator-visible UIs.</p>
+<p><strong>Current controls and limitation:</strong>
+- JSON and SARIF serializers JSON-encode strings.
+- Markdown uses fenced code blocks, but scanner-controlled backticks and other Markdown constructs are not comprehensively escaped in this release. Treat generated Markdown and PR-comment artifacts as untrusted text and do not render them in privileged HTML contexts.</p>
+<h3 id="t3-scanner-output-deception">T3 — Scanner output deception</h3>
+<p><strong>Threat:</strong> A scanner is configured (or compromised) to emit findings that frame attacker-controlled paths.</p>
+<p><strong>Mitigations:</strong>
+- Standards mapping is local (<code>rule_map.json</code>), not scanner-supplied. A scanner cannot claim <code>category: "policy_docs"</code> for a CWE-89 finding to dodge the <code>auth_authz</code> gate.
+- Severity overrides flow operator → tool, never tool → operator. The scanner's severity is a hint; the operator's <code>severity_overrides</code> in config is the ground truth.
+- Fingerprints are computed from <code>(canonical_cwe, file_path, normalized_code_hash)</code> — a scanner cannot manipulate the fingerprint by changing its rule id.</p>
+<h3 id="t4-suppression-bypass">T4 — Suppression bypass</h3>
+<p><strong>Threat:</strong> Operator suppresses overly-broad rules to silence the gate.</p>
+<p><strong>Mitigations:</strong>
+- <code>.scignore.yaml</code> requires a <code>reason</code> field. Empty reasons fail config validation.
+- <code>.scignore.yaml</code> requires an <code>expires</code> date (max 365 days). Past-expiry suppressions become CRITICAL findings on their own.
+- Wildcard rule suppressions (<code>rule_id: "*"</code>) require a <code>file:</code> or <code>paths:</code> scope — you cannot disable a rule globally.
+- Category-level suppressions are not supported. Operators must enumerate specific rules.</p>
+<h3 id="t5-baseline-tampering">T5 — Baseline tampering</h3>
+<p><strong>Threat:</strong> Operator silently flips a finding into the baseline (<code>--bump-baseline</code>) without review.</p>
+<p><strong>Mitigations:</strong>
+- Baseline is a checked-in JSON artifact with operator-attributable git diffs. Reviewers must approve baseline changes in PR.
+- Baseline entries record the best-effort local Git email, but this release does not add an interactive acknowledgment or cryptographic identity. Repository review and branch protection are the approval boundary.</p>
+<h3 id="t6-cleartext-secret-in-report">T6 — Cleartext secret in report</h3>
+<p><strong>Threat:</strong> Scanner emits the raw matched secret in its output; we render it into a checked-in artifact.</p>
+<p><strong>Mitigations:</strong>
+- Secret-scanning scanners (Gitleaks, TruffleHog) are configured with <code>--redact</code> (Gitleaks) and <code>--only-verified --concurrency=1</code> (TruffleHog) by default.
+- The Markdown report renders only the redacted match.
+- Fingerprints use the redacted evidence supplied to the normalized finding; the orchestrator does not retain the raw secret for deduplication.
+- SARIF serializes the normalized finding. It does not perform a second redaction pass, so adapter redaction is part of the scanner contract and must be regression-tested.</p>
+<h3 id="t7-exfiltration-via-scanner-network-calls">T7 — Exfiltration via scanner network calls</h3>
+<p><strong>Threat:</strong> A scanner makes outbound network calls that leak repo content (filenames, snippets).</p>
+<p><strong>Mitigations:</strong>
+- The CLI itself has no telemetry or version-check request. External scanners may access registries, advisory services, GitHub, or package indexes depending on their arguments and local caches.
+- Bandit and built-in rules are local-only. Dependency resolution and registry-backed scanners must be treated as network-capable unless the operator has independently configured and verified an offline mode.
+- <code>scanners.&lt;name&gt;.online</code> only changes adapters that explicitly implement it. It is not a global network sandbox.</p>
+<h3 id="t8-resource-exhaustion">T8 — Resource exhaustion</h3>
+<p><strong>Threat:</strong> A pathological repo causes a scanner to consume unbounded CPU/RAM.</p>
+<p><strong>Mitigations:</strong>
+- Each scanner runs under a wall-clock timeout (<code>scanners.&lt;name&gt;.timeout_seconds</code>, default 600).
+- On timeout <code>subprocess.run</code> terminates the child, a <code>tool_timeout</code> finding is emitted, and required coverage fails. Child-created process trees may require runner-level isolation.
+- Scanner output is captured in memory and SARIF is loaded as JSON. CI runners should enforce repository-size, memory, and process limits.</p>
+<h3 id="t9-supply-chain-attack-on-the-agent-itself">T9 — Supply-chain attack on the agent itself</h3>
+<p><strong>Threat:</strong> A compromised release of <code>secure-code-agent</code> injects malicious behavior into a security-critical step.</p>
+<p><strong>Mitigations:</strong>
+- GitHub Action references should be pinned to a SHA (<code>uses: marshallguillory86/secure-code-agent@&lt;sha&gt;</code>), not a tag.
+- GitHub CI tests the package and dogfoods selected scanners against the repository. Scanner versions are pinned in that workflow.
+- Release signing, provenance attestations, and SBOM publication are release-process goals and must not be assumed unless the corresponding release artifacts are present.</p>
+<h2 id="out-of-scope">Out of scope</h2>
+<ul>
+<li><strong>Runtime attacks</strong> — WAFs, IDS, RASP, runtime memory protections.</li>
+<li><strong>Operator account compromise</strong> — if your GitHub account is taken over, this tool cannot help.</li>
+<li><strong>CI runner compromise</strong> — if your CI runner is owned, gate output is untrusted by definition.</li>
+<li><strong>Compromise of the underlying scanners</strong> — we rely on Bandit, Semgrep, etc. being correctly built and distributed. We pin versions; we don't audit their source.</li>
+</ul>
+<h2 id="reporting-vulnerabilities-in-this-tool">Reporting vulnerabilities in this tool</h2>
+<p>See <a href="security.html">SECURITY.md</a>. Coordinated disclosure via GitHub Security Advisory.</p>
+<footer>Rendered from <code>docs/threat-model.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>
