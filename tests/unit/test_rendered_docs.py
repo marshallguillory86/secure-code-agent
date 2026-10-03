@@ -38,7 +38,21 @@ HTML = ROOT / "docs" / "html"
 
 
 def _load():
-    """Import the renderer as a module, so these tests exercise it directly."""
+    """Import the renderer as a module, so these tests exercise it directly.
+
+    `markdown` is a dev dependency, and this whole file skips without it.
+    That is not politeness: the renderer imports it at module scope, so a
+    bare `import` here failed collection in any environment that does not
+    have it — including maintainability-agent's own virtualenv, which runs
+    this repository's declared test command. It reported `pytest exited 2`
+    and scored `test_effectiveness` as not measurable, undoing the fix that
+    made the suite measurable at all a few hours earlier.
+
+    Same shape as `test_one_coverage_floor.py`'s `tomllib` skip, and for the
+    same reason: skip on the environment that lacks the tool rather than
+    taking the suite down with it.
+    """
+    pytest.importorskip("markdown", reason="markdown is a dev dependency of the docs renderer")
     if not TOOL.is_file():
         pytest.fail(f"{TOOL} does not exist; the reading copy has no renderer")
     spec = importlib.util.spec_from_file_location("render_docs", TOOL)
