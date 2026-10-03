@@ -28,7 +28,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-import tomllib
 import yaml
 
 REPO = Path(__file__).resolve().parents[2]
@@ -39,6 +38,19 @@ _FAIL_UNDER = re.compile(r"--cov-fail-under(?:[=\s]+(?P<value>[\d.]+))?")
 
 #: A YAML comment, from an unquoted `#` to the end of the line.
 _COMMENT = re.compile(r"(?m)(?<!['\"])#.*$")
+
+
+def _pyproject() -> dict:
+    """`tomllib` is 3.11+, and this project's support floor is 3.10.
+
+    Same shape as `test_contract_sync.py`'s helper, for the same reason:
+    skipping on the oldest interpreter only keeps the check running on the
+    rest of the matrix, where a blanket skip would let it rot unnoticed.
+    Importing it at module scope instead fails collection for this whole
+    file on 3.10, taking the workflow lints down with it.
+    """
+    toml = pytest.importorskip("tomllib", reason="tomllib is 3.11+")
+    return toml.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
 
 
 def _workflow_files() -> list[Path]:
@@ -63,8 +75,7 @@ def test_there_are_workflows_to_check():
 
 def test_pyproject_declares_the_floor():
     """The single source of truth has to exist for the rule to mean anything."""
-    config = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
-    floor = config["tool"]["coverage"]["report"]["fail_under"]
+    floor = _pyproject()["tool"]["coverage"]["report"]["fail_under"]
     assert isinstance(floor, (int, float))
     assert floor >= 92, (
         f"the house coverage floor is 92; pyproject declares {floor}. "
@@ -194,8 +205,7 @@ CONSUMED_ARTIFACTS = ("coverage.xml", "coverage/lcov.info", "lcov.info")
 
 
 def _addopts() -> str:
-    config = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
-    return config["tool"]["pytest"]["ini_options"]["addopts"]
+    return _pyproject()["tool"]["pytest"]["ini_options"]["addopts"]
 
 
 def _writes_a_consumable_artifact(addopts: str) -> bool:
