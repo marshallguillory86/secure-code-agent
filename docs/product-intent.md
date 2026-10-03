@@ -459,10 +459,15 @@ wanted to be the one to close it.
    so the behaviour cannot drift while the question is open. Semgrep is the
    adapter that uses `cwe_override`, so it is the one whose output this decides.
 
-   **Answered 2026-10-02 — the override wins both fields.** A finding
+   **Answered 2026-10-02 — the override wins both fields.** Recorded as
+   [D31](decisions.md). A finding
    reporting CWE-22 beside A03 Injection is incoherent to whoever reads it, and
    an adapter asserting a more specific CWE is asserting the weakness rather
    than just its number. Semgrep is the only caller, so the change is small.
-   The pinned corpus is re-measured before and after, because this moves
-   findings between OWASP categories and D17's published figures are derived
-   from them.
+   The pinned corpus was going to be re-measured before and after, on the
+   assumption that moving findings between OWASP categories moves D17's
+   published figures. Checked instead of assumed, and it does not:
+   `scoring.py` never reads `owasp_top10`, it is not an input to
+   `make_fingerprint`, and suppressions do not match on it. The grade, the
+   baseline identity and the calibration study are all untouched, so no
+   corpus run was needed.

@@ -147,18 +147,56 @@ def test_cwe_override_derives_owasp_from_the_override_not_from_the_map():
     assert std.owasp_top10 == "A01"
 
 
-def test_curated_owasp_wins_over_the_one_derived_from_an_overriding_cwe():
-    """When the map carries an OWASP id it is kept even if the CWE is overridden.
+def test_an_overriding_cwe_also_decides_the_owasp_category():
+    """A finding's CWE and its OWASP category must describe one weakness (D31).
 
-    Documents the actual rule (`entry.owasp_top10 or owasp_for_cwe(...)`):
-    B608 is A03 in the map; overriding to CWE-22 (A01 by derivation) keeps A03.
-    The assertion that A01 differs guards against the test passing vacuously.
+    The rule was `entry.owasp_top10 or owasp_for_cwe(canonical_cwe)`, so the
+    curated OWASP survived a CWE that had just overruled the curated CWE.
+    B608 is CWE-89/A03 in the map; a Semgrep rule asserting CWE-22 produced
+    **CWE-22 with A03** — path traversal filed under Injection. Whoever read
+    that report got two standards disagreeing about what kind of defect it
+    was, and neither of them was wrong on its own.
+
+    An adapter that overrides the CWE is asserting the weakness, not merely
+    its number, so the category derived from it follows. The A03 assertion
+    below is the competing answer and keeps this from passing vacuously.
     """
-    assert owasp_for_cwe("CWE-22") == "A01"  # the competing answer
+    assert owasp_for_cwe("CWE-22") == "A01"  # derived from the override
+    assert lookup("bandit", "B608").owasp_top10 == "A03"  # the curated answer it beats
 
     std = _resolve(cwe_override="CWE-22")
 
     assert std.canonical_cwe == "CWE-22"
+    assert std.owasp_top10 == "A01"
+
+
+def test_an_override_with_no_owasp_bucket_does_not_fall_back_to_the_curated_one():
+    """Falling back would reinstate exactly the incoherence D30a removes.
+
+    CWE-703 belongs to no Top 10 category. Overriding B608 to it must yield
+    no OWASP id at all — not A03, which describes the CWE-89 the override
+    just replaced. "We do not know" is the honest answer; the curated bucket
+    for a different weakness is a wrong one.
+    """
+    assert owasp_for_cwe("CWE-703") is None  # premise
+    assert lookup("bandit", "B608").owasp_top10 == "A03"  # what must not leak through
+
+    std = _resolve(cwe_override="CWE-703")
+
+    assert std.canonical_cwe == "CWE-703"
+    assert std.owasp_top10 is None
+
+
+def test_without_an_override_the_curated_owasp_still_wins():
+    """The falsifier. Always deriving would discard the reviewed mapping.
+
+    The curated row is the only source carrying ASVS, SSDF and a fix hint,
+    and its OWASP id is reviewed rather than computed. With no override it
+    must still be preferred over derivation.
+    """
+    std = _resolve()
+
+    assert std.canonical_cwe == "CWE-89"
     assert std.owasp_top10 == "A03"
 
 

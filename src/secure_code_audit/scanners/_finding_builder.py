@@ -72,9 +72,25 @@ def _resolve_standards(
 
     # Mapping fallback to wildcard (handled inside lookup).
     canonical_cwe = cwe_override or (entry.canonical_cwe if entry else None) or scanner_cwe
+    # An override decides the OWASP category too, because a CWE and an OWASP
+    # id that disagree describe two different defects. This was
+    # `entry.owasp_top10 or owasp_for_cwe(...)` unconditionally, so a Semgrep
+    # rule asserting CWE-22 against B608 produced CWE-22 with A03 — path
+    # traversal filed under Injection. An adapter overriding the CWE is
+    # asserting the weakness, not just its number.
+    #
+    # No fallback to the curated id when the override maps to no bucket: that
+    # id describes the CWE the override just replaced, so it would reinstate
+    # the same incoherence. None means "no Top 10 category", which is the
+    # honest answer. D31, and docs/product-intent.md §8 question 9.
+    owasp_top10 = (
+        owasp_for_cwe(canonical_cwe)
+        if cwe_override
+        else (entry.owasp_top10 if entry else None) or owasp_for_cwe(canonical_cwe)
+    )
     return _Standards(
         canonical_cwe=canonical_cwe,
-        owasp_top10=(entry.owasp_top10 if entry else None) or owasp_for_cwe(canonical_cwe),
+        owasp_top10=owasp_top10,
         asvs_section=entry.asvs_section if entry else None,
         nist_ssdf=entry.nist_ssdf if entry else None,
         category=category or (entry.category if entry else default_category),

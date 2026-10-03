@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.10 — 2026-10-02.** The decision register. D1–D30.
+> Status: **v0.12.10 — 2026-10-02.** The decision register. D1–D31.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -43,6 +43,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D28 | A declared capability's findings are not patch targets | 2026-09-20 | Accepted |
 | D29 | An untrusted config does not choose a scanner's command | 2026-10-02 | Accepted |
 | D30 | An adapter judges its own tool's exit codes, and `_exec` judges none | 2026-10-02 | Accepted |
+| D31 | An overriding CWE decides the OWASP category derived from it | 2026-10-02 | Accepted |
 
 ---
 
@@ -1901,3 +1902,52 @@ bandit specifically, exit 2 becomes `FAILED` carrying bandit's stderr, where
 it previously became a passing empty result. Repositories where bandit
 errors silently will start reporting failed coverage — which is the point:
 coverage says *we do not know* rather than *nothing is there*.
+
+---
+
+## D31 — An overriding CWE decides the OWASP category derived from it
+
+**Status:** Accepted · 2026-10-02 · answers
+[`product-intent.md`](product-intent.md) §8 question 9
+
+**Context.** `_resolve_standards` ranks three sources for a finding's CWE:
+an adapter's `cwe_override` first, then the curated map, then what the tool
+said about its own rule. OWASP was not ranked at all. It read
+`entry.owasp_top10 or owasp_for_cwe(canonical_cwe)`, so the curated OWASP id
+survived a CWE that had just overruled the curated CWE.
+
+Bandit's `B608` is CWE-89 / A03 in the map. A Semgrep rule asserting CWE-22
+produced a finding carrying **CWE-22 with A03** — path traversal filed under
+Injection. Two standards in one row disagreeing about what kind of defect it
+was, and neither wrong on its own terms. Found by the first unit tests
+written directly against `_finding_builder.py`, which had pinned the
+behaviour as a documented oddity rather than judging it.
+
+**Decision.** When an adapter overrides the CWE, the OWASP category is
+derived from the override. An adapter asserting a more specific CWE is
+asserting the weakness, not merely its number, and the category computed
+from a weakness must describe that weakness.
+
+There is **no fallback** to the curated id when the override maps to no Top
+10 bucket. That id describes the CWE the override replaced, so falling back
+would reinstate the same incoherence in the case most likely to be
+misread. `None` — "no Top 10 category" — is the honest answer, and the
+existing rule that a CWE outside the Top 10 yields no OWASP id already
+establishes it.
+
+Without an override the curated id still wins. It is reviewed rather than
+computed, and it is the only source that also carries ASVS, SSDF and a fix
+hint, so deriving unconditionally would discard reviewed mapping.
+
+**Consequences.** Semgrep is the only adapter that passes `cwe_override` —
+verified, not assumed — so this changes the OWASP column for Semgrep
+findings whose rule metadata names a CWE the curated map maps differently,
+and nothing else.
+
+**No score changes, and no corpus re-measurement.** This was expected to move
+D17's published figures and does not: `scoring.py` never reads
+`owasp_top10`, the field is not an input to `Finding.make_fingerprint`, and
+suppression matching does not use it. So the grade, the baseline identity and
+the calibration study are all untouched, and the change is confined to what a
+report shows. Checked before concluding it, because the opposite assumption
+would have cost a corpus run.
