@@ -240,23 +240,38 @@ files.
 - **No telemetry.** Not opt-in, not anonymized, not "just crash reports."
 
 **Deferred, not rejected.** These are tracked so that "not yet" is not confused
-with "never," and so a contributor knows what a good proposal looks like.
+with "never," and so a contributor knows what a good proposal looks like. This
+is the product roadmap: a shipped entry is struck through and says so rather
+than being deleted, because what was once deferred and why is part of the
+record. Two entries below had shipped without being struck, which is how a
+roadmap stops being one.
 
-- Additional language SAST adapters — gosec, Brakeman, SpotBugs/FindSecBugs —
-  added when a repository that needs them is actually being dogfooded, not
-  speculatively.
-- Ingest-only integrations for tools we will not invoke ourselves: CodeQL
-  (runs in GitHub-hosted analysis) and Snyk (license and auth burden).
+- Additional language SAST adapters — ~~gosec~~, Brakeman, SpotBugs/FindSecBugs
+  — added when a repository that needs them is actually being dogfooded, not
+  speculatively. **gosec shipped**; it is registered in `SCANNERS` and carries
+  an adapter. Brakeman and SpotBugs/FindSecBugs remain deferred on the same
+  terms.
+- ~~Ingest-only integrations for tools we will not invoke ourselves: CodeQL
+  (runs in GitHub-hosted analysis) and Snyk (license and auth burden).~~
+  **Shipped.** `--sarif-import` ingests either, and D3 settled the trust model
+  for imported SARIF; the quickstart documents both by name.
 - Cross-scanner deduplication. Overlapping SCA adapters can currently
   double-count one advisory. Fingerprints are stable enough to support this; the
   scorer does not yet do it.
 - Operator-defined standards rule packs. The mapping table is currently
-  compiled into the package.
+  compiled into the package. **Accepted 2026-10-02 and no longer deferred** —
+  §8 question 3 answers it: ship the mapping as data with an operator overlay.
+  Not yet built, so it stays listed until it is.
 - ~~Scoped changed-file audits.~~ **Shipped in 0.12.0.** `--changed-only REF`
   scans the whole tree, scopes the *report* to files changed since `REF`, and
   withholds the grade — a run that looks at less must not score better.
 - SBOM generation and signature verification — better served by dedicated tools
   this agent can be paired with.
+- Full OASIS schema validation of emitted SARIF in CI. The output is
+  SARIF 2.1.0-shaped, structurally unit-tested and round-tripped, and `README.md`
+  §Versioning says validation "is not yet part of CI" — which was the only place
+  it was written down. Recorded here so the claim has a home in the roadmap
+  rather than living in a versioning footnote.
 
 ## 7. Positioning
 
@@ -286,26 +301,59 @@ reads it — see principle 9 in §5 and [D3](decisions.md).
 Recorded rather than resolved. Each of these should be answered deliberately
 rather than settled by whichever feature lands first.
 
+**An answered question keeps its number, its original text and its verdict.**
+The numbers are cited from source comments and test docstrings, so renumbering
+would silently break them; and the reasoning that made something a question is
+worth keeping beside the answer. A verdict of *declined* or *deferred* is an
+answer — the failure mode here is a question that stays open because nobody
+wanted to be the one to close it.
+
 1. **Should the deliverable be one verdict or two numbers?** Today a report
    carries a letter grade *and* a coverage status, and the reader must combine
    them. The score's null state is "perfect" — a repository where nothing ran
    still grades A+ — which is why coverage had to be added beside it. See
    [`architecture.md` §5](architecture.md).
+
+   **Deferred 2026-10-02.** D16 and D17 settled the score model on
+   measurement three weeks ago; reopening how it is *presented* now would churn
+   the one part of this that is finally calibrated. It belongs at v1.0, when the
+   config schema locks and the output contract is the thing being frozen.
 2. **Does the remediation prompt measurably bound agent behavior?** Criterion 3
    in §4 is asserted from first principles and has never been evaluated.
    An honest answer needs a fixture repository, a set of seeded findings, and
    patches from several agents scored against the constraint list.
+
+   **Scheduled 2026-10-02**, as feature-sized work rather than a backlog
+   line. It is the only success criterion in §4 with no evidence behind it, and
+   it is the central one. The deliverable is a fixture repository, a seeded
+   finding set, and patches from several agents scored against the constraint
+   list — a measurement, not an argument.
 3. **Who owns the standards mapping?** It is compiled into the package today,
    so adding a rule requires a release and operators cannot extend it. Shipping
    it as data with an operator overlay is a product decision about how much
    customization to invite.
+
+   **Answered 2026-10-02 — ship it as data, with an operator overlay.**
+   Decided together with `standards.py`'s size finding, which is this same
+   problem seen from the other side: 705 lines, roughly 390 of them a
+   hand-written table that needs a package release to extend, with the
+   `(scanner, "*")` wildcard absorbing the coverage gap. One change answers the
+   product question and clears the file finding.
 4. **How far does "never install anything" extend?** It is settled for scanner
    binaries. It is not settled for whether the tool should offer to *verify*
    installed scanner versions against pinned expectations, which is adjacent to
    supply-chain assurance and might belong here.
+
+   **Deferred 2026-10-02.** Nothing is pulling on it — no operator has
+   asked, and no finding depends on it. Recorded so it is not mistaken for
+   settled.
 5. **What is the adoption path for a repository with thousands of existing
    findings?** Baseline plus expiring suppressions is the current answer, but it
    has not been exercised on a large legacy codebase.
+
+   **Deferred 2026-10-02**, on this document's own terms: §6 refuses to
+   build for a repository that is not actually being dogfooded, and no large
+   legacy codebase is. The answer arrives with the first one that is.
 6. **Should preflight advise on a required scanner the operator switched off?**
    `--preflight --json` builds a row per *selected* scanner, each carrying a
    `remedy` from the adapter's own `unavailable_fix_hint()`. A scanner that is
@@ -323,6 +371,10 @@ rather than settled by whichever feature lands first.
    operator's choice, so advice about it reads closer to *your config and your
    gate disagree* than to *install this tool* — which may make it a
    gate-reporting concern rather than a preflight one.
+
+   **Deferred 2026-10-02.** By its own text the shape of an answer is not
+   obvious, and nothing since has changed that. It stays open rather than being
+   closed for tidiness.
 7. **Should a host be able to ask for a preflight that never reads the target's
    config?** There is `--config` and there is `--trust-target-config`, but
    nothing that declines the audited tree's configuration outright: with
@@ -346,6 +398,13 @@ rather than settled by whichever feature lands first.
    So this is a question about whether a cleaner surface is worth a third
    config mode, not about unblocking anything — recorded that way so nobody
    later reads it as a consumer waiting on us.
+
+   **Answered 2026-10-02 — declined.** Asked directly, the consumer called
+   the empty-file route inelegant rather than painful: a few lines in its own
+   `_security_delegate.py`, working against every release from 0.12.10. A third
+   config mode is not worth a cleaner surface for a single caller, and declining
+   a question is as much of an answer as building the flag. Reopen if a second
+   host hits the same edge.
 8. **Does exit-code policy belong in `_exec` or in each adapter?** `_exec`
    takes an `allowed_exits` tuple and does nothing with it: both branches
    return the `CompletedProcess` unchanged, so the parameter has no effect on
@@ -372,6 +431,14 @@ rather than settled by whichever feature lands first.
    `_execution.py`, which is the kind of thing a paired test finds and an
    indirect one does not. The docstring now states the truth; the parameter and
    its call sites are untouched pending this answer.
+
+   **Answered 2026-10-02 — delete the parameter.** The inline checks are
+   what actually run, and each is correct for its own tool. Making `_exec`
+   enforce the tuple means inventing a way to say "this exit code is not
+   acceptable" that fifteen call sites must then act on, for no change in
+   behaviour. So the parameter goes — and `bandit_scanner.py` gains the
+   returncode guard it never had, because removing a false guard without adding
+   the real one loses information rather than clarifying it.
 9. **Should a curated OWASP id outrank one derived from an overriding CWE?**
    `_resolve_standards` lets an adapter's `cwe_override` beat the curated map
    for the CWE, but takes OWASP as `entry.owasp_top10 or
@@ -390,3 +457,11 @@ rather than settled by whichever feature lands first.
    Pinned by `test_curated_owasp_wins_over_the_one_derived_from_an_overriding_cwe`
    so the behaviour cannot drift while the question is open. Semgrep is the
    adapter that uses `cwe_override`, so it is the one whose output this decides.
+
+   **Answered 2026-10-02 — the override wins both fields.** A finding
+   reporting CWE-22 beside A03 Injection is incoherent to whoever reads it, and
+   an adapter asserting a more specific CWE is asserting the weakness rather
+   than just its number. Semgrep is the only caller, so the change is small.
+   The pinned corpus is re-measured before and after, because this moves
+   findings between OWASP categories and D17's published figures are derived
+   from them.
