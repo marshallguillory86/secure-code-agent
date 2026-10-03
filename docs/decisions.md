@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.10 — 2026-10-02.** The decision register. D1–D29.
+> Status: **v0.12.10 — 2026-10-02.** The decision register. D1–D30.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -42,6 +42,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D27 | The work order is available as facts, not only as prose | 2026-09-19 | Accepted |
 | D28 | A declared capability's findings are not patch targets | 2026-09-20 | Accepted |
 | D29 | An untrusted config does not choose a scanner's command | 2026-10-02 | Accepted |
+| D30 | An adapter judges its own tool's exit codes, and `_exec` judges none | 2026-10-02 | Accepted |
 
 ---
 
@@ -1855,3 +1856,48 @@ owner passes `--trust-target-config`. That is the trade T1 already made for
 executables, extended to the arguments that made the executable check
 decorative.
 
+---
+
+## D30 — An adapter judges its own tool's exit codes, and `_exec` judges none
+
+**Status:** Accepted · 2026-10-02 · answers
+[`product-intent.md`](product-intent.md) §8 question 8
+
+**Context.** `Scanner._exec` took an `allowed_exits` tuple and did nothing
+with it. Both of its branches returned the `CompletedProcess` unchanged, so
+the parameter could not affect any run. Fourteen adapters passed one anyway,
+and the knowledge ended up written twice in most of them — `_exec(...,
+allowed_exits=(0, 183))` sitting beside `if r.returncode not in (0, 183)` —
+with only the second copy doing anything. This is §3 of
+[`architecture.md`](architecture.md), two sources of truth, with the unusual
+property that one source was inert from the beginning.
+
+The cost was not theoretical. `bandit_scanner.py` declared `(0, 1)` to
+`_exec` and then checked no exit code at all beyond the timeout sentinel.
+Bandit exits 2 on an internal error and can still emit a JSON envelope, so
+that run was parsed, found to contain no results, and reported `COMPLETED`
+with zero findings: a clean scan of a tree bandit never finished reading.
+A false green, against §4 criterion 1 — *a green gate means something*.
+It was found by the first unit tests written directly against
+`_execution.py`, not by reading the adapters.
+
+**Decision.** Exit-code policy belongs to the adapter. `_exec` returns what
+the process did and judges nothing; `allowed_exits` is deleted rather than
+implemented. Each adapter states its own tool's codes once, as a named
+constant where it has more than one, and acts on them itself.
+
+**Why not make `_exec` enforce it.** That is the tidier-looking option and it
+was rejected on evidence. `_exec` returns a `CompletedProcess` because every
+caller needs the stdout; enforcement would need a second channel to say
+"this code is unacceptable" that fifteen call sites must then act on, and
+each would still need its own branch — 1 means *findings* to bandit, 183 to
+trufflehog, and *failure* to hadolint. The result is the same number of
+inline checks plus a mechanism. The knowledge is genuinely per-tool, so the
+single source of truth is the adapter, not the helper.
+
+**Consequences.** A scanner that fails in a way its adapter does not
+recognise now fails its coverage instead of reporting a clean scan. For
+bandit specifically, exit 2 becomes `FAILED` carrying bandit's stderr, where
+it previously became a passing empty result. Repositories where bandit
+errors silently will start reporting failed coverage — which is the point:
+coverage says *we do not know* rather than *nothing is there*.

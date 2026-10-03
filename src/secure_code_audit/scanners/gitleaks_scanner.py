@@ -95,9 +95,7 @@ class GitleaksScanner(Scanner):
             ]
             args.extend(sc_cfg.extra_args)
             # Gitleaks exits 1 when findings exist; 0 = clean; >1 = error.
-            r = self._exec(
-                args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
-            )
+            r = self._exec(args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds)
             if r.returncode not in (0, 1):
                 return f"gitleaks {mode} failed: {r.stderr[:300]}"
             if not report_path.exists() or report_path.stat().st_size == 0:

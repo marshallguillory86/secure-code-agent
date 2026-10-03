@@ -28,23 +28,23 @@ class SubprocessExecution:
         args: list[str],
         cwd: Path,
         timeout_seconds: int,
-        allowed_exits: tuple[int, ...] = (0,),
     ) -> subprocess.CompletedProcess:
         """Run a scanner subprocess with sanitized env, no shell.
 
-        `allowed_exits` does **not** do what it says, and the next reader
-        should not trust it: both branches below return `r` unchanged, so
-        the parameter has no effect on anything. Every adapter decides for
-        itself what its tool's exit codes mean, and several then declare the
-        same tuple twice — `_exec(..., allowed_exits=(0, 183))` sitting
-        beside `if r.returncode not in (0, 183)`. Bandit declares `(0, 1)`
-        here and then checks no exit code at all, which is the cost of a
-        parameter that looks like a guard.
+        **This does not judge the exit code.** It returns whatever the
+        process did, and the adapter decides what its own tool's codes mean,
+        because that knowledge is per-tool: 1 means findings to bandit, 183
+        to trufflehog, and failure to hadolint.
 
-        Whether exit-code policy belongs in this helper or in each adapter
-        is a design decision, recorded as an open question rather than
-        settled here. Until it is answered the inline check is the one that
-        runs.
+        It used to take an `allowed_exits` tuple and do nothing with it —
+        both branches returned the process unchanged. Fourteen adapters
+        passed one, several then wrote the same tuple again as the check
+        that actually ran, and bandit passed `(0, 1)` and checked no exit
+        code at all, reporting a clean scan when bandit had failed
+        internally. The parameter was deleted rather than implemented:
+        enforcing it here would need a way to say "this code is not
+        acceptable" that fifteen call sites must act on, for no change in
+        behaviour. See `docs/product-intent.md` §8 question 8.
 
         `cwd` is coerced to a directory. Auditing a single file is supported
         — the CLI and several adapters carry `target if target.is_dir() else
@@ -75,8 +75,6 @@ class SubprocessExecution:
                 stdout="",
                 stderr=f"timeout after {timeout_seconds}s",
             )
-        if r.returncode not in allowed_exits and r.returncode != 0:
-            return r  # caller decides how to handle
         return r
 
     @staticmethod

@@ -63,9 +63,7 @@ class OsvScanner(Scanner):
         # osv-scanner exits 0 on clean, 1 on findings, 127 on general failure,
         # and 128 when it found nothing to read. 128 was documented here as an
         # internal error and mapped to FAILED — see D23.
-        r = self._exec(
-            args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
-        )
+        r = self._exec(args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds)
         if r.returncode == 124:
             return self.timed_out(target, f"osv-scanner timed out: {r.stderr[:200]}")
         if r.returncode == _NO_PACKAGE_SOURCES:

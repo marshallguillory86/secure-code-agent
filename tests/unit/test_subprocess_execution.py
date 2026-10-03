@@ -73,13 +73,13 @@ def test_timeout_becomes_exit_124_with_a_reason(tmp_path):
 
 def test_nonzero_exit_is_returned_not_raised(tmp_path):
     """The caller decides what a nonzero exit means (npm audit exits 1 on findings)."""
-    result = _Runner()._exec(_py("import sys; sys.exit(3)"), tmp_path, 30, allowed_exits=(0, 1))
+    result = _Runner()._exec(_py("import sys; sys.exit(3)"), tmp_path, 30)
 
     assert result.returncode == 3
 
 
 def test_a_findings_exit_code_is_passed_through_untouched(tmp_path):
-    result = _Runner()._exec(_py("import sys; sys.exit(1)"), tmp_path, 30, allowed_exits=(0, 1))
+    result = _Runner()._exec(_py("import sys; sys.exit(1)"), tmp_path, 30)
 
     assert result.returncode == 1
 

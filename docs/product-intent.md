@@ -432,7 +432,8 @@ wanted to be the one to close it.
    indirect one does not. The docstring now states the truth; the parameter and
    its call sites are untouched pending this answer.
 
-   **Answered 2026-10-02 — delete the parameter.** The inline checks are
+   **Answered 2026-10-02 — delete the parameter.** Recorded as
+   [D30](decisions.md). The inline checks are
    what actually run, and each is correct for its own tool. Making `_exec`
    enforce the tuple means inventing a way to say "this exit code is not
    acceptable" that fifteen call sites must then act on, for no change in

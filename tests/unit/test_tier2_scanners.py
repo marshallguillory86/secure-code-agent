@@ -99,7 +99,7 @@ def test_trivy_parses_sarif_and_routes_categories(tmp_path, monkeypatch):
         ],
     }
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         # The scanner writes to a tempfile via --output; mimic that.
         out_idx = args.index("--output") + 1
         Path(args[out_idx]).write_text(json.dumps(sarif_content), encoding="utf-8")
@@ -150,7 +150,7 @@ def test_checkov_parses_sarif_into_config_iac(tmp_path, monkeypatch):
         ],
     }
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         # Checkov writes to results_sarif.sarif inside the output dir.
         out_idx = args.index("--output-file-path") + 1
         (Path(args[out_idx]) / "results_sarif.sarif").write_text(
@@ -211,7 +211,7 @@ def test_hadolint_parses_findings(tmp_path, monkeypatch):
         ]
     )
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         return _proc(stdout=output, code=0)
 
     monkeypatch.setattr(HadolintScanner, "_exec", fake_exec)
@@ -256,7 +256,7 @@ def test_osv_parses_vulnerabilities(tmp_path, monkeypatch):
         ],
     }
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         captured.extend(args)
         return _proc(stdout=json.dumps(payload), code=1)
 
@@ -283,7 +283,7 @@ def test_osv_finding_no_package_sources_does_not_degrade_coverage(tmp_path, monk
     monkeypatch.setattr(
         OsvScanner,
         "_exec",
-        lambda self, args, cwd, timeout_seconds, allowed_exits=(0,): _proc(
+        lambda self, args, cwd, timeout_seconds: _proc(
             stderr="No package sources found, --help for usage information.", code=128
         ),
     )
@@ -302,9 +302,7 @@ def test_osv_reports_a_genuine_failure_as_a_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(
         OsvScanner,
         "_exec",
-        lambda self, args, cwd, timeout_seconds, allowed_exits=(0,): _proc(
-            stderr="unknown flag: --nope", code=127
-        ),
+        lambda self, args, cwd, timeout_seconds: _proc(stderr="unknown flag: --nope", code=127),
     )
 
     result = OsvScanner().scan(tmp_path, Config())
@@ -361,7 +359,7 @@ def test_trufflehog_parses_verified_secret_as_critical(tmp_path, monkeypatch):
         ]
     )
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         return _proc(stdout=jsonl, code=0)
 
     monkeypatch.setattr(TruffleHogScanner, "_exec", fake_exec)
@@ -428,7 +426,7 @@ def test_scorecard_routes_security_policy_to_policy_docs(tmp_path, monkeypatch):
         ],
     }
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         return _proc(stdout=json.dumps(payload), code=0)
 
     monkeypatch.setattr(ScorecardScanner, "_exec", fake_exec)
@@ -445,7 +443,7 @@ def test_trufflehog_findings_exit_with_empty_stdout_fails_instead_of_reading_cle
     monkeypatch.setattr(
         TruffleHogScanner,
         "_exec",
-        lambda self, args, cwd, timeout_seconds, allowed_exits=(0,): _proc(code=183),
+        lambda self, args, cwd, timeout_seconds: _proc(code=183),
     )
     scanner = TruffleHogScanner()
     scanner._resolved_command = ("trufflehog",)
@@ -461,9 +459,7 @@ def test_trufflehog_findings_exit_with_only_blank_lines_also_fails(tmp_path, mon
     monkeypatch.setattr(
         TruffleHogScanner,
         "_exec",
-        lambda self, args, cwd, timeout_seconds, allowed_exits=(0,): _proc(
-            stdout="\n  \n", code=183
-        ),
+        lambda self, args, cwd, timeout_seconds: _proc(stdout="\n  \n", code=183),
     )
     scanner = TruffleHogScanner()
     scanner._resolved_command = ("trufflehog",)
@@ -477,7 +473,7 @@ def test_trufflehog_clean_exit_with_empty_stdout_is_still_a_clean_scan(tmp_path,
     monkeypatch.setattr(
         TruffleHogScanner,
         "_exec",
-        lambda self, args, cwd, timeout_seconds, allowed_exits=(0,): _proc(code=0),
+        lambda self, args, cwd, timeout_seconds: _proc(code=0),
     )
     scanner = TruffleHogScanner()
     scanner._resolved_command = ("trufflehog",)
