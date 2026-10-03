@@ -25,7 +25,7 @@ def test_auto_mode_audits_pyproject_project(tmp_path, monkeypatch):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
     captured = []
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         captured.append(args)
         return _proc(stdout=json.dumps({"dependencies": []}))
 
@@ -41,7 +41,7 @@ def test_locked_mode_passes_locked_before_project(tmp_path, monkeypatch):
     pyproject.write_text("[project]\nname='demo'\n", encoding="utf-8")
     captured = []
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         captured.append(args)
         return _proc(stdout=json.dumps({"dependencies": []}))
 
@@ -57,7 +57,7 @@ def test_auto_mode_prefers_requirements_in_same_project(tmp_path, monkeypatch):
     requirements.write_text("demo==1.0\n", encoding="utf-8")
     captured = []
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         captured.append(args)
         return _proc(stdout=json.dumps({"dependencies": []}))
 
@@ -108,7 +108,7 @@ def test_unavailable_invalid_mode_and_missing_input_are_visible(tmp_path):
 def test_environment_mode_and_explicit_input_validation(tmp_path, monkeypatch):
     captured = []
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         captured.append(args)
         return _proc(stdout=json.dumps({"dependencies": []}))
 
@@ -133,7 +133,7 @@ def test_requirements_mode_discovers_nested_inputs_and_excludes_venv(tmp_path, m
     excluded.write_text("ignore==1\n", encoding="utf-8")
     captured = []
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         captured.append(args)
         return _proc(stdout="[]")
 

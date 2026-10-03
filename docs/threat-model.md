@@ -97,22 +97,52 @@ than inspecting the string. The run exits 2 before any scanner starts.
 Explicit CLI output flags are untouched: `--output /tmp/report.md` is the
 operator speaking.
 
+### The tree does not grade itself, either
+
+**Threat:** the audited repository supplies the numbers its own audit reports.
+
+`severity_overrides` and `category_overrides` map a rule id to a severity or
+a category, and they were applied from any config — including one discovered
+inside the audited tree, with no `--trust-target-config`. `INFORMATIONAL` is
+weight 0.0, so re-labelling a finding removes it from the score while leaving
+it visible in the report.
+
+Measured on one `subprocess.run(cmd, shell=True)`: **0.00 (F)** honestly, and
+**5.00 (A+)** with an in-tree `severity_overrides` naming that rule. Nothing
+was hidden; the weight was.
+
+This is the same shape as the T1 ruling one step removed. T1 was about what
+the tree may make the host *run*; this is about what the tree may make the
+host *report*. An auditing tool whose grade is settable by the audited party
+has no product left, so it is a trust-boundary question rather than a
+configuration one. [D32](decisions.md) records it.
+
+**Ruling.** A config inside the containment root, without
+`--trust-target-config`, does not supply either key. They are dropped before
+any consumer reads them, and the run warns on stderr naming the file. A
+config kept outside the tree, and the flag, both still apply them — the
+operator auditing their own repository is the ordinary case, and that case
+has an owner-shaped escape hatch already.
+
 ### What `--trust-target-config` grants
 
-It says: *treat this tree's config as though you wrote it.* That is *two*
-grants, and both are real:
+It says: *treat this tree's config as though you wrote it.* That is *three*
+grants, and all three are real:
 
 1. the config may name executables from that tree, which this host will run;
 2. the config may direct outputs, baseline and history to paths outside the
-   tree.
+   tree;
+3. the config may re-label a finding's severity and category, which moves the
+   grade.
 
-One flag rather than two because it is one judgement — whether this
+One flag rather than three because it is one judgement — whether this
 repository's config is an operator artifact. But it is worth being plain that
-saying yes hands over both, not just the first.
+saying yes hands over all three, not just the first.
 
 **Mitigations:**
 - All scanner invocations are `subprocess.run(args=[...], shell=False, cwd=target, env=_sanitized_env())`.
 - Repository-supplied configuration cannot select an executable inside the audited tree; see the ruling above.
+- Repository-supplied configuration cannot set a finding's severity or category, so the audited tree cannot move its own grade (D32).
 - Unknown top-level configuration keys are rejected rather than ignored, so a config asserting a privilege this tool does not read fails loudly instead of appearing accepted.
 - The orchestrator does not `eval()`, `exec()`, `pickle.load()`, or import target source. `.scignore.yaml` uses `yaml.safe_load`; PyYAML is a bounded runtime dependency.
 - File paths are passed via argv, never via shell interpolation.

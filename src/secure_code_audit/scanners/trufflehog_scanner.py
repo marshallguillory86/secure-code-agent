@@ -49,7 +49,7 @@ class TruffleHogScanner(Scanner):
         args.extend(sc_cfg.extra_args)
 
         r = self._exec(
-            args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 183)
+            args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds
         )  # 183 = findings present
         if r.returncode == 124:
             return self.timed_out(target, f"trufflehog timed out: {r.stderr[:200]}")

@@ -38,6 +38,14 @@ def _cwe_of(result: dict[str, Any]) -> str | None:
     return f"CWE-{identifier}" if identifier else None
 
 
+#: Bandit's own exit codes: 0 a clean tree, 1 findings present. 2 is its
+#: internal error, and anything else is not a scan we can report. Declared
+#: once here, where the knowledge belongs, and read by the one check that
+#: uses it — `_exec` used to take this as `allowed_exits` and do nothing
+#: with it, which is how this adapter came to check no exit code at all.
+_CLEAN_OR_FINDINGS = (0, 1)
+
+
 class BanditScanner(Scanner):
     name = "bandit"
     binary = "bandit"
@@ -68,12 +76,15 @@ class BanditScanner(Scanner):
             args.extend(["--exclude", ",".join(excludes)])
         args.extend(sc_cfg.extra_args)
 
-        # Bandit exits nonzero on findings — accept 0 + 1.
-        r = self._exec(
-            args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
-        )
+        r = self._exec(args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds)
         if r.returncode == 124:
             return self.timed_out(target, f"bandit timed out: {r.stderr}")
+        # Exit 1 is bandit saying it found something, so it is a success. Any
+        # other nonzero is bandit failing, and a bandit that failed internally
+        # can still emit a JSON envelope — parsing that one reported a clean
+        # scan of a tree it never finished reading.
+        if r.returncode not in _CLEAN_OR_FINDINGS:
+            return self.failed(target, f"bandit failed: {r.stderr[:300]}")
         if not r.stdout.strip():
             return self.failed(target, "bandit emitted no output")
 

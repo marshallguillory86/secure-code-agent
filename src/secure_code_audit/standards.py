@@ -13,6 +13,7 @@ See docs/standards.md for the citations.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from secure_code_audit.findings import Category, Confidence, Severity
 
@@ -69,6 +70,25 @@ OWASP_TOP10_2021: dict[str, str] = {
 
 
 # --- Standards mapping entry ----------------------------------------------
+#: Exactly the fields a data row may carry. Anything else is a typo, and a
+#: typo that is ignored silently downgrades a curated rule to an unmapped one.
+_ROW_KEYS = frozenset(
+    {
+        "scanner",
+        "rule_id",
+        "canonical_cwe",
+        "owasp_top10",
+        "asvs_section",
+        "nist_ssdf",
+        "category",
+        "severity",
+        "confidence",
+        "short_desc",
+        "fix_hint",
+    }
+)
+
+
 @dataclass(frozen=True)
 class StandardsEntry:
     canonical_cwe: str | None
@@ -83,429 +103,254 @@ class StandardsEntry:
 
 
 # --- The mapping table -----------------------------------------------------
-# Indexed by (scanner_name, rule_id). Keys must be lowercase scanner name +
-# exact rule id as the scanner emits it.
+# Shipped as data, not code: `data/standards.yaml`. It was 416 lines of Python
+# here, which meant an operator could not add a rule without a package
+# release, and Semgrep alone publishes thousands of them
+# (`docs/product-intent.md` §8 question 3, D32).
+#
+# Indexed by (scanner_name, rule_id): lowercase scanner name, and the exact
+# rule id as the scanner emits it.
 #
 # Adding a rule:
-#   1. Add the (CWE id, OWASP id, ASVS section, SSDF practice) tuple.
-#   2. Cite the scanner's docs URL in `references=` if non-obvious.
-#   3. Add an entry to the matching tier in docs/scanners.md.
-#   4. Add a fixture in tests/fixtures/<scanner>/.
+#   1. Add an entry to `data/standards.yaml` with its CWE, OWASP id, ASVS
+#      section and SSDF practice.
+#   2. Add an entry to the matching tier in docs/scanners.md.
+#   3. Add a fixture in tests/fixtures/<scanner>/.
+#
+# An operator extends the table without touching this file, by pointing
+# `standards.overlay` at their own YAML. An overlay may add entries and may
+# not restate severity, confidence or category — see D32.
 
-_MAP: dict[tuple[str, str], StandardsEntry] = {
-    # ----- Bandit ----------------------------------------------------------
-    # Source: https://bandit.readthedocs.io/en/latest/plugins/index.html
-    # B102 read CWE-78 — *OS* command injection, the shell-injection weakness
-    # that B602/B603/B605/B607 cover. `exec()` does not invoke a shell; it
-    # compiles and runs Python. The mislabel travelled: into the OWASP
-    # mapping, into SARIF, into the work order, and into the Top-25 bonus,
-    # which CWE-78 carries and the true weakness does not directly.
-    #
-    # It also broke corroboration, which is how it was found. Bandit's B102
-    # and our own `sca.python.eval` fire on the same `exec(compile(...))`
-    # line in Flask's `config.py`; `_same_weakness` merges across scanners on
-    # a shared CWE, CWE-78 and CWE-95 are not shared, so one defect scored
-    # twice. Flask carried four such pairs and graded F partly on doubles.
-    ("bandit", "B102"): StandardsEntry(
-        canonical_cwe="CWE-95",
-        owasp_top10="A03",
-        asvs_section="V5.3.8",
-        nist_ssdf="PW.5.1",
-        category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.MEDIUM,
-        short_desc="Use of exec() — arbitrary code execution risk.",
-        fix_hint="Eliminate exec() entirely. If dynamic dispatch is required, use a typed registry / function map.",
-    ),
-    # B307 (`eval`) had no curated entry, so `_make_finding` fell back to the
-    # CWE the scanner reports — and Bandit files `eval` under CWE-78 too. Same
-    # weakness as B102, same fix, and curating it is what stops the fallback.
-    ("bandit", "B307"): StandardsEntry(
-        canonical_cwe="CWE-95",
-        owasp_top10="A03",
-        asvs_section="V5.2.4",
-        nist_ssdf="PW.5.1",
-        category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.MEDIUM,
-        short_desc="Use of eval() — arbitrary code execution risk.",
-        fix_hint="Use ast.literal_eval for data. For dispatch, use a dict of callables rather than evaluating a name.",
-    ),
-    ("bandit", "B301"): StandardsEntry(
-        canonical_cwe="CWE-502",
-        owasp_top10="A08",
-        asvs_section="V5.5.1",
-        nist_ssdf="PW.5.1",
-        category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="pickle.loads() on possibly-untrusted input — arbitrary code execution.",
-        fix_hint="Replace pickle with JSON for data, or a signed/encrypted envelope for trusted state transfer.",
-    ),
-    ("bandit", "B303"): StandardsEntry(
-        canonical_cwe="CWE-327",
-        owasp_top10="A02",
-        asvs_section="V6.2.5",
-        nist_ssdf="PW.4.1",
-        category=Category.CRYPTO,
-        severity=Severity.MEDIUM,
-        confidence=Confidence.HIGH,
-        short_desc="MD5/SHA-1 used. Insecure for security purposes (collisions).",
-        fix_hint="Use SHA-256 or BLAKE2 for non-password hashing. Use Argon2id for password hashing.",
-    ),
-    ("bandit", "B305"): StandardsEntry(
-        canonical_cwe="CWE-327",
-        owasp_top10="A02",
-        asvs_section="V6.2.2",
-        nist_ssdf="PW.4.1",
-        category=Category.CRYPTO,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="Use of insecure cipher mode (ECB).",
-        fix_hint="Use authenticated encryption (AES-GCM or ChaCha20-Poly1305). Never ECB.",
-    ),
-    ("bandit", "B501"): StandardsEntry(
-        canonical_cwe="CWE-295",
-        owasp_top10="A07",
-        asvs_section="V9.2.1",
-        nist_ssdf="PW.4.1",
-        category=Category.CRYPTO,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="Requests call with verify=False — TLS cert validation disabled.",
-        fix_hint="Remove verify=False. If self-signed cert is required, pass the trusted CA bundle explicitly.",
-    ),
-    ("bandit", "B602"): StandardsEntry(
-        canonical_cwe="CWE-78",
-        owasp_top10="A03",
-        asvs_section="V5.3.8",
-        nist_ssdf="PW.5.1",
-        category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="subprocess with shell=True and shell metacharacters — command injection.",
-        fix_hint="Pass argv as a list and use shell=False. Never interpolate user input into a shell string.",
-    ),
-    ("bandit", "B608"): StandardsEntry(
-        canonical_cwe="CWE-89",
-        owasp_top10="A03",
-        asvs_section="V5.3.5",
-        nist_ssdf="PW.5.1",
-        category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.MEDIUM,
-        short_desc="String-built SQL — possible injection.",
-        fix_hint="Use parameterized queries ($1, ?, :name). Never interpolate user input into SQL strings.",
-    ),
-    # ----- pip-audit -------------------------------------------------------
-    # Source: https://github.com/pypa/pip-audit
-    # pip-audit emits per-CVE findings — they all share CWE-1104 (Use of
-    # Unmaintained Third Party Components) plus a per-CVE rule id.
-    ("pip_audit", "*"): StandardsEntry(
-        canonical_cwe="CWE-1104",
-        owasp_top10="A06",
-        asvs_section="V14.2.1",
-        nist_ssdf="PW.4.4",
-        category=Category.DEPENDENCIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="Known-vulnerable dependency in pinned set.",
-        fix_hint="Bump to the fixed version per the advisory. If no fix exists, document the residual risk in `.scignore.yaml` with an expires date.",
-    ),
-    # ----- npm audit -------------------------------------------------------
-    ("npm_audit", "*"): StandardsEntry(
-        canonical_cwe="CWE-1104",
-        owasp_top10="A06",
-        asvs_section="V14.2.1",
-        nist_ssdf="PW.4.4",
-        category=Category.DEPENDENCIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="Known-vulnerable npm dependency.",
-        fix_hint="`npm audit fix` is often safe for patch-level bumps but can downgrade majors. Inspect the suggested fix before applying; for downgrades, track upstream.",
-    ),
-    # ----- Gitleaks --------------------------------------------------------
-    # Source: https://github.com/gitleaks/gitleaks
-    ("gitleaks", "*"): StandardsEntry(
-        canonical_cwe="CWE-798",
-        owasp_top10="A07",
-        asvs_section="V2.10.1",
-        nist_ssdf="PS.1.1",
-        category=Category.SECRETS,
-        severity=Severity.CRITICAL,
-        confidence=Confidence.HIGH,
-        short_desc="Hardcoded secret detected.",
-        fix_hint="Rotate the secret immediately. Move to an env var / secret manager. Run `git filter-repo` to scrub history if it's been pushed publicly.",
-    ),
-    # ----- TruffleHog ------------------------------------------------------
-    ("trufflehog", "*"): StandardsEntry(
-        canonical_cwe="CWE-798",
-        owasp_top10="A07",
-        asvs_section="V2.10.1",
-        nist_ssdf="PS.1.1",
-        category=Category.SECRETS,
-        severity=Severity.CRITICAL,
-        confidence=Confidence.HIGH,
-        short_desc="Verified secret detected.",
-        fix_hint="Same as Gitleaks: rotate, move to env / secret manager, scrub history if leaked publicly.",
-    ),
-    # ----- Built-in regex rules -------------------------------------------
-    ("builtin_rules", "sca.python.eval"): StandardsEntry(
-        canonical_cwe="CWE-95",
-        owasp_top10="A03",
-        asvs_section="V5.2.4",
-        nist_ssdf="PW.5.1",
-        category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.MEDIUM,
-        short_desc="eval()/exec() on non-literal input.",
-        fix_hint="Eliminate eval. Use ast.literal_eval for safe data, or a typed registry for dispatch.",
-    ),
-    ("builtin_rules", "sca.python.yaml.unsafe_load"): StandardsEntry(
-        canonical_cwe="CWE-502",
-        owasp_top10="A08",
-        asvs_section="V5.5.2",
-        nist_ssdf="PW.5.1",
-        category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="yaml.load() without SafeLoader.",
-        fix_hint="Use yaml.safe_load() or yaml.load(stream, Loader=yaml.SafeLoader).",
-    ),
-    ("builtin_rules", "sca.python.requests.verify_false"): StandardsEntry(
-        canonical_cwe="CWE-295",
-        owasp_top10="A07",
-        asvs_section="V9.2.1",
-        nist_ssdf="PW.4.1",
-        category=Category.CRYPTO,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="requests.* called with verify=False.",
-        fix_hint="Remove verify=False. Pass the trusted CA bundle if the upstream cert is self-signed.",
-    ),
-    ("builtin_rules", "sca.python.fstring_sql"): StandardsEntry(
-        canonical_cwe="CWE-89",
-        owasp_top10="A03",
-        asvs_section="V5.3.5",
-        nist_ssdf="PW.5.1",
-        category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.MEDIUM,
-        short_desc="f-string SQL — interpolated value in .execute()/.executemany().",
-        fix_hint="Parameterize: `await conn.execute('... WHERE id = $1', value)` instead of f-string.",
-    ),
-    ("builtin_rules", "sca.python.subprocess.shell_true"): StandardsEntry(
-        canonical_cwe="CWE-78",
-        owasp_top10="A03",
-        asvs_section="V5.3.8",
-        nist_ssdf="PW.5.1",
-        category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="subprocess.* with shell=True and non-literal command.",
-        fix_hint="Pass argv as a list (e.g. ['git', 'log', '-n', '5']) and use shell=False.",
-    ),
-    ("builtin_rules", "sca.python.hashlib.md5_sha1_security"): StandardsEntry(
-        canonical_cwe="CWE-327",
-        owasp_top10="A02",
-        asvs_section="V6.2.5",
-        nist_ssdf="PW.4.1",
-        category=Category.CRYPTO,
-        severity=Severity.MEDIUM,
-        confidence=Confidence.MEDIUM,
-        short_desc="MD5/SHA-1 in a non-test, non-checksum path.",
-        fix_hint="Use SHA-256 or BLAKE2. For password hashing, use Argon2id (via argon2-cffi or passlib).",
-    ),
-    ("builtin_rules", "sca.web.dangerously_set_inner_html"): StandardsEntry(
-        canonical_cwe="CWE-79",
-        owasp_top10="A03",
-        asvs_section="V5.3.3",
-        nist_ssdf="PW.5.1",
-        category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.LOW,
-        short_desc="React dangerouslySetInnerHTML with non-literal input.",
-        fix_hint="Render via React text nodes. If raw HTML is required, sanitize with DOMPurify and document the trust source inline.",
-    ),
-    ("builtin_rules", "sca.web.cors_wildcard"): StandardsEntry(
-        canonical_cwe="CWE-942",
-        owasp_top10="A05",
-        asvs_section="V14.5.3",
-        nist_ssdf="PW.5.1",
-        category=Category.CODE_VULNERABILITIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="CORS Access-Control-Allow-Origin: * with credentials allowed.",
-        fix_hint="Scope Allow-Origin to a specific allowlist when credentials are in use. '*' + credentials is forbidden by spec.",
-    ),
-    ("builtin_rules", "sca.shell.curl_pipe_sh"): StandardsEntry(
-        canonical_cwe="CWE-78",
-        owasp_top10="A03",
-        asvs_section="V5.3.8",
-        nist_ssdf="PW.4.4",
-        category=Category.SUPPLY_CHAIN,
-        severity=Severity.MEDIUM,
-        confidence=Confidence.HIGH,
-        short_desc="curl | sh / wget | bash — opaque remote-script execution.",
-        fix_hint="Pin a checksum or use a package manager. If you must download a script, verify a SHA before executing.",
-    ),
-    # ----- Trivy ----------------------------------------------------------
-    # Trivy emits per-CVE rule ids (CVE-/GHSA-/AVD-). The per-rule CWE is
-    # carried inside the SARIF properties; this wildcard covers what the
-    # SARIF doesn't.
-    ("trivy", "*"): StandardsEntry(
-        canonical_cwe="CWE-1104",
-        owasp_top10="A06",
-        asvs_section="V14.2.1",
-        nist_ssdf="PW.4.4",
-        category=Category.DEPENDENCIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="Trivy finding (vuln / misconfig / secret).",
-        fix_hint="Trivy routes vuln/misconfig/secret into different categories — see the finding's category field for the specific guidance.",
-    ),
-    # ----- Checkov --------------------------------------------------------
-    # Checkov rule ids are like CKV_AWS_xxx, CKV_K8S_xxx, CKV_DOCKER_xxx.
-    # All map to config_iac with OWASP A05 (Security Misconfiguration).
-    ("checkov", "*"): StandardsEntry(
-        canonical_cwe="CWE-1188",
-        owasp_top10="A05",
-        asvs_section="V14.1.1",
-        nist_ssdf="PW.6.1",
-        category=Category.CONFIG_IAC,
-        severity=Severity.MEDIUM,
-        confidence=Confidence.HIGH,
-        short_desc="IaC misconfiguration detected by Checkov.",
-        fix_hint="Follow Checkov's documentation link in the finding message. Misconfigs are typically a one-property addition (encryption, public-access blockers, etc.).",
-    ),
-    # ----- Hadolint -------------------------------------------------------
-    # Most-flagged security-relevant rules. Style rules fall through to the
-    # wildcard.
-    ("hadolint", "hadolint.DL3002"): StandardsEntry(
-        canonical_cwe="CWE-250",
-        owasp_top10="A05",
-        asvs_section="V14.2.5",
-        nist_ssdf="PW.6.1",
-        category=Category.CONFIG_IAC,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="Dockerfile sets USER root — privileged container.",
-        fix_hint="Add `USER <non-root-uid>` near the end of the Dockerfile. Or run with `--user` at the container runtime.",
-    ),
-    ("hadolint", "hadolint.DL3025"): StandardsEntry(
-        canonical_cwe="CWE-78",
-        owasp_top10="A03",
-        asvs_section="V5.3.8",
-        nist_ssdf="PW.5.1",
-        category=Category.CONFIG_IAC,
-        severity=Severity.MEDIUM,
-        confidence=Confidence.HIGH,
-        short_desc="Dockerfile CMD/ENTRYPOINT in shell form — argv injection surface.",
-        fix_hint='Use JSON-array form: `CMD ["node", "server.js"]`. Avoids the shell wrapper that interprets metacharacters.',
-    ),
-    ("hadolint", "*"): StandardsEntry(
-        canonical_cwe="CWE-1188",
-        owasp_top10="A05",
-        asvs_section="V14.1.1",
-        nist_ssdf="PW.6.1",
-        category=Category.CONFIG_IAC,
-        severity=Severity.LOW,
-        confidence=Confidence.HIGH,
-        short_desc="Dockerfile lint finding.",
-        fix_hint="See https://github.com/hadolint/hadolint/wiki for the specific rule.",
-    ),
-    # ----- OSV-Scanner ----------------------------------------------------
-    ("osv_scanner", "*"): StandardsEntry(
-        canonical_cwe="CWE-1104",
-        owasp_top10="A06",
-        asvs_section="V14.2.1",
-        nist_ssdf="PW.4.4",
-        category=Category.DEPENDENCIES,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="Vulnerable dependency reported by osv.dev.",
-        fix_hint="Bump to the fixed version per the advisory. If no fix exists, document the residual risk in `.scignore.yaml`.",
-    ),
-    # ----- OpenSSF Scorecard ----------------------------------------------
-    # Scorecard's check names are stable — map each to its standards refs.
-    ("scorecard", "scorecard.Branch-Protection"): StandardsEntry(
-        canonical_cwe="CWE-732",
-        owasp_top10="A05",
-        asvs_section="V14.1.4",
-        nist_ssdf="PO.5.1",
-        category=Category.SUPPLY_CHAIN,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="Branch protection insufficient on the default branch.",
-        fix_hint="Enable required PR reviews, required status checks, and prevent force-pushes on the default branch.",
-    ),
-    ("scorecard", "scorecard.Signed-Releases"): StandardsEntry(
-        canonical_cwe="CWE-345",
-        owasp_top10="A08",
-        asvs_section="V10.3.2",
-        nist_ssdf="PS.2.1",
-        category=Category.SUPPLY_CHAIN,
-        severity=Severity.MEDIUM,
-        confidence=Confidence.HIGH,
-        short_desc="Releases are not signed with Sigstore/cosign.",
-        fix_hint="Sign releases via Sigstore/cosign. Publish provenance with `slsa-github-generator` or equivalent.",
-    ),
-    ("scorecard", "scorecard.Pinned-Dependencies"): StandardsEntry(
-        canonical_cwe="CWE-829",
-        owasp_top10="A08",
-        asvs_section="V14.2.2",
-        nist_ssdf="PW.4.4",
-        category=Category.SUPPLY_CHAIN,
-        severity=Severity.MEDIUM,
-        confidence=Confidence.HIGH,
-        short_desc="Dependencies (esp. GitHub Actions) are not pinned by SHA.",
-        fix_hint="Pin third-party Actions to a commit SHA, not a tag. Pin Docker base images by digest.",
-    ),
-    ("scorecard", "scorecard.Token-Permissions"): StandardsEntry(
-        canonical_cwe="CWE-272",
-        owasp_top10="A01",
-        asvs_section="V4.1.5",
-        nist_ssdf="PO.5.2",
-        category=Category.SUPPLY_CHAIN,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="GitHub workflow tokens granted excess permissions.",
-        fix_hint="Add `permissions: contents: read` at workflow root; elevate per-job only as needed.",
-    ),
-    ("scorecard", "scorecard.Security-Policy"): StandardsEntry(
-        canonical_cwe="CWE-1059",
-        owasp_top10="A09",
-        asvs_section="V0.2.1",
-        nist_ssdf="PO.4.1",
-        category=Category.POLICY_DOCS,
-        severity=Severity.LOW,
-        confidence=Confidence.HIGH,
-        short_desc="Repository is missing SECURITY.md.",
-        fix_hint="Add SECURITY.md with a vulnerability disclosure path. Use `github.com/<repo>/security/advisories/new` for the form.",
-    ),
-    ("scorecard", "scorecard.Dangerous-Workflow"): StandardsEntry(
-        canonical_cwe="CWE-94",
-        owasp_top10="A03",
-        asvs_section="V5.2.4",
-        nist_ssdf="PW.5.1",
-        category=Category.SUPPLY_CHAIN,
-        severity=Severity.HIGH,
-        confidence=Confidence.HIGH,
-        short_desc="Workflow uses untrusted input in a dangerous context.",
-        fix_hint="Avoid `${{ github.event.pull_request.title }}` in `run:` blocks. Use env vars instead.",
-    ),
-    ("scorecard", "*"): StandardsEntry(
-        canonical_cwe=None,
-        owasp_top10="A08",
-        asvs_section=None,
-        nist_ssdf="PO.5.1",
-        category=Category.SUPPLY_CHAIN,
-        severity=Severity.MEDIUM,
-        confidence=Confidence.MEDIUM,
-        short_desc="OpenSSF Scorecard check failed.",
-        fix_hint="See the documentation link in the finding message.",
-    ),
-}
+_DATA_FILE = Path(__file__).parent / "data" / "standards.yaml"
+
+
+def _entry_from_row(row: dict, source: str, index: int) -> tuple[tuple[str, str], StandardsEntry]:
+    """One `(key, entry)` pair from one data row, or a `ValueError` naming it.
+
+    Fails closed on an unparseable row. A mapping table that silently drops a
+    malformed entry reports findings as unmapped — no CWE, no OWASP, no fix
+    hint — which reads exactly like a rule nobody has curated yet. The row
+    number and the file are in every message because this file is now
+    something an operator edits.
+    """
+    where = f"{source}: entry #{index}"
+    scanner = str(row.get("scanner", "")).strip().lower()
+    rule_id = str(row.get("rule_id", "")).strip()
+    if not scanner or not rule_id:
+        raise ValueError(f"{where}: 'scanner' and 'rule_id' are both required.")
+
+    unknown = sorted(set(row) - _ROW_KEYS)
+    if unknown:
+        raise ValueError(
+            f"{where} ({scanner}/{rule_id}): unknown field(s) {', '.join(unknown)}. "
+            f"Allowed: {', '.join(sorted(_ROW_KEYS))}."
+        )
+    if not str(row.get("short_desc", "")).strip():
+        raise ValueError(f"{where} ({scanner}/{rule_id}): 'short_desc' is required.")
+
+    try:
+        entry = StandardsEntry(
+            canonical_cwe=row.get("canonical_cwe"),
+            owasp_top10=row.get("owasp_top10"),
+            asvs_section=row.get("asvs_section"),
+            nist_ssdf=row.get("nist_ssdf"),
+            category=Category(row["category"]),
+            severity=Severity(row["severity"]),
+            confidence=Confidence(row["confidence"]),
+            short_desc=row["short_desc"],
+            fix_hint=row.get("fix_hint"),
+        )
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"{where} ({scanner}/{rule_id}): {exc}") from exc
+    return (scanner, rule_id), entry
+
+
+def _load_table(path: Path) -> dict[tuple[str, str], StandardsEntry]:
+    """The shipped mapping table. Raises rather than returning a partial one."""
+    import yaml
+
+    document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    rows = document.get("entries") or []
+    if not isinstance(rows, list):
+        raise ValueError(f"{path}: 'entries' must be a list.")
+
+    table: dict[tuple[str, str], StandardsEntry] = {}
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError(f"{path}: entry #{index}: must be a mapping.")
+        key, entry = _entry_from_row(row, str(path), index)
+        if key in table:
+            # Two rows for one rule means one of them is being ignored, and
+            # which one depends on file order. That is not a table.
+            raise ValueError(f"{path}: entry #{index}: duplicate rule {key[0]}/{key[1]}.")
+        table[key] = entry
+    return table
+
+
+_MAP: dict[tuple[str, str], StandardsEntry] = _load_table(_DATA_FILE)
+
+
+# --- The operator overlay --------------------------------------------------
+#
+# §8 question 3: the curated table is 34 rules and Semgrep alone publishes
+# thousands, so an operator who maps their own rules waits for a release.
+# The overlay is how they do not.
+#
+# It carries the *standards* fields only. `severity`, `confidence` and
+# `category` are refused, because those three are the scoring inputs and D32
+# is what happens when something outside the instrument can set them: an
+# in-tree `severity_overrides` moved a repository's own grade from 0.00/F to
+# 5.00/A+ by re-labelling one finding. An overlay is exactly the kind of file
+# an audited tree would ship, so it may say what weakness a rule describes
+# and not how much it counts.
+
+#: Fields an overlay row may carry.
+_OVERLAY_KEYS = frozenset(
+    {
+        "scanner",
+        "rule_id",
+        "canonical_cwe",
+        "owasp_top10",
+        "asvs_section",
+        "nist_ssdf",
+        "short_desc",
+        "fix_hint",
+    }
+)
+
+#: Fields an overlay row may not carry, with the reason attached to each.
+_SCORING_KEYS = ("severity", "confidence", "category")
+
+
+@dataclass(frozen=True, slots=True)
+class OverlayEntry:
+    """An operator's mapping for one rule. Standards fields only."""
+
+    canonical_cwe: str | None = None
+    owasp_top10: str | None = None
+    asvs_section: str | None = None
+    nist_ssdf: str | None = None
+    short_desc: str | None = None
+    fix_hint: str | None = None
+
+
+#: Process-wide, installed once per run. `_resolve_standards` is reached from
+#: fifteen adapters, and threading a config object through all of them to
+#: deliver one optional table would be the larger change. Tests clear it.
+_OVERLAY: dict[tuple[str, str], OverlayEntry] = {}
+
+
+def _overlay_row(
+    where: str, row: object
+) -> tuple[tuple[str, str] | None, OverlayEntry | None, str]:
+    """One validated overlay row, or the reason it is refused.
+
+    Returns `(key, entry, "")` or `(None, None, error)`. Split out of
+    `load_overlay` because carrying all five checks in the loop put that
+    function at cognitive complexity 18 against a limit of 15.
+    """
+    if not isinstance(row, dict):
+        return None, None, f"{where}: must be a mapping."
+
+    scoring = [key for key in _SCORING_KEYS if key in row]
+    if scoring:
+        return (
+            None,
+            None,
+            f"{where}: an overlay may not set {', '.join(scoring)}. Those are the "
+            f"scoring inputs, and an overlay that set them could move the grade — "
+            f"see D32. Map the rule's standards here, and set severity policy with "
+            f"severity_overrides in a config kept outside the audited tree.",
+        )
+
+    unknown = sorted(set(row) - _OVERLAY_KEYS)
+    if unknown:
+        return (
+            None,
+            None,
+            f"{where}: unknown field(s) {', '.join(unknown)}. "
+            f"Allowed: {', '.join(sorted(_OVERLAY_KEYS))}.",
+        )
+
+    scanner = str(row.get("scanner", "")).strip().lower()
+    rule_id = str(row.get("rule_id", "")).strip()
+    if not scanner or not rule_id:
+        return None, None, f"{where}: 'scanner' and 'rule_id' are both required."
+
+    return (
+        (scanner, rule_id),
+        OverlayEntry(
+            canonical_cwe=row.get("canonical_cwe"),
+            owasp_top10=row.get("owasp_top10"),
+            asvs_section=row.get("asvs_section"),
+            nist_ssdf=row.get("nist_ssdf"),
+            short_desc=row.get("short_desc"),
+            fix_hint=row.get("fix_hint"),
+        ),
+        "",
+    )
+
+
+def load_overlay(path: Path) -> tuple[dict[tuple[str, str], OverlayEntry], list[str]]:
+    """Read an overlay file. Returns `(entries, errors)`; never a partial table.
+
+    Fails closed, like `suppressions.load`: on any error the caller gets no
+    entries and the reasons, because half an applied overlay is a mapping
+    nobody wrote. A named-but-absent file is an error rather than an empty
+    table — it is a typo in a path, and silence would mean the operator's
+    whole mapping file quietly did nothing.
+    """
+    import yaml
+
+    if not path.exists():
+        return {}, [f"{path}: standards overlay not found."]
+    try:
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (yaml.YAMLError, ValueError, OSError) as exc:
+        # `ValueError` alongside `YAMLError` for the same reason
+        # `suppressions.load` catches it: an unquoted impossible date is a
+        # YAML timestamp, and PyYAML raises a plain ValueError for it.
+        return {}, [f"{path}: could not be read: {exc}"]
+
+    rows = document.get("entries") if isinstance(document, dict) else None
+    if not isinstance(rows, list):
+        return {}, [f"{path}: 'entries' must be a list."]
+
+    entries: dict[tuple[str, str], OverlayEntry] = {}
+    errors: list[str] = []
+    for index, row in enumerate(rows):
+        key, entry, error = _overlay_row(f"{path}: entry #{index}", row)
+        if error:
+            errors.append(error)
+        elif key in entries:
+            errors.append(f"{path}: entry #{index}: duplicate rule {key[0]}/{key[1]}.")
+        else:
+            entries[key] = entry
+    if errors:
+        return {}, errors
+    return entries, []
+
+
+def install_overlay(entries: dict[tuple[str, str], OverlayEntry]) -> None:
+    """Make these the active overlay for this process."""
+    global _OVERLAY
+    _OVERLAY = dict(entries)
+
+
+def clear_overlay() -> None:
+    """Forget any installed overlay. Used by tests, and by nothing else."""
+    global _OVERLAY
+    _OVERLAY = {}
+
+
+def overlay_for(scanner: str, rule_id: str) -> OverlayEntry | None:
+    """The operator's mapping for this rule, with the same wildcard fallback."""
+    if not _OVERLAY:
+        return None
+    exact = _OVERLAY.get((scanner.lower(), rule_id))
+    if exact is not None:
+        return exact
+    return _OVERLAY.get((scanner.lower(), "*"))
 
 
 def lookup(scanner: str, rule_id: str) -> StandardsEntry | None:

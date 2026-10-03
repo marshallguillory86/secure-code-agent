@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.10 — 2026-10-02.** The decision register. D1–D29.
+> Status: **v0.12.10 — 2026-10-02.** The decision register. D1–D32.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -42,6 +42,9 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D27 | The work order is available as facts, not only as prose | 2026-09-19 | Accepted |
 | D28 | A declared capability's findings are not patch targets | 2026-09-20 | Accepted |
 | D29 | An untrusted config does not choose a scanner's command | 2026-10-02 | Accepted |
+| D30 | An adapter judges its own tool's exit codes, and `_exec` judges none | 2026-10-02 | Accepted |
+| D31 | An overriding CWE decides the OWASP category derived from it | 2026-10-02 | Accepted |
+| D32 | The audited tree does not grade itself | 2026-10-02 | Accepted |
 
 ---
 
@@ -1833,6 +1836,7 @@ an agent to judge architecture the operator already settled.
 ## D29 — An untrusted config does not choose a scanner's command
 
 **Status:** Accepted · 2026-10-02 · closes the argument half of threat-model T1
+· **extended by [D32](#d32--the-audited-tree-does-not-grade-itself)**, which covers what an in-tree config may claim about the *findings* rather than about the command
 
 **Context.** The T1 ruling refused a command that an in-tree config named
 *from the tree*. Nothing refused the arguments. An in-tree
@@ -1855,3 +1859,165 @@ owner passes `--trust-target-config`. That is the trade T1 already made for
 executables, extended to the arguments that made the executable check
 decorative.
 
+---
+
+## D30 — An adapter judges its own tool's exit codes, and `_exec` judges none
+
+**Status:** Accepted · 2026-10-02 · answers
+[`product-intent.md`](product-intent.md) §8 question 8
+
+**Context.** `Scanner._exec` took an `allowed_exits` tuple and did nothing
+with it. Both of its branches returned the `CompletedProcess` unchanged, so
+the parameter could not affect any run. Fourteen adapters passed one anyway,
+and the knowledge ended up written twice in most of them — `_exec(...,
+allowed_exits=(0, 183))` sitting beside `if r.returncode not in (0, 183)` —
+with only the second copy doing anything. This is §3 of
+[`architecture.md`](architecture.md), two sources of truth, with the unusual
+property that one source was inert from the beginning.
+
+The cost was not theoretical. `bandit_scanner.py` declared `(0, 1)` to
+`_exec` and then checked no exit code at all beyond the timeout sentinel.
+Bandit exits 2 on an internal error and can still emit a JSON envelope, so
+that run was parsed, found to contain no results, and reported `COMPLETED`
+with zero findings: a clean scan of a tree bandit never finished reading.
+A false green, against §4 criterion 1 — *a green gate means something*.
+It was found by the first unit tests written directly against
+`_execution.py`, not by reading the adapters.
+
+**Decision.** Exit-code policy belongs to the adapter. `_exec` returns what
+the process did and judges nothing; `allowed_exits` is deleted rather than
+implemented. Each adapter states its own tool's codes once, as a named
+constant where it has more than one, and acts on them itself.
+
+**Why not make `_exec` enforce it.** That is the tidier-looking option and it
+was rejected on evidence. `_exec` returns a `CompletedProcess` because every
+caller needs the stdout; enforcement would need a second channel to say
+"this code is unacceptable" that fifteen call sites must then act on, and
+each would still need its own branch — 1 means *findings* to bandit, 183 to
+trufflehog, and *failure* to hadolint. The result is the same number of
+inline checks plus a mechanism. The knowledge is genuinely per-tool, so the
+single source of truth is the adapter, not the helper.
+
+**Consequences.** A scanner that fails in a way its adapter does not
+recognise now fails its coverage instead of reporting a clean scan. For
+bandit specifically, exit 2 becomes `FAILED` carrying bandit's stderr, where
+it previously became a passing empty result. Repositories where bandit
+errors silently will start reporting failed coverage — which is the point:
+coverage says *we do not know* rather than *nothing is there*.
+
+---
+
+## D31 — An overriding CWE decides the OWASP category derived from it
+
+**Status:** Accepted · 2026-10-02 · answers
+[`product-intent.md`](product-intent.md) §8 question 9
+
+**Context.** `_resolve_standards` ranks three sources for a finding's CWE:
+an adapter's `cwe_override` first, then the curated map, then what the tool
+said about its own rule. OWASP was not ranked at all. It read
+`entry.owasp_top10 or owasp_for_cwe(canonical_cwe)`, so the curated OWASP id
+survived a CWE that had just overruled the curated CWE.
+
+Bandit's `B608` is CWE-89 / A03 in the map. A Semgrep rule asserting CWE-22
+produced a finding carrying **CWE-22 with A03** — path traversal filed under
+Injection. Two standards in one row disagreeing about what kind of defect it
+was, and neither wrong on its own terms. Found by the first unit tests
+written directly against `_finding_builder.py`, which had pinned the
+behaviour as a documented oddity rather than judging it.
+
+**Decision.** When an adapter overrides the CWE, the OWASP category is
+derived from the override. An adapter asserting a more specific CWE is
+asserting the weakness, not merely its number, and the category computed
+from a weakness must describe that weakness.
+
+There is **no fallback** to the curated id when the override maps to no Top
+10 bucket. That id describes the CWE the override replaced, so falling back
+would reinstate the same incoherence in the case most likely to be
+misread. `None` — "no Top 10 category" — is the honest answer, and the
+existing rule that a CWE outside the Top 10 yields no OWASP id already
+establishes it.
+
+Without an override the curated id still wins. It is reviewed rather than
+computed, and it is the only source that also carries ASVS, SSDF and a fix
+hint, so deriving unconditionally would discard reviewed mapping.
+
+**Consequences.** Semgrep is the only adapter that passes `cwe_override` —
+verified, not assumed — so this changes the OWASP column for Semgrep
+findings whose rule metadata names a CWE the curated map maps differently,
+and nothing else.
+
+**No score changes, and no corpus re-measurement.** This was expected to move
+D17's published figures and does not: `scoring.py` never reads
+`owasp_top10`, the field is not an input to `Finding.make_fingerprint`, and
+suppression matching does not use it. So the grade, the baseline identity and
+the calibration study are all untouched, and the change is confined to what a
+report shows. Checked before concluding it, because the opposite assumption
+would have cost a corpus run.
+
+---
+
+## D32 — The audited tree does not grade itself
+
+**Status:** Accepted · 2026-10-02 · extends [D29](#d29--an-untrusted-config-does-not-choose-a-scanners-command)
+to policy
+
+**Context.** D29 settled that a config the audited tree supplies does not
+choose a scanner's *command*. It said nothing about what that config may
+claim about the findings. `severity_overrides` and `category_overrides` were
+applied unconditionally, from any config — including one discovered inside
+the tree being audited, with no `--trust-target-config`.
+
+Measured, on a file containing one `subprocess.run(cmd, shell=True)`:
+
+| run | overall |
+| --- | ---: |
+| honest | **0.00 (F)** |
+| plus an in-tree `secure-code-agent.json` with `severity_overrides: {B602: informational}` | **5.00 (A+)** |
+
+Same tree, same finding, same scanner. `INFORMATIONAL` is weight 0.0 in
+`SEVERITY_WEIGHT`, so re-labelling a finding removes it from the score while
+leaving it in the report — the number moves and the evidence still looks
+present. The audited party moved its own grade from F to A+.
+
+This is §4 criterion 1 — *a green gate means something* — made falsifiable
+by the one actor with a motive to falsify it. It is also promise **P3** from
+the other side: P3 refuses *"any input whose removal raises the graded
+field"*, and this is an input whose **addition** raises it. The promise was
+written about withholding evidence and the hole was in supplying it.
+
+The intent was already recorded, which is the part worth noting.
+`tests/integration/test_declared_config_is_live.py` deliberately writes its
+fixture config *outside* the tree, with the comment: *"the tree's own config
+does not choose a scanner's command (D29) and is not read for policy
+either."* The second half of that sentence described no code.
+
+**Decision.** A config inside the containment root, without
+`--trust-target-config`, does not supply `severity_overrides` or
+`category_overrides`. They are dropped immediately after the config is
+loaded — before any consumer reads them, so no later code path can
+reintroduce them — and the run warns on stderr naming the file and both
+routes to applying it.
+
+**Why not refuse the keys outright.** A repository carrying this config for
+its own operator's use is the ordinary case, not the attack. The operator
+says so with `--trust-target-config`, or by keeping the config outside the
+tree; both already worked, and tests now hold both open. Refusing
+unconditionally would delete a real feature to close a hole that has an
+owner-shaped escape hatch already built.
+
+**Why a warning rather than a failure.** Failing closed would make this
+tool refuse to audit any repository that happens to carry these keys,
+including every repository that set them honestly before this release. The
+grade is correct either way; what the operator needs is to know their
+setting did not apply.
+
+**Consequences.** A repository that set `severity_overrides` honestly, and
+audits itself without the flag, will see its grade move to the ungraded
+value and a warning saying why. That is the same trade D29 made for
+executables, extended to the field those executables were being pointed at.
+
+**Scope note for the standards overlay.** The operator overlay that §8
+question 3 asks for may add mapping entries and may **not** restate
+`severity`, `confidence` or `category`. Those three are the scoring inputs,
+and an overlay that set them would reopen this exact hole through a second
+door.

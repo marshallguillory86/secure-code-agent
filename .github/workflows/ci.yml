@@ -40,6 +40,9 @@ jobs:
       - name: Check formatting
         run: python -m ruff format --check .
 
+      # No --cov-fail-under here: a command-line value beats pyproject.toml,
+      # and this one said 85 while the declared floor said 92. The floor is
+      # declared once, in pyproject.toml, and this job reads it from there.
       - name: Test with branch coverage
         run: >-
           python -m pytest
@@ -47,7 +50,6 @@ jobs:
           --cov=secure_code_audit
           --cov-branch
           --cov-report=term-missing
-          --cov-fail-under=85
 
       - name: Build wheel through pip
         run: python -m pip wheel . --no-deps --wheel-dir wheelhouse
@@ -57,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -84,13 +86,13 @@ jobs:
           echo "$(ruby -e 'puts Gem.user_dir')/bin" >> "$GITHUB_PATH"
 
       - name: Every rule fires, none fires on safe code, and none duplicates a tool
-        run: python -m pytest tests/unit/test_offline_ruleset.py -v --no-header
+        run: python -m pytest tests/unit/test_offline_ruleset.py -v --no-header --no-cov
 
       # A skip here means the check did not run. Fail loudly rather than let a
       # green tick stand for an assertion nobody made.
       - name: No overlap check was skipped
         run: |
-          python -m pytest tests/unit/test_offline_ruleset.py -q --no-header -rs 2>&1 | tee out.txt
+          python -m pytest tests/unit/test_offline_ruleset.py -q --no-header -rs --no-cov 2>&1 | tee out.txt
           if grep -q "skipped" out.txt; then
             echo "::error::an offline-ruleset test skipped; the tool it needs is missing"
             exit 1
@@ -130,7 +132,7 @@ jobs:
       # in `test_osv_parses_vulnerabilities`. Running the suite here too means
       # a host-dependent test fails on a pull request rather than at a tag.
       - name: Run the suite against the installed floor
-        run: python -m pytest -o cache_dir=.pytest-cache-floor -q --no-header
+        run: python -m pytest -o cache_dir=.pytest-cache-floor -q --no-header --no-cov
 
       # Scorecard is not here on purpose. It is in the declared floor at
       # repository cadence and runs in supply-chain.yml, because its answers

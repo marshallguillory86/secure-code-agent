@@ -43,7 +43,7 @@ class _Recorder:
     #: executable is pinned to exactly one element by `_scanner` below.
     MODE_INDEX = 1
 
-    def __call__(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def __call__(self, args, cwd, timeout_seconds):
         self.calls.append(list(args))
         mode = args[self.MODE_INDEX]
         assert mode in ("dir", "git"), f"argv[{self.MODE_INDEX}] is {mode!r}, not a subcommand"
@@ -202,7 +202,7 @@ def test_either_pass_failing_fails_the_scanner(tmp_path, failing_mode):
     (tmp_path / ".git").mkdir()
 
     class _Broken(_Recorder):
-        def __call__(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+        def __call__(self, args, cwd, timeout_seconds):
             self.calls.append(list(args))
             if args[self.MODE_INDEX] == failing_mode:
                 return type("R", (), {"returncode": 2, "stdout": "", "stderr": "boom"})()
@@ -219,7 +219,7 @@ def test_unparseable_output_from_either_pass_fails(tmp_path):
     (tmp_path / ".git").mkdir()
 
     class _Garbage(_Recorder):
-        def __call__(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+        def __call__(self, args, cwd, timeout_seconds):
             self.calls.append(list(args))
             Path(args[args.index("--report-path") + 1]).write_text("not json", encoding="utf-8")
             return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()

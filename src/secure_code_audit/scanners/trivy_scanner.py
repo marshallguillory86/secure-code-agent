@@ -61,9 +61,7 @@ class TrivyScanner(Scanner):
             ]
             args.extend(sc_cfg.extra_args)
 
-            r = self._exec(
-                args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds, allowed_exits=(0, 1)
-            )
+            r = self._exec(args, cwd=target, timeout_seconds=sc_cfg.timeout_seconds)
             if r.returncode == 124:
                 return self.timed_out(target, f"trivy timed out: {r.stderr[:200]}")
             if r.returncode not in (0, 1):

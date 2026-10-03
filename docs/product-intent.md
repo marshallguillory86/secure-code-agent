@@ -1,6 +1,6 @@
 # secure-code-agent — Product Intent
 
-> Status: **v0.12.10 — 2026-09-11.** The single source of truth for
+> Status: **v0.12.10 — 2026-10-02.** The single source of truth for
 > *why this exists, who it serves, and what it refuses to become.*
 > Companion docs: [`design.md`](design.md) for how it is built,
 > [`architecture.md`](architecture.md) for where the build diverges from the
@@ -115,7 +115,7 @@ together.
 | --- | --- | --- |
 | **P1** | The audit is deterministic: same tree, same config, same pinned scanner versions in — same findings, coverage and score out. The analysis invokes no language model. | Two runs disagreeing on identical inputs, or a model in the gate path |
 | **P2** | The same rubric applies to every repository, and the rubric is readable in source | A repository-specific code path changing a weight or a band |
-| **P3** | **Withholding evidence cannot improve the reported grade.** The score is a rate over findings, so removing a scanner removes findings and the raw number rises — coverage is a separate axis for exactly this reason, and a grade is withheld when it cannot be supported | Any input whose removal raises the graded field. Measured once at 0.00/F to 5.00/A+ by disabling scanners |
+| **P3** | **Neither withholding nor supplying evidence can improve the reported grade.** The score is a rate over findings, so removing a scanner removes findings and the raw number rises — coverage is a separate axis for exactly this reason, and a grade is withheld when it cannot be supported. The audited tree's own configuration is not evidence: it cannot re-label a finding's severity or category (D32) | Any input whose removal **or addition** raises the graded field. Measured twice at 0.00/F to 5.00/A+ — once by disabling scanners, and once by an in-tree `severity_overrides`, which is what added the second half of this promise |
 | **P4** | The overall score is the worst category printed beside it, never their mean | A report where the arithmetic does not check |
 | **P5** | The remediation prompt names only findings the audit actually produced | A prompt instruction with no corresponding finding |
 | **P6** | Every empirical claim in this repository is reproducible from checked-in pinned inputs | A quoted number that cannot be re-derived offline |
@@ -240,23 +240,40 @@ files.
 - **No telemetry.** Not opt-in, not anonymized, not "just crash reports."
 
 **Deferred, not rejected.** These are tracked so that "not yet" is not confused
-with "never," and so a contributor knows what a good proposal looks like.
+with "never," and so a contributor knows what a good proposal looks like. This
+is the product roadmap: a shipped entry is struck through and says so rather
+than being deleted, because what was once deferred and why is part of the
+record. Two entries below had shipped without being struck, which is how a
+roadmap stops being one.
 
-- Additional language SAST adapters — gosec, Brakeman, SpotBugs/FindSecBugs —
-  added when a repository that needs them is actually being dogfooded, not
-  speculatively.
-- Ingest-only integrations for tools we will not invoke ourselves: CodeQL
-  (runs in GitHub-hosted analysis) and Snyk (license and auth burden).
+- Additional language SAST adapters — ~~gosec~~, Brakeman, SpotBugs/FindSecBugs
+  — added when a repository that needs them is actually being dogfooded, not
+  speculatively. **gosec shipped**; it is registered in `SCANNERS` and carries
+  an adapter. Brakeman and SpotBugs/FindSecBugs remain deferred on the same
+  terms.
+- ~~Ingest-only integrations for tools we will not invoke ourselves: CodeQL
+  (runs in GitHub-hosted analysis) and Snyk (license and auth burden).~~
+  **Shipped.** `--sarif-import` ingests either, and D3 settled the trust model
+  for imported SARIF; the quickstart documents both by name.
 - Cross-scanner deduplication. Overlapping SCA adapters can currently
   double-count one advisory. Fingerprints are stable enough to support this; the
   scorer does not yet do it.
-- Operator-defined standards rule packs. The mapping table is currently
-  compiled into the package.
+- ~~Operator-defined standards rule packs. The mapping table is currently
+  compiled into the package.~~ **Shipped 2026-10-02.** The table is
+  `data/standards.yaml`, and `standards_overlay` layers an operator's own
+  mapping over it. The overlay carries the standards fields only — it cannot
+  set severity, confidence or category, because those are the scoring inputs
+  (D32). §8 question 3.
 - ~~Scoped changed-file audits.~~ **Shipped in 0.12.0.** `--changed-only REF`
   scans the whole tree, scopes the *report* to files changed since `REF`, and
   withholds the grade — a run that looks at less must not score better.
 - SBOM generation and signature verification — better served by dedicated tools
   this agent can be paired with.
+- Full OASIS schema validation of emitted SARIF in CI. The output is
+  SARIF 2.1.0-shaped, structurally unit-tested and round-tripped, and `README.md`
+  §Versioning says validation "is not yet part of CI" — which was the only place
+  it was written down. Recorded here so the claim has a home in the roadmap
+  rather than living in a versioning footnote.
 
 ## 7. Positioning
 
@@ -286,23 +303,177 @@ reads it — see principle 9 in §5 and [D3](decisions.md).
 Recorded rather than resolved. Each of these should be answered deliberately
 rather than settled by whichever feature lands first.
 
+**An answered question keeps its number, its original text and its verdict.**
+The numbers are cited from source comments and test docstrings, so renumbering
+would silently break them; and the reasoning that made something a question is
+worth keeping beside the answer. A verdict of *declined* or *deferred* is an
+answer — the failure mode here is a question that stays open because nobody
+wanted to be the one to close it.
+
 1. **Should the deliverable be one verdict or two numbers?** Today a report
    carries a letter grade *and* a coverage status, and the reader must combine
    them. The score's null state is "perfect" — a repository where nothing ran
    still grades A+ — which is why coverage had to be added beside it. See
    [`architecture.md` §5](architecture.md).
+
+   **Deferred 2026-10-02.** D16 and D17 settled the score model on
+   measurement three weeks ago; reopening how it is *presented* now would churn
+   the one part of this that is finally calibrated. It belongs at v1.0, when the
+   config schema locks and the output contract is the thing being frozen.
 2. **Does the remediation prompt measurably bound agent behavior?** Criterion 3
    in §4 is asserted from first principles and has never been evaluated.
    An honest answer needs a fixture repository, a set of seeded findings, and
    patches from several agents scored against the constraint list.
+
+   **Scheduled 2026-10-02**, as feature-sized work rather than a backlog
+   line. It is the only success criterion in §4 with no evidence behind it, and
+   it is the central one. The deliverable is a fixture repository, a seeded
+   finding set, and patches from several agents scored against the constraint
+   list — a measurement, not an argument.
 3. **Who owns the standards mapping?** It is compiled into the package today,
    so adding a rule requires a release and operators cannot extend it. Shipping
    it as data with an operator overlay is a product decision about how much
    customization to invite.
+
+   **Answered 2026-10-02 — ship it as data, with an operator overlay.**
+   **Built the same day**: `data/standards.yaml` plus a `standards_overlay`
+   config key. The overlay may add or correct a rule's CWE, OWASP id, ASVS
+   section, SSDF practice and prose, and is refused if it names severity,
+   confidence or category — see D32's scope note, which this is.
+   Decided together with `standards.py`'s size finding, which is this same
+   problem seen from the other side: 705 lines, roughly 390 of them a
+   hand-written table that needs a package release to extend, with the
+   `(scanner, "*")` wildcard absorbing the coverage gap. One change answers the
+   product question and clears the file finding.
 4. **How far does "never install anything" extend?** It is settled for scanner
    binaries. It is not settled for whether the tool should offer to *verify*
    installed scanner versions against pinned expectations, which is adjacent to
    supply-chain assurance and might belong here.
+
+   **Deferred 2026-10-02.** Nothing is pulling on it — no operator has
+   asked, and no finding depends on it. Recorded so it is not mistaken for
+   settled.
 5. **What is the adoption path for a repository with thousands of existing
    findings?** Baseline plus expiring suppressions is the current answer, but it
    has not been exercised on a large legacy codebase.
+
+   **Deferred 2026-10-02**, on this document's own terms: §6 refuses to
+   build for a repository that is not actually being dogfooded, and no large
+   legacy codebase is. The answer arrives with the first one that is.
+6. **Should preflight advise on a required scanner the operator switched off?**
+   `--preflight --json` builds a row per *selected* scanner, each carrying a
+   `remedy` from the adapter's own `unavailable_fix_hint()`. A scanner that is
+   required but **not selected** never gets a row: it appears only as a name in
+   `required_not_selected`, with no advice attached. A host that wants to tell
+   its user what to do must therefore write that advice itself — which is the
+   thing this tool exists to stop other tools having to invent.
+
+   Raised by `maintainability-agent`, whose Decision 14 puts scanner knowledge
+   in this tool, so MA deliberately wrote no remedy of its own and Grok's audit
+   of MA 4.0.0 flagged MA as silent in that case. Verified here against
+   `cli.py`: the row loop covers `selected` only.
+
+   Undecided, and the shape of an answer is not obvious. "Switched off" is an
+   operator's choice, so advice about it reads closer to *your config and your
+   gate disagree* than to *install this tool* — which may make it a
+   gate-reporting concern rather than a preflight one.
+
+   **Deferred 2026-10-02.** By its own text the shape of an answer is not
+   obvious, and nothing since has changed that. It stays open rather than being
+   closed for tidiness.
+7. **Should a host be able to ask for a preflight that never reads the target's
+   config?** There is `--config` and there is `--trust-target-config`, but
+   nothing that declines the audited tree's configuration outright: with
+   `--config` omitted, `config_mod.load` discovers `secure-code-agent.json`
+   inside the target.
+
+   A host asking *before* its user has consented to a run — MA's chat door does
+   exactly this — cannot let the target's config decide anything. So MA writes
+   an empty `{}` file and points `--config` at it. That works, and it is a
+   workaround for a gap in this tool's surface. D29 closed the execution half
+   of the same concern; this is the half that remains.
+
+   Raised by `maintainability-agent` (4.0.1 / D222). Verified here against
+   `cli.py`. A flag of this tool's own — MA suggests `--ignore-target-config` —
+   would replace the workaround *if* it belongs in the product.
+
+   Undecided, and **not urgent on the consumer's own account.** Asked directly
+   whether the empty-file route is painful or merely inelegant, MA answered
+   inelegant: a few lines in its `_security_delegate.py`, written to a temp
+   directory outside the target, working against every release from 0.12.10.
+   So this is a question about whether a cleaner surface is worth a third
+   config mode, not about unblocking anything — recorded that way so nobody
+   later reads it as a consumer waiting on us.
+
+   **Answered 2026-10-02 — declined.** Asked directly, the consumer called
+   the empty-file route inelegant rather than painful: a few lines in its own
+   `_security_delegate.py`, working against every release from 0.12.10. A third
+   config mode is not worth a cleaner surface for a single caller, and declining
+   a question is as much of an answer as building the flag. Reopen if a second
+   host hits the same edge.
+8. **Does exit-code policy belong in `_exec` or in each adapter?** `_exec`
+   takes an `allowed_exits` tuple and does nothing with it: both branches
+   return the `CompletedProcess` unchanged, so the parameter has no effect on
+   any run. Fourteen adapters pass it, and several then write the same tuple a
+   second time as a live check — `allowed_exits=(0, 183)` sitting beside `if
+   r.returncode not in (0, 183)`. That is the two-sources-of-truth shape this
+   repository keeps finding, except here one of the two sources is inert.
+
+   The cost is visible in `bandit_scanner.py`, which declares `(0, 1)` to
+   `_exec` and then checks no exit code at all beyond the timeout sentinel. A
+   bandit internal error is caught only indirectly, by the JSON parse failing
+   — which it probably does, but that is luck rather than a guard, and the
+   adapter reads as though it had one.
+
+   Two coherent answers, and they differ in where knowledge lives. Delete the
+   parameter, and each adapter keeps stating its own exit codes, which is what
+   already happens; or make `_exec` enforce it, and the fourteen inline checks
+   collapse into the one declaration. The second is the stronger design and the
+   larger change: `_exec` returns a `CompletedProcess`, so enforcement needs a
+   way to say "this exit code is not acceptable" that fifteen call sites can
+   act on without each re-deriving it.
+
+   Found by the test seat while writing the first direct tests for
+   `_execution.py`, which is the kind of thing a paired test finds and an
+   indirect one does not. The docstring now states the truth; the parameter and
+   its call sites are untouched pending this answer.
+
+   **Answered 2026-10-02 — delete the parameter.** Recorded as
+   [D30](decisions.md). The inline checks are
+   what actually run, and each is correct for its own tool. Making `_exec`
+   enforce the tuple means inventing a way to say "this exit code is not
+   acceptable" that fifteen call sites must then act on, for no change in
+   behaviour. So the parameter goes — and `bandit_scanner.py` gains the
+   returncode guard it never had, because removing a false guard without adding
+   the real one loses information rather than clarifying it.
+9. **Should a curated OWASP id outrank one derived from an overriding CWE?**
+   `_resolve_standards` lets an adapter's `cwe_override` beat the curated map
+   for the CWE, but takes OWASP as `entry.owasp_top10 or
+   owasp_for_cwe(canonical_cwe)` — so the curated entry still supplies OWASP
+   even when its CWE was just overruled. With `cwe_override="CWE-22"` on
+   bandit's B608, the finding reports CWE-22 (path traversal) alongside
+   A03:2021-Injection, where the overriding CWE would have derived
+   A01:2021-Broken Access Control.
+
+   It may be right: the curated row is reviewed and the derivation is a lookup
+   table, so preferring the reviewed value is defensible. It may equally be a
+   seam nobody chose, where an override is honoured for one field and ignored
+   for the field computed from it. Either way a reader of the report sees a CWE
+   and an OWASP category that disagree about what kind of defect it is.
+
+   Pinned by `test_curated_owasp_wins_over_the_one_derived_from_an_overriding_cwe`
+   so the behaviour cannot drift while the question is open. Semgrep is the
+   adapter that uses `cwe_override`, so it is the one whose output this decides.
+
+   **Answered 2026-10-02 — the override wins both fields.** Recorded as
+   [D31](decisions.md). A finding
+   reporting CWE-22 beside A03 Injection is incoherent to whoever reads it, and
+   an adapter asserting a more specific CWE is asserting the weakness rather
+   than just its number. Semgrep is the only caller, so the change is small.
+   The pinned corpus was going to be re-measured before and after, on the
+   assumption that moving findings between OWASP categories moves D17's
+   published figures. Checked instead of assumed, and it does not:
+   `scoring.py` never reads `owasp_top10`, it is not an input to
+   `make_fingerprint`, and suppressions do not match on it. The grade, the
+   baseline identity and the calibration study are all untouched, so no
+   corpus run was needed.

@@ -434,7 +434,17 @@ class ScoreReport:
         rows = []
         for cat in Category:
             grade = self.per_category.get(cat)
-            count = self.per_category_count.get(cat, 0)
+            # Indexed, not `.get(cat, 0)`. `score()` fills this for every
+            # Category, so the default was unreachable — and an unreachable
+            # `, 0)` on a counter is the absence-as-zero shape this project
+            # shipped four times, sitting in the code as an example of itself.
+            #
+            # `AxisReport` carries a field of the same name that IS sparse,
+            # deliberately: its `worst_severity` is `max(..., default=None)`,
+            # so filling that dict would make an axis with no findings report
+            # a worst severity. The two are not interchangeable and the guard
+            # tests say so.
+            count = self.per_category_count[cat]
             rows.append(
                 (cat.value, letter_grade(grade) if grade is not None else "—", grade, count)
             )
@@ -934,7 +944,8 @@ def _gate_max_unsuppressed(
     caps = gate_config.get("max_unsuppressed", {})
     for sev_str, cap in caps.items():
         sev = Severity.from_string(sev_str)
-        count = report.per_severity_count.get(sev, 0)
+        # Indexed: `score()` fills every Severity. See `as_table` above.
+        count = report.per_severity_count[sev]
         if count > cap:
             tripped.append(f"max_unsuppressed.{sev_str}")
             reasons.append(f"{count} unsuppressed {sev.value} finding(s) exceeds cap {cap}")

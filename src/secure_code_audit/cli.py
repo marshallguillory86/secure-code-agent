@@ -21,6 +21,7 @@ from secure_code_audit import (
     renderers,
     sarif,
     scanners,
+    standards,
     suppressions,
     triage,
 )
@@ -361,87 +362,43 @@ def _print_preflight(rows: list[dict], unselected: list[str], blocking: list[str
         print("  all required scanners resolved")
 
 
-def _do_audit(args: argparse.Namespace) -> int:
-    cfg, target, root = _prepare_audit(args)
-    _require_configured_gates(args, cfg)
-    # Before anything is resolved or written, and before any scanner runs.
-    _assert_config_writes_are_contained(cfg, root, target)
-    # Resolved before the scan so the run can recognise its own artifacts.
-    paths = _resolve_outputs(args, cfg, root)
+@dataclass(frozen=True)
+class _Axes:
+    """What the axis split produced, and the LOC that goes with it.
 
-    # ----- scanners -----
-    scan = _run_scanners(args, cfg, target)
-    all_findings = scan.findings
-    ran, unavailable, executions = scan.ran, scan.unavailable, scan.executions
+    Seven values travelled together as seven locals inside a 346-line
+    function; a dataclass is what they were already.
+    """
 
-    # ----- SARIF imports -----
-    # An imported SARIF is coverage: a scanner someone else ran on our behalf.
-    imported, imported_executions = _ingest_sarif_imports(args.sarif_import)
-    all_findings.extend(imported)
-    executions.extend(imported_executions)
+    primary: list[Finding]
+    test: list[Finding]
+    docs: list[Finding]
+    #: Kept whole as well as split: `declared_axes` reads it by name for the
+    #: capability axes, which are not a fixed set.
+    path_axes: dict[str, list[Finding]]
+    all_findings: list[Finding]
+    loc: int
+    test_loc: int
+    docs_loc: int
+    changed_note: str | None
 
-    # ----- one path convention, before anything reads a path -----
-    # Repository-relative from here on, whichever tool reported the finding.
-    # Suppressions, the baseline and every written output compare or publish
-    # this path, and none of them may depend on where the checkout lives.
-    scanned = target if target.is_dir() else target.parent
-    all_findings = anchor(all_findings, scanned=scanned, root=root)
 
-    # ----- scan scope, enforced once -----
-    own_artifacts = _own_artifacts(paths, cfg, root)
-    all_findings = _drop_excluded(all_findings, target, cfg, own_artifacts, root)
+def _split_axes(
+    all_findings: list[Finding],
+    args: argparse.Namespace,
+    cfg: config_mod.Config,
+    target: Path,
+    root: Path,
+    own_artifacts: frozenset[Path],
+) -> _Axes:
+    """Partition findings by axis and measure each axis's LOC.
 
-    # ----- one weakness, one finding -----
-    # Before overrides and suppressions, so an operator writing either one
-    # sees the same finding the report will show. Bandit's B308 and B703 are
-    # the same check under two ids and shared fifty lines in Django; a report
-    # that lists a line twice is wrong about the code, and a work order built
-    # from it would ask for the same fix twice.
-    all_findings = merge_corroborating(all_findings)
-
-    # ----- overrides from config -----
-    all_findings = _apply_overrides(all_findings, cfg)
-
-    # ----- suppressions -----
-    suppression_path = _under_root(root, cfg.suppressions_file)
-    sup_rules, sup_errors = suppressions.load(suppression_path)
-    if sup_errors:
-        # Fail closed. A suppression file that exists is an explicit
-        # instruction; ignoring it silently changes which findings are
-        # reported, and "my suppressions are working" then looks exactly
-        # like "my suppressions were skipped". This bit in practice: a
-        # missing PyYAML made an entire .scignore.yaml a no-op while the
-        # run still exited 0 and reported the suppressed finding as live.
-        #
-        # Only reachable when the file is present, so repositories that
-        # do not use suppressions are unaffected.
-        for err in sup_errors:
-            sys.stderr.write(f"ERROR: {err}\n")
-        sys.stderr.write(
-            f"ERROR: {suppression_path} exists but could not be applied; refusing to "
-            "report results that silently ignore it.\n"
-        )
-        return 1
-    all_findings = suppressions.apply(all_findings, sup_rules, root)
-    all_findings.extend(
-        anchor(
-            suppressions.expired_findings(sup_rules, suppression_path),
-            scanned=scanned,
-            root=root,
-        )
-    )
-
-    # ----- severity threshold filter -----
-    threshold = Severity.from_string(args.severity_threshold)
-    all_findings = [f for f in all_findings if f.severity.rank >= threshold.rank]
-
-    # ----- baseline -----
-    baseline_path = _under_root(root, args.baseline or cfg.outputs["baseline_path"])
-    baseline = baseline_mod.load(baseline_path)
-    baseline_state = baseline_mod.state(baseline_path)
-    all_findings = baseline_mod.mark_new(all_findings, baseline, root)
-
-    # ----- scoring -----
+    Lifted whole out of `_do_audit`, which was 346 lines at complexity 36
+    against configured limits of 80 and 15. The checks, their order and
+    their comments are unchanged: this is a move, not a rewrite, because a
+    rewrite of the axis split is how a repository gets graded on its test
+    fixtures and the corpus has already shown what that costs.
+    """
     # The test tree is reported, not scored. A project graded on its test
     # fixtures is graded on the wrong thing: across the calibration corpus,
     # including test directories moved the median normalized subtotal from
@@ -522,6 +479,124 @@ def _do_audit(args: argparse.Namespace) -> int:
             own_artifacts,
             cfg.docs_patterns,
         )
+
+    return _Axes(
+        primary=primary_findings,
+        test=test_findings,
+        docs=docs_findings,
+        path_axes=path_axes,
+        all_findings=all_findings,
+        loc=loc,
+        test_loc=test_loc,
+        docs_loc=docs_loc,
+        changed_note=changed_note,
+    )
+
+
+def _do_audit(args: argparse.Namespace) -> int:
+    cfg, target, root = _prepare_audit(args)
+    # Before any consumer reads them: the audited tree does not grade itself.
+    cfg = _refuse_target_policy(cfg, target)
+    _require_configured_gates(args, cfg)
+    if (failed := _install_standards_overlay(cfg, root)) is not None:
+        return failed
+    # Before anything is resolved or written, and before any scanner runs.
+    _assert_config_writes_are_contained(cfg, root, target)
+    # Resolved before the scan so the run can recognise its own artifacts.
+    paths = _resolve_outputs(args, cfg, root)
+
+    # ----- scanners -----
+    scan = _run_scanners(args, cfg, target)
+    all_findings = scan.findings
+    ran, unavailable, executions = scan.ran, scan.unavailable, scan.executions
+
+    # ----- SARIF imports -----
+    # An imported SARIF is coverage: a scanner someone else ran on our behalf.
+    imported, imported_executions = _ingest_sarif_imports(args.sarif_import)
+    all_findings.extend(imported)
+    executions.extend(imported_executions)
+
+    # ----- one path convention, before anything reads a path -----
+    # Repository-relative from here on, whichever tool reported the finding.
+    # Suppressions, the baseline and every written output compare or publish
+    # this path, and none of them may depend on where the checkout lives.
+    scanned = target if target.is_dir() else target.parent
+    all_findings = anchor(all_findings, scanned=scanned, root=root)
+
+    # ----- scan scope, enforced once -----
+    own_artifacts = _own_artifacts(paths, cfg, root)
+    all_findings = _drop_excluded(all_findings, target, cfg, own_artifacts, root)
+
+    # ----- one weakness, one finding -----
+    # Before overrides and suppressions, so an operator writing either one
+    # sees the same finding the report will show. Bandit's B308 and B703 are
+    # the same check under two ids and shared fifty lines in Django; a report
+    # that lists a line twice is wrong about the code, and a work order built
+    # from it would ask for the same fix twice.
+    all_findings = merge_corroborating(all_findings)
+
+    # ----- overrides from config -----
+    all_findings = _apply_overrides(all_findings, cfg)
+
+    # ----- suppressions -----
+    suppression_path = _under_root(root, cfg.suppressions_file)
+    sup_rules, sup_errors = suppressions.load(suppression_path)
+    if sup_errors:
+        # Fail closed. A suppression file that exists is an explicit
+        # instruction; ignoring it silently changes which findings are
+        # reported, and "my suppressions are working" then looks exactly
+        # like "my suppressions were skipped". This bit in practice: a
+        # missing PyYAML made an entire .scignore.yaml a no-op while the
+        # run still exited 0 and reported the suppressed finding as live.
+        #
+        # Only reachable when the file is present, so repositories that
+        # do not use suppressions are unaffected.
+        for err in sup_errors:
+            sys.stderr.write(f"ERROR: {err}\n")
+        sys.stderr.write(
+            f"ERROR: {suppression_path} exists but could not be applied; refusing to "
+            "report results that silently ignore it.\n"
+        )
+        return 1
+    all_findings = suppressions.apply(all_findings, sup_rules, root)
+    # Snapshot the scanner findings before the synthetic ones are appended.
+    # `unused_findings` asks whether each rule still has a subject, and a
+    # wildcard rule with `paths` would happily match the expired-suppression
+    # finding about `.scignore.yaml` itself — reporting itself as used
+    # because it matched a finding about suppressions.
+    scanner_findings = list(all_findings)
+    all_findings.extend(
+        anchor(
+            suppressions.expired_findings(sup_rules, suppression_path),
+            scanned=scanned,
+            root=root,
+        )
+    )
+    all_findings.extend(
+        anchor(
+            suppressions.unused_findings(sup_rules, scanner_findings, suppression_path, root),
+            scanned=scanned,
+            root=root,
+        )
+    )
+
+    # ----- severity threshold filter -----
+    threshold = Severity.from_string(args.severity_threshold)
+    all_findings = [f for f in all_findings if f.severity.rank >= threshold.rank]
+
+    # ----- baseline -----
+    baseline_path = _under_root(root, args.baseline or cfg.outputs["baseline_path"])
+    baseline = baseline_mod.load(baseline_path)
+    baseline_state = baseline_mod.state(baseline_path)
+    all_findings = baseline_mod.mark_new(all_findings, baseline, root)
+
+    # ----- scoring -----
+    _axes = _split_axes(all_findings, args, cfg, target, root, own_artifacts)
+    all_findings = _axes.all_findings
+    primary_findings, test_findings, docs_findings = _axes.primary, _axes.test, _axes.docs
+    path_axes = _axes.path_axes
+    loc, test_loc, docs_loc = _axes.loc, _axes.test_loc, _axes.docs_loc
+    changed_note = _axes.changed_note
     # Dependencies come off the code-condition score and onto their own axis.
     # A CVE in a pinned dependency is fixed with a version bump; an injection
     # flaw is fixed with a rewrite. Averaging them produced the largest
@@ -1068,6 +1143,78 @@ def _write_outputs(
     # is the only output that carries both axes plus the practice level.
     if paths.security_pillar is not None and pillar is not None:
         pillar_mod.write(pillar, paths.security_pillar)
+
+
+def _install_standards_overlay(cfg: config_mod.Config, root: Path) -> int | None:
+    """Layer the operator's standards mapping over the shipped table.
+
+    Returns an exit code when the overlay cannot be applied, else None.
+
+    Fails closed, for the same reason a malformed suppressions file does: the
+    operator named a mapping file, so running without it reports findings
+    under the standards nobody chose — unmapped where they should be mapped,
+    and no louder than a rule nobody has curated. Reachable only when the key
+    is set, so repositories that do not use an overlay are unaffected.
+    """
+    if not cfg.standards_overlay:
+        return None
+    path = _under_root(root, cfg.standards_overlay)
+    entries, errors = standards.load_overlay(path)
+    if errors:
+        for err in errors:
+            sys.stderr.write(f"ERROR: {err}\n")
+        sys.stderr.write(
+            f"ERROR: standards_overlay {path} is declared but could not be applied; "
+            "refusing to report findings mapped by a table the operator did not choose.\n"
+        )
+        return 1
+    standards.install_overlay(entries)
+    return None
+
+
+#: Config keys that move the grade, and so may not come from the audited tree.
+#: `severity_overrides` sets a finding's weight — `INFORMATIONAL` is 0.0 in
+#: `SEVERITY_WEIGHT`, so re-labelling removes a finding from the score while
+#: leaving it in the report. `category_overrides` moves it between the
+#: per-category rates, and the worst category drives the overall.
+_GRADING_KEYS = ("severity_overrides", "category_overrides")
+
+
+def _refuse_target_policy(cfg: config_mod.Config, target: Path) -> config_mod.Config:
+    """Drop grading keys supplied by the audited tree. Returns the config to use.
+
+    D29 settled that a config the tree supplies does not choose a scanner's
+    command. It said nothing about what that config may claim about the
+    findings, and these two keys were applied from any config, including one
+    discovered inside the tree, with no `--trust-target-config`.
+
+    Measured on one `subprocess` call made with `shell=True` — paraphrased
+    rather than quoted, because this repository audits its own source and
+    the verbatim expression trips `sca.python.subprocess.shell_true` here,
+    in shipped code, where it is scored: 0.00/F honestly, and
+    5.00/A+ with an in-tree `severity_overrides` mapping B602 to
+    informational. The audited party moved its own grade, which is §4
+    criterion 1 falsifiable by the one actor with a motive, and promise P3
+    from the other side — P3 refuses an input whose *removal* raises the
+    graded field, and this is one whose *addition* raises it.
+
+    Not silent, and not fatal. A repository may carry this config for its
+    own operator's use, and that operator says so with
+    `--trust-target-config` or by keeping the config outside the tree —
+    exactly the two routes that already work for a command.
+    """
+    if not config_mod.target_config_is_untrusted(cfg, target):
+        return cfg
+    ignored = [key for key in _GRADING_KEYS if getattr(cfg, key)]
+    if not ignored:
+        return cfg
+    for key in ignored:
+        sys.stderr.write(
+            f"WARNING: {key} in {cfg.source_path} is inside the audited tree and "
+            f"changes the grade, so it was ignored. Pass --trust-target-config, or "
+            f"keep the configuration outside the tree, to apply it.\n"
+        )
+    return replace(cfg, severity_overrides={}, category_overrides={})
 
 
 def _apply_overrides(findings: list[Finding], cfg: config_mod.Config) -> list[Finding]:

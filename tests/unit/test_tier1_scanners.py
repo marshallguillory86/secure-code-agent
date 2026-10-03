@@ -58,6 +58,73 @@ def test_bandit_parses_finding_and_control_failures(tmp_path, monkeypatch):
     assert scanner.scan(tmp_path, Config()).findings[0].rule_id == "bandit.tool_error"
 
 
+def test_bandit_erroring_is_not_a_clean_scan(tmp_path, monkeypatch):
+    """PRODUCT BUG — bandit exit 2 with parseable output read as clean.
+
+    Bandit exits 0 for no issues, 1 for issues found and 2 for an internal
+    error. The adapter declared `allowed_exits=(0, 1)` to `_exec` — which
+    does nothing with it, both branches return the process unchanged — and
+    then checked no exit code at all beyond the 124 timeout sentinel. So a
+    bandit that failed internally and still emitted a JSON envelope was
+    parsed, found to contain no results, and reported as `COMPLETED` with
+    zero findings: a clean scan of a tree bandit never finished reading.
+
+    That is the false-green this product exists to refuse. §4 criterion 1 is
+    "a green gate means something", and the sibling adapters already get
+    this right — gitleaks, trufflehog, checkov and hadolint each check
+    their own returncode. Bandit is the one that relied on a parameter that
+    looks like a guard.
+
+    Coverage must say "we do not know" rather than "nothing is there", so
+    the outcome is FAILED and carries bandit's stderr.
+    """
+    scanner = _configured(BanditScanner(), "bandit")
+    monkeypatch.setattr(
+        scanner,
+        "_exec",
+        lambda *args, **kwargs: _proc('{"results": []}', stderr="bandit: internal error", code=2),
+    )
+
+    result = scanner.scan(tmp_path, Config())
+
+    assert result.outcome is ScannerOutcome.FAILED, (
+        "bandit exited 2 and the scan was reported as a completed clean run"
+    )
+    assert result.findings[0].rule_id == "bandit.tool_error"
+    assert "internal error" in result.reason
+
+
+def test_bandit_findings_exit_is_still_a_successful_scan(tmp_path, monkeypatch):
+    """The falsifier. Refusing every nonzero exit would break the normal case.
+
+    Exit 1 is bandit's way of saying it found something, which is the most
+    common outcome on a real repository. A guard that treated it as failure
+    would turn every repository with a finding into failed coverage.
+    """
+    payload = {
+        "results": [
+            {
+                "test_id": "B608",
+                "issue_text": "SQL expression",
+                "filename": "app.py",
+                "line_number": 8,
+                "line_range": [8, 9],
+                "issue_severity": "HIGH",
+                "issue_confidence": "HIGH",
+            }
+        ]
+    }
+    scanner = _configured(BanditScanner(), "bandit")
+    monkeypatch.setattr(
+        scanner, "_exec", lambda *args, **kwargs: _proc(json.dumps(payload), code=1)
+    )
+
+    result = scanner.scan(tmp_path, Config())
+
+    assert result.outcome is ScannerOutcome.COMPLETED
+    assert [f.rule_id for f in result.findings] == ["B608"]
+
+
 def test_bandit_requests_quiet_json_and_combines_excludes(tmp_path, monkeypatch):
     scanner = _configured(BanditScanner(), "bandit")
     captured = []
@@ -103,7 +170,7 @@ def test_gitleaks_parses_redacted_secret_and_failures(tmp_path, monkeypatch):
         }
     ]
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         report = Path(args[args.index("--report-path") + 1])
         report.write_text(json.dumps(payload), encoding="utf-8")
         return _proc(code=1)
@@ -123,7 +190,7 @@ def test_gitleaks_parses_redacted_secret_and_failures(tmp_path, monkeypatch):
 def test_gitleaks_invalid_json_is_parse_failure(tmp_path, monkeypatch):
     scanner = _configured(GitleaksScanner(), "gitleaks")
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         report = Path(args[args.index("--report-path") + 1])
         report.write_text("not json", encoding="utf-8")
         return _proc()
@@ -212,7 +279,7 @@ def test_semgrep_parses_sarif_and_reports_invalid_output(tmp_path, monkeypatch):
     }
     scanner = _configured(SemgrepScanner(), "semgrep")
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         output = Path(args[args.index("--output") + 1])
         output.write_text(json.dumps(payload), encoding="utf-8")
         return _proc(code=1)
@@ -222,7 +289,7 @@ def test_semgrep_parses_sarif_and_reports_invalid_output(tmp_path, monkeypatch):
     assert findings[0].canonical_cwe == "CWE-95"
     assert findings[0].severity is Severity.HIGH
 
-    def invalid_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def invalid_exec(self, args, cwd, timeout_seconds):
         output = Path(args[args.index("--output") + 1])
         output.write_text("bad", encoding="utf-8")
         return _proc()
@@ -237,7 +304,7 @@ def test_gitleaks_findings_exit_with_empty_report_fails_instead_of_reading_clean
     # Exit 1 is gitleaks asserting it found secrets. An empty report then means
     # we have nothing to show for it — recording a clean scan would discard the
     # scanner's own signal in the highest-weighted category.
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         Path(args[args.index("--report-path") + 1]).write_text("", encoding="utf-8")
         return _proc(code=1)
 
@@ -250,7 +317,7 @@ def test_gitleaks_findings_exit_with_empty_report_fails_instead_of_reading_clean
 
 
 def test_gitleaks_findings_exit_with_empty_array_report_also_fails(tmp_path, monkeypatch):
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         Path(args[args.index("--report-path") + 1]).write_text("[]", encoding="utf-8")
         return _proc(code=1)
 
@@ -261,7 +328,7 @@ def test_gitleaks_findings_exit_with_empty_array_report_also_fails(tmp_path, mon
 
 
 def test_gitleaks_clean_exit_with_empty_report_is_still_a_clean_scan(tmp_path, monkeypatch):
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         Path(args[args.index("--report-path") + 1]).write_text("", encoding="utf-8")
         return _proc(code=0)
 
@@ -275,7 +342,7 @@ def test_gitleaks_clean_exit_with_empty_report_is_still_a_clean_scan(tmp_path, m
 def test_gitleaks_non_array_report_is_a_failure_not_a_clean_scan(tmp_path, monkeypatch):
     """Exit 0 and an unreadable report is not zero secrets."""
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         Path(args[args.index("--report-path") + 1]).write_text('{"oops": 1}', encoding="utf-8")
         return _proc(code=0)
 
@@ -291,7 +358,7 @@ def test_semgrep_offline_uses_the_packaged_ruleset_not_the_registry(tmp_path, mo
     # the network, so offline silently was not offline.
     captured: dict = {}
 
-    def fake_exec(self, args, cwd, timeout_seconds, allowed_exits=(0,)):
+    def fake_exec(self, args, cwd, timeout_seconds):
         captured["args"] = args
         Path(args[args.index("--output") + 1]).write_text(
             json.dumps({"runs": [{"tool": {"driver": {"rules": []}}, "results": []}]}),

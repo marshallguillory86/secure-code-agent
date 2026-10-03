@@ -1,0 +1,424 @@
+# Standards mapping, indexed by (scanner, rule_id).
+#
+# This was 416 lines of Python in `standards.py`. It is data: a table an
+# operator could not extend without a package release, which is what
+# `docs/product-intent.md` §8 question 3 was about. Entry comments are
+# preserved verbatim from the Python source -- several record a defect found
+# the hard way, and that reasoning is worth more than the row it sits above.
+#
+# `scanner` is the lowercase scanner name; `rule_id` is exactly what the
+# scanner emits. An operator overlay may add entries and may not change
+# severity, confidence or category -- see D32 and promise P3.
+
+version: 1
+entries:
+  # ----- Bandit ----------------------------------------------------------
+  # Source: https://bandit.readthedocs.io/en/latest/plugins/index.html
+  # B102 read CWE-78 — *OS* command injection, the shell-injection weakness
+  # that B602/B603/B605/B607 cover. `exec()` does not invoke a shell; it
+  # compiles and runs Python. The mislabel travelled: into the OWASP
+  # mapping, into SARIF, into the work order, and into the Top-25 bonus,
+  # which CWE-78 carries and the true weakness does not directly.
+  #
+  # It also broke corroboration, which is how it was found. Bandit's B102
+  # and our own `sca.python.eval` fire on the same `exec(compile(...))`
+  # line in Flask's `config.py`; `_same_weakness` merges across scanners on
+  # a shared CWE, CWE-78 and CWE-95 are not shared, so one defect scored
+  # twice. Flask carried four such pairs and graded F partly on doubles.
+  - scanner: bandit
+    rule_id: B102
+    canonical_cwe: CWE-95
+    owasp_top10: A03
+    asvs_section: V5.3.8
+    nist_ssdf: PW.5.1
+    category: code_vulnerabilities
+    severity: high
+    confidence: medium
+    short_desc: Use of exec() — arbitrary code execution risk.
+    fix_hint: Eliminate exec() entirely. If dynamic dispatch is required, use a typed registry / function map.
+  # B307 (`eval`) had no curated entry, so `_make_finding` fell back to the
+  # CWE the scanner reports — and Bandit files `eval` under CWE-78 too. Same
+  # weakness as B102, same fix, and curating it is what stops the fallback.
+  - scanner: bandit
+    rule_id: B307
+    canonical_cwe: CWE-95
+    owasp_top10: A03
+    asvs_section: V5.2.4
+    nist_ssdf: PW.5.1
+    category: code_vulnerabilities
+    severity: high
+    confidence: medium
+    short_desc: Use of eval() — arbitrary code execution risk.
+    fix_hint: Use ast.literal_eval for data. For dispatch, use a dict of callables rather than evaluating a name.
+  - scanner: bandit
+    rule_id: B301
+    canonical_cwe: CWE-502
+    owasp_top10: A08
+    asvs_section: V5.5.1
+    nist_ssdf: PW.5.1
+    category: code_vulnerabilities
+    severity: high
+    confidence: high
+    short_desc: pickle.loads() on possibly-untrusted input — arbitrary code execution.
+    fix_hint: Replace pickle with JSON for data, or a signed/encrypted envelope for trusted state transfer.
+  - scanner: bandit
+    rule_id: B303
+    canonical_cwe: CWE-327
+    owasp_top10: A02
+    asvs_section: V6.2.5
+    nist_ssdf: PW.4.1
+    category: crypto
+    severity: medium
+    confidence: high
+    short_desc: MD5/SHA-1 used. Insecure for security purposes (collisions).
+    fix_hint: Use SHA-256 or BLAKE2 for non-password hashing. Use Argon2id for password hashing.
+  - scanner: bandit
+    rule_id: B305
+    canonical_cwe: CWE-327
+    owasp_top10: A02
+    asvs_section: V6.2.2
+    nist_ssdf: PW.4.1
+    category: crypto
+    severity: high
+    confidence: high
+    short_desc: Use of insecure cipher mode (ECB).
+    fix_hint: Use authenticated encryption (AES-GCM or ChaCha20-Poly1305). Never ECB.
+  - scanner: bandit
+    rule_id: B501
+    canonical_cwe: CWE-295
+    owasp_top10: A07
+    asvs_section: V9.2.1
+    nist_ssdf: PW.4.1
+    category: crypto
+    severity: high
+    confidence: high
+    short_desc: Requests call with verify=False — TLS cert validation disabled.
+    fix_hint: Remove verify=False. If self-signed cert is required, pass the trusted CA bundle explicitly.
+  - scanner: bandit
+    rule_id: B602
+    canonical_cwe: CWE-78
+    owasp_top10: A03
+    asvs_section: V5.3.8
+    nist_ssdf: PW.5.1
+    category: code_vulnerabilities
+    severity: high
+    confidence: high
+    short_desc: subprocess with shell=True and shell metacharacters — command injection.
+    fix_hint: Pass argv as a list and use shell=False. Never interpolate user input into a shell string.
+  - scanner: bandit
+    rule_id: B608
+    canonical_cwe: CWE-89
+    owasp_top10: A03
+    asvs_section: V5.3.5
+    nist_ssdf: PW.5.1
+    category: code_vulnerabilities
+    severity: high
+    confidence: medium
+    short_desc: String-built SQL — possible injection.
+    fix_hint: Use parameterized queries ($1, ?, :name). Never interpolate user input into SQL strings.
+  # ----- pip-audit -------------------------------------------------------
+  # Source: https://github.com/pypa/pip-audit
+  # pip-audit emits per-CVE findings — they all share CWE-1104 (Use of
+  # Unmaintained Third Party Components) plus a per-CVE rule id.
+  - scanner: pip_audit
+    rule_id: '*'
+    canonical_cwe: CWE-1104
+    owasp_top10: A06
+    asvs_section: V14.2.1
+    nist_ssdf: PW.4.4
+    category: dependencies
+    severity: high
+    confidence: high
+    short_desc: Known-vulnerable dependency in pinned set.
+    fix_hint: Bump to the fixed version per the advisory. If no fix exists, document the residual risk in `.scignore.yaml` with an expires date.
+  # ----- npm audit -------------------------------------------------------
+  - scanner: npm_audit
+    rule_id: '*'
+    canonical_cwe: CWE-1104
+    owasp_top10: A06
+    asvs_section: V14.2.1
+    nist_ssdf: PW.4.4
+    category: dependencies
+    severity: high
+    confidence: high
+    short_desc: Known-vulnerable npm dependency.
+    fix_hint: '`npm audit fix` is often safe for patch-level bumps but can downgrade majors. Inspect the suggested fix before applying; for downgrades, track upstream.'
+  # ----- Gitleaks --------------------------------------------------------
+  # Source: https://github.com/gitleaks/gitleaks
+  - scanner: gitleaks
+    rule_id: '*'
+    canonical_cwe: CWE-798
+    owasp_top10: A07
+    asvs_section: V2.10.1
+    nist_ssdf: PS.1.1
+    category: secrets
+    severity: critical
+    confidence: high
+    short_desc: Hardcoded secret detected.
+    fix_hint: Rotate the secret immediately. Move to an env var / secret manager. Run `git filter-repo` to scrub history if it's been pushed publicly.
+  # ----- TruffleHog ------------------------------------------------------
+  - scanner: trufflehog
+    rule_id: '*'
+    canonical_cwe: CWE-798
+    owasp_top10: A07
+    asvs_section: V2.10.1
+    nist_ssdf: PS.1.1
+    category: secrets
+    severity: critical
+    confidence: high
+    short_desc: Verified secret detected.
+    fix_hint: 'Same as Gitleaks: rotate, move to env / secret manager, scrub history if leaked publicly.'
+  # ----- Built-in regex rules -------------------------------------------
+  - scanner: builtin_rules
+    rule_id: sca.python.eval
+    canonical_cwe: CWE-95
+    owasp_top10: A03
+    asvs_section: V5.2.4
+    nist_ssdf: PW.5.1
+    category: code_vulnerabilities
+    severity: high
+    confidence: medium
+    short_desc: eval()/exec() on non-literal input.
+    fix_hint: Eliminate eval. Use ast.literal_eval for safe data, or a typed registry for dispatch.
+  - scanner: builtin_rules
+    rule_id: sca.python.yaml.unsafe_load
+    canonical_cwe: CWE-502
+    owasp_top10: A08
+    asvs_section: V5.5.2
+    nist_ssdf: PW.5.1
+    category: code_vulnerabilities
+    severity: high
+    confidence: high
+    short_desc: yaml.load() without SafeLoader.
+    fix_hint: Use yaml.safe_load() or yaml.load(stream, Loader=yaml.SafeLoader).
+  - scanner: builtin_rules
+    rule_id: sca.python.requests.verify_false
+    canonical_cwe: CWE-295
+    owasp_top10: A07
+    asvs_section: V9.2.1
+    nist_ssdf: PW.4.1
+    category: crypto
+    severity: high
+    confidence: high
+    short_desc: requests.* called with verify=False.
+    fix_hint: Remove verify=False. Pass the trusted CA bundle if the upstream cert is self-signed.
+  - scanner: builtin_rules
+    rule_id: sca.python.fstring_sql
+    canonical_cwe: CWE-89
+    owasp_top10: A03
+    asvs_section: V5.3.5
+    nist_ssdf: PW.5.1
+    category: code_vulnerabilities
+    severity: high
+    confidence: medium
+    short_desc: f-string SQL — interpolated value in .execute()/.executemany().
+    fix_hint: 'Parameterize: `await conn.execute(''... WHERE id = $1'', value)` instead of f-string.'
+  - scanner: builtin_rules
+    rule_id: sca.python.subprocess.shell_true
+    canonical_cwe: CWE-78
+    owasp_top10: A03
+    asvs_section: V5.3.8
+    nist_ssdf: PW.5.1
+    category: code_vulnerabilities
+    severity: high
+    confidence: high
+    short_desc: subprocess.* with shell=True and non-literal command.
+    fix_hint: Pass argv as a list (e.g. ['git', 'log', '-n', '5']) and use shell=False.
+  - scanner: builtin_rules
+    rule_id: sca.python.hashlib.md5_sha1_security
+    canonical_cwe: CWE-327
+    owasp_top10: A02
+    asvs_section: V6.2.5
+    nist_ssdf: PW.4.1
+    category: crypto
+    severity: medium
+    confidence: medium
+    short_desc: MD5/SHA-1 in a non-test, non-checksum path.
+    fix_hint: Use SHA-256 or BLAKE2. For password hashing, use Argon2id (via argon2-cffi or passlib).
+  - scanner: builtin_rules
+    rule_id: sca.web.dangerously_set_inner_html
+    canonical_cwe: CWE-79
+    owasp_top10: A03
+    asvs_section: V5.3.3
+    nist_ssdf: PW.5.1
+    category: code_vulnerabilities
+    severity: high
+    confidence: low
+    short_desc: React dangerouslySetInnerHTML with non-literal input.
+    fix_hint: Render via React text nodes. If raw HTML is required, sanitize with DOMPurify and document the trust source inline.
+  - scanner: builtin_rules
+    rule_id: sca.web.cors_wildcard
+    canonical_cwe: CWE-942
+    owasp_top10: A05
+    asvs_section: V14.5.3
+    nist_ssdf: PW.5.1
+    category: code_vulnerabilities
+    severity: high
+    confidence: high
+    short_desc: 'CORS Access-Control-Allow-Origin: * with credentials allowed.'
+    fix_hint: Scope Allow-Origin to a specific allowlist when credentials are in use. '*' + credentials is forbidden by spec.
+  - scanner: builtin_rules
+    rule_id: sca.shell.curl_pipe_sh
+    canonical_cwe: CWE-78
+    owasp_top10: A03
+    asvs_section: V5.3.8
+    nist_ssdf: PW.4.4
+    category: supply_chain
+    severity: medium
+    confidence: high
+    short_desc: curl | sh / wget | bash — opaque remote-script execution.
+    fix_hint: Pin a checksum or use a package manager. If you must download a script, verify a SHA before executing.
+  # ----- Trivy ----------------------------------------------------------
+  # Trivy emits per-CVE rule ids (CVE-/GHSA-/AVD-). The per-rule CWE is
+  # carried inside the SARIF properties; this wildcard covers what the
+  # SARIF doesn't.
+  - scanner: trivy
+    rule_id: '*'
+    canonical_cwe: CWE-1104
+    owasp_top10: A06
+    asvs_section: V14.2.1
+    nist_ssdf: PW.4.4
+    category: dependencies
+    severity: high
+    confidence: high
+    short_desc: Trivy finding (vuln / misconfig / secret).
+    fix_hint: Trivy routes vuln/misconfig/secret into different categories — see the finding's category field for the specific guidance.
+  # ----- Checkov --------------------------------------------------------
+  # Checkov rule ids are like CKV_AWS_xxx, CKV_K8S_xxx, CKV_DOCKER_xxx.
+  # All map to config_iac with OWASP A05 (Security Misconfiguration).
+  - scanner: checkov
+    rule_id: '*'
+    canonical_cwe: CWE-1188
+    owasp_top10: A05
+    asvs_section: V14.1.1
+    nist_ssdf: PW.6.1
+    category: config_iac
+    severity: medium
+    confidence: high
+    short_desc: IaC misconfiguration detected by Checkov.
+    fix_hint: Follow Checkov's documentation link in the finding message. Misconfigs are typically a one-property addition (encryption, public-access blockers, etc.).
+  # ----- Hadolint -------------------------------------------------------
+  # Most-flagged security-relevant rules. Style rules fall through to the
+  # wildcard.
+  - scanner: hadolint
+    rule_id: hadolint.DL3002
+    canonical_cwe: CWE-250
+    owasp_top10: A05
+    asvs_section: V14.2.5
+    nist_ssdf: PW.6.1
+    category: config_iac
+    severity: high
+    confidence: high
+    short_desc: Dockerfile sets USER root — privileged container.
+    fix_hint: Add `USER <non-root-uid>` near the end of the Dockerfile. Or run with `--user` at the container runtime.
+  - scanner: hadolint
+    rule_id: hadolint.DL3025
+    canonical_cwe: CWE-78
+    owasp_top10: A03
+    asvs_section: V5.3.8
+    nist_ssdf: PW.5.1
+    category: config_iac
+    severity: medium
+    confidence: high
+    short_desc: Dockerfile CMD/ENTRYPOINT in shell form — argv injection surface.
+    fix_hint: 'Use JSON-array form: `CMD ["node", "server.js"]`. Avoids the shell wrapper that interprets metacharacters.'
+  - scanner: hadolint
+    rule_id: '*'
+    canonical_cwe: CWE-1188
+    owasp_top10: A05
+    asvs_section: V14.1.1
+    nist_ssdf: PW.6.1
+    category: config_iac
+    severity: low
+    confidence: high
+    short_desc: Dockerfile lint finding.
+    fix_hint: See https://github.com/hadolint/hadolint/wiki for the specific rule.
+  # ----- OSV-Scanner ----------------------------------------------------
+  - scanner: osv_scanner
+    rule_id: '*'
+    canonical_cwe: CWE-1104
+    owasp_top10: A06
+    asvs_section: V14.2.1
+    nist_ssdf: PW.4.4
+    category: dependencies
+    severity: high
+    confidence: high
+    short_desc: Vulnerable dependency reported by osv.dev.
+    fix_hint: Bump to the fixed version per the advisory. If no fix exists, document the residual risk in `.scignore.yaml`.
+  # ----- OpenSSF Scorecard ----------------------------------------------
+  # Scorecard's check names are stable — map each to its standards refs.
+  - scanner: scorecard
+    rule_id: scorecard.Branch-Protection
+    canonical_cwe: CWE-732
+    owasp_top10: A05
+    asvs_section: V14.1.4
+    nist_ssdf: PO.5.1
+    category: supply_chain
+    severity: high
+    confidence: high
+    short_desc: Branch protection insufficient on the default branch.
+    fix_hint: Enable required PR reviews, required status checks, and prevent force-pushes on the default branch.
+  - scanner: scorecard
+    rule_id: scorecard.Signed-Releases
+    canonical_cwe: CWE-345
+    owasp_top10: A08
+    asvs_section: V10.3.2
+    nist_ssdf: PS.2.1
+    category: supply_chain
+    severity: medium
+    confidence: high
+    short_desc: Releases are not signed with Sigstore/cosign.
+    fix_hint: Sign releases via Sigstore/cosign. Publish provenance with `slsa-github-generator` or equivalent.
+  - scanner: scorecard
+    rule_id: scorecard.Pinned-Dependencies
+    canonical_cwe: CWE-829
+    owasp_top10: A08
+    asvs_section: V14.2.2
+    nist_ssdf: PW.4.4
+    category: supply_chain
+    severity: medium
+    confidence: high
+    short_desc: Dependencies (esp. GitHub Actions) are not pinned by SHA.
+    fix_hint: Pin third-party Actions to a commit SHA, not a tag. Pin Docker base images by digest.
+  - scanner: scorecard
+    rule_id: scorecard.Token-Permissions
+    canonical_cwe: CWE-272
+    owasp_top10: A01
+    asvs_section: V4.1.5
+    nist_ssdf: PO.5.2
+    category: supply_chain
+    severity: high
+    confidence: high
+    short_desc: GitHub workflow tokens granted excess permissions.
+    fix_hint: 'Add `permissions: contents: read` at workflow root; elevate per-job only as needed.'
+  - scanner: scorecard
+    rule_id: scorecard.Security-Policy
+    canonical_cwe: CWE-1059
+    owasp_top10: A09
+    asvs_section: V0.2.1
+    nist_ssdf: PO.4.1
+    category: policy_docs
+    severity: low
+    confidence: high
+    short_desc: Repository is missing SECURITY.md.
+    fix_hint: Add SECURITY.md with a vulnerability disclosure path. Use `github.com/<repo>/security/advisories/new` for the form.
+  - scanner: scorecard
+    rule_id: scorecard.Dangerous-Workflow
+    canonical_cwe: CWE-94
+    owasp_top10: A03
+    asvs_section: V5.2.4
+    nist_ssdf: PW.5.1
+    category: supply_chain
+    severity: high
+    confidence: high
+    short_desc: Workflow uses untrusted input in a dangerous context.
+    fix_hint: Avoid `${{ github.event.pull_request.title }}` in `run:` blocks. Use env vars instead.
+  - scanner: scorecard
+    rule_id: '*'
+    owasp_top10: A08
+    nist_ssdf: PO.5.1
+    category: supply_chain
+    severity: medium
+    confidence: medium
+    short_desc: OpenSSF Scorecard check failed.
+    fix_hint: See the documentation link in the finding message.
