@@ -191,6 +191,31 @@ def _required_fields(
     return _Required(rule_id=rule_id, reason=reason, expires=expires), None
 
 
+def _identity_keys(prefix: str, entry: dict) -> str | None:
+    """`fingerprint` and `line` pin an entry to one finding. Error, or None.
+
+    Separate from the rest of `_narrow_keys` because these two answer a
+    different question — *which* finding rather than *what shape* of match —
+    and because carrying all four checks in one body put that function at
+    complexity 18 against a limit of 15.
+
+    Both are validated only when present. Absent is the common case and means
+    "do not pin"; present-and-malformed must fail rather than be dropped, or
+    the entry widens back to the broad file+rule form while still reading as
+    narrow.
+    """
+    fingerprint_v = entry.get("fingerprint")
+    if "fingerprint" in entry and not _VALID_FINGERPRINT.fullmatch(str(fingerprint_v or "")):
+        return f"{prefix}: 'fingerprint' must be 16 hexadecimal characters (got {fingerprint_v!r})."
+
+    line_v = entry.get("line")
+    if "line" in entry and not (
+        isinstance(line_v, int) and not isinstance(line_v, bool) and line_v > 0
+    ):
+        return f"{prefix}: 'line' must be a positive integer (got {line_v!r})."
+    return None
+
+
 def _narrow_keys(prefix: str, entry: dict, rule_id: str) -> tuple[_Narrow | None, str | None]:
     """The narrowing keys, or the first failure.
 
@@ -211,17 +236,11 @@ def _narrow_keys(prefix: str, entry: dict, rule_id: str) -> tuple[_Narrow | None
     if rule_id == "*" and not file_v and not paths_v:
         return None, f"{prefix}: rule_id='*' requires `file` or `paths`."
 
+    identity_error = _identity_keys(prefix, entry)
+    if identity_error is not None:
+        return None, identity_error
     fingerprint_v = entry.get("fingerprint")
-    if "fingerprint" in entry and not _VALID_FINGERPRINT.fullmatch(str(fingerprint_v or "")):
-        return None, (
-            f"{prefix}: 'fingerprint' must be 16 hexadecimal characters (got {fingerprint_v!r})."
-        )
-
     line_v = entry.get("line")
-    if "line" in entry and not (
-        isinstance(line_v, int) and not isinstance(line_v, bool) and line_v > 0
-    ):
-        return None, f"{prefix}: 'line' must be a positive integer (got {line_v!r})."
 
     return (
         _Narrow(
@@ -323,35 +342,17 @@ def unused_findings(
 ) -> list[Finding]:
     """One informational finding per suppression that matched nothing.
 
-    A suppression is a reviewed decision with a reason and an expiry. One
-    that matches no current finding is none of those things any more: it
-    reads as active protection and protects nothing. Two ways to get there,
-    and only one of them is good news —
+    An entry whose subject is gone reads as active protection and protects
+    none: either the finding was fixed and the entry should be deleted, or
+    the code moved and the entry silently stopped covering it.
 
-    - the underlying finding was fixed, and the entry should be deleted;
-    - the code moved, and the entry silently stopped covering it.
+    Expired rules are excluded — they do not suppress, so they match nothing
+    by construction, and `expired_findings` already reports them as CRITICAL.
+    One entry must not produce two findings about itself.
 
-    The second is what happened when `Scanner` was split: the `B404` and
-    `B603` entries named `scanners/base.py`, the subprocess code moved out
-    to `_execution.py` and `_resolution.py`, and four reviewed findings
-    came back as new work while the entries meant to cover them sat there
-    naming a file that still existed and no longer contained any of it.
-
-    `tests/unit/test_no_suppression_path_matches_nothing.py` catches the
-    weaker version of this — a glob whose file is gone — and passed against
-    that incident for exactly the reason above. Only a run holding the
-    findings can answer the real question, so this is computed here rather
-    than linted over the file.
-
-    **Expired rules are excluded.** They do not suppress, so they match
-    nothing by construction, and `expired_findings` already reports them as
-    CRITICAL. One entry must not produce two findings about itself, and
-    expiry is the more specific statement.
-
-    **INFORMATIONAL, so the score cannot move.** `SEVERITY_WEIGHT` prices it
-    at 0.0. A repository is not more vulnerable for holding stale
-    suppressions, and a tidiness finding that changed a grade would be the
-    next thing an operator suppresses.
+    INFORMATIONAL because `SEVERITY_WEIGHT` prices it at 0.0: tidiness must
+    not move a grade. The full reasoning, and the incident that prompted it,
+    are in `tests/unit/test_suppressions.py` and `docs/product-intent.md`.
     """
     out: list[Finding] = []
     for r in findings_rules:
