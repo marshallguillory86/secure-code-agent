@@ -524,6 +524,79 @@ def test_one_repository_failing_does_not_end_the_study(tmp_path, monkeypatch, ca
     assert "FAILED" in study.stdout
 
 
+def test_a_run_with_a_failed_repository_exits_nonzero(tmp_path, monkeypatch, capsys):
+    """PRODUCT BUG — `main` returned 0 however many repositories failed.
+
+    The loop deliberately survives one unreachable remote, which is right:
+    a corpus run takes hours and dying on the first failure throws away
+    every repository after it. But surviving is not succeeding. `main`
+    returned 0 unconditionally, so a run that fetched nothing at all, wrote
+    a `results.json` with an empty distribution and printed FAILED nineteen
+    times still reported success to its caller.
+
+    That matters because of what this script is for. D17's published
+    figures — AUC, separation, the maintained median — are the evidence for
+    the grade scale, and promise P6 is that every empirical claim here is
+    reproducible from checked-in pinned inputs. A silent partial run
+    produces figures over a smaller corpus than the one named, and the exit
+    code is the only thing that could say so. An exit code that lies is the
+    exact defect class this product exists to catch.
+
+    Any failure is enough. A partial corpus is not a corpus, so this does
+    not wait for all of them to fail.
+    """
+    study = _run(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        [_entry("django"), _entry("flask"), _entry("httpx")],
+        {"django": _payload(overall=3.5), "httpx": _payload(overall=4.0)},
+        fetch_fails=("flask",),
+    )
+
+    assert study.out["summary"]["failed"] == ["flask"]
+    assert study.rc != 0, (
+        "a run with a failed repository reported success; its figures are "
+        "derived from a smaller corpus than the one it was given"
+    )
+
+
+def test_a_run_where_every_repository_failed_exits_nonzero(tmp_path, monkeypatch, capsys):
+    """The degenerate case, which produced the most confident wrong answer.
+
+    With every fetch failing there is no distribution at all, so `main`
+    takes the no-median branch and returns early — and that branch also
+    returned 0. The run printed "no distribution to calibrate from", which
+    reads as a legitimate outcome for an all-Java corpus, and exited
+    successfully having measured nothing.
+    """
+    study = _run(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        [_entry("django"), _entry("flask")],
+        {},
+        fetch_fails=("django", "flask"),
+    )
+
+    assert study.out["summary"]["failed"] == ["django", "flask"]
+    assert study.rc != 0, "a run that measured nothing reported success"
+
+
+def test_a_clean_run_still_exits_zero(tmp_path, monkeypatch, capsys):
+    """The falsifier. `return 1` everywhere would satisfy both tests above."""
+    study = _run(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        [_entry("django"), _entry("pygoat", kind="vulnerable-by-design")],
+        {"django": _payload(overall=3.5), "pygoat": _payload(overall=0.0, letter="F")},
+    )
+
+    assert study.out["summary"]["failed"] == []
+    assert study.rc == 0
+
+
 def test_the_printed_headline_is_the_maintained_median_not_the_pooled_one(
     tmp_path, monkeypatch, capsys
 ):

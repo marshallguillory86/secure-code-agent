@@ -517,13 +517,30 @@ def main() -> int:
     # happened to be in the list.
     maintained = summary.get("maintained_overall") or {}
     vulnerable = summary.get("vulnerable_overall") or {}
+    # One source for the exit code, read by both returns below. A failed
+    # repository means the figures are derived from a smaller corpus than
+    # the one named, and the exit code is the only thing that can say so --
+    # this returned 0 unconditionally, so a run that fetched nothing still
+    # reported success. Any failure is enough: a partial corpus is not a
+    # corpus, and D17's published figures are supposed to re-derive from the
+    # pinned inputs (promise P6).
+    failed = summary["failed"]
+    status = 1 if failed else 0
+    if failed:
+        print(
+            f"\n{len(failed)} of {len(rows)} repositories failed and were measured "
+            f"by nothing: {', '.join(failed)}. Every figure below is over the "
+            f"{summary['measured']} that did run, so this is not a corpus-wide "
+            f"result and this run exits {status}."
+        )
+
     median = maintained.get("median")
     if median is None:
         print(
             "\nNo maintained repository in this corpus was examined by a scanner "
             "that reads its language, so there is no distribution to calibrate from."
         )
-        return 0
+        return status
 
     print(
         f"\nMaintained median: {median} → {letter_grade(max(0.0, min(5.0, median)))} "
@@ -550,7 +567,7 @@ def main() -> int:
             f"{unexamined} of {summary['measured']} repositories were not examined "
             f"and are excluded from every figure above."
         )
-    return 0
+    return status
 
 
 if __name__ == "__main__":
