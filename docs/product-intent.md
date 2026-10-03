@@ -1,6 +1,6 @@
 # secure-code-agent — Product Intent
 
-> Status: **v0.12.10 — 2026-10-02.** The single source of truth for
+> Status: **v0.12.11 — 2026-10-03.** The single source of truth for
 > *why this exists, who it serves, and what it refuses to become.*
 > Companion docs: [`design.md`](design.md) for how it is built,
 > [`architecture.md`](architecture.md) for where the build diverges from the
@@ -326,7 +326,12 @@ wanted to be the one to close it.
    patches from several agents scored against the constraint list.
 
    **Scheduled 2026-10-02**, as feature-sized work rather than a backlog
-   line. It is the only success criterion in §4 with no evidence behind it, and
+   line. **Design fixed 2026-10-03** in
+   [`remediation-prompt-evaluation.md`](remediation-prompt-evaluation.md):
+   hypothesis, fixture requirements, the two arms, the scoring rubric (which
+   is `remediation.md`'s own ten constraints), blinding, and — written before
+   any run — the four ways the result would be worthless. Not yet run; the
+   method is fixed in advance so that it cannot be chosen to suit the answer. It is the only success criterion in §4 with no evidence behind it, and
    it is the central one. The deliverable is a fixture repository, a seeded
    finding set, and patches from several agents scored against the constraint
    list — a measurement, not an argument.

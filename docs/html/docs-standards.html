@@ -1,0 +1,291 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Standards anchors · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#nist-ssdf-sp-800-218">NIST SSDF — SP 800-218</a></li>
+<li><a href="#owasp-top-10-2021">OWASP Top 10 (2021)</a></li>
+<li><a href="#owasp-asvs-50">OWASP ASVS 5.0</a></li>
+<li><a href="#mitre-cwe-top-25-2025">MITRE CWE Top 25 (2025)</a></li>
+<li><a href="#openssf-scorecard">OpenSSF Scorecard</a></li>
+<li><a href="#sarif-210">SARIF 2.1.0</a></li>
+<li><a href="#mapping-table">Mapping table</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Security and standards</div><h1>Standards anchors</h1><blockquote>
+<p>Status: <strong>v0.12.11 — 2026-09-11.</strong> CWE / OWASP / ASVS / NIST SSDF mapping.</p>
+</blockquote>
+<p><code>secure-code-agent</code> does not invent a new taxonomy. Known rules map to fields
+from widely-cited public standards. Unmapped or control findings may have null
+fields; reports preserve the scanner rule rather than inventing a mapping.</p>
+<h2 id="nist-ssdf-sp-800-218">NIST SSDF — SP 800-218</h2>
+<p><a href="https://csrc.nist.gov/pubs/sp/800/218/final">Source</a>. The Secure Software Development Framework defines four practice groups:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Name</th>
+<th>What it covers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PO</strong></td>
+<td>Prepare the Organization</td>
+<td>Security policies, training, infrastructure prerequisites</td>
+</tr>
+<tr>
+<td><strong>PS</strong></td>
+<td>Protect the Software</td>
+<td>Source integrity, supply-chain verification, secret management</td>
+</tr>
+<tr>
+<td><strong>PW</strong></td>
+<td>Produce Well-Secured Software</td>
+<td>Threat modeling, secure design, secure code review, code analysis, defect fixing</td>
+</tr>
+<tr>
+<td><strong>RV</strong></td>
+<td>Respond to Vulnerabilities</td>
+<td>Vulnerability identification, fix, disclosure</td>
+</tr>
+</tbody>
+</table></div>
+<p>This tool primarily exercises <strong>PW</strong> (well-secured production) and <strong>RV</strong>
+(response). Mapped findings carry an SSDF practice id. The reviewed mappings
+live in <code>src/secure_code_audit/standards.py</code>.</p>
+<h2 id="owasp-top-10-2021">OWASP Top 10 (2021)</h2>
+<p><a href="https://owasp.org/Top10/2021/">Source</a>. Ten web-app risk buckets, refreshed every ~3 years. The agent tags every applicable finding with one or more bucket ids:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Id</th>
+<th>Bucket</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A01</td>
+<td>Broken Access Control</td>
+</tr>
+<tr>
+<td>A02</td>
+<td>Cryptographic Failures</td>
+</tr>
+<tr>
+<td>A03</td>
+<td>Injection</td>
+</tr>
+<tr>
+<td>A04</td>
+<td>Insecure Design</td>
+</tr>
+<tr>
+<td>A05</td>
+<td>Security Misconfiguration</td>
+</tr>
+<tr>
+<td>A06</td>
+<td>Vulnerable and Outdated Components</td>
+</tr>
+<tr>
+<td>A07</td>
+<td>Identification and Authentication Failures</td>
+</tr>
+<tr>
+<td>A08</td>
+<td>Software and Data Integrity Failures</td>
+</tr>
+<tr>
+<td>A09</td>
+<td>Security Logging and Monitoring Failures</td>
+</tr>
+<tr>
+<td>A10</td>
+<td>Server-Side Request Forgery (SSRF)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Mappings are versioned with the package and require an explicit reviewed update.</p>
+<h2 id="owasp-asvs-50">OWASP ASVS 5.0</h2>
+<p><a href="https://github.com/OWASP/ASVS">Source</a>. Application Security Verification Standard — verification-requirement granularity. Three levels:</p>
+<ul>
+<li><strong>L1</strong> — minimum, all apps</li>
+<li><strong>L2</strong> — apps handling sensitive data (the [private] baseline)</li>
+<li><strong>L3</strong> — apps requiring the highest trust</li>
+</ul>
+<p>Mapped findings carry the applicable ASVS section (for example <code>V5.3</code>). The
+current release does not implement an ASVS-level gate or severity adjustment;
+configuration that claims one is rejected rather than silently ignored.</p>
+<h2 id="mitre-cwe-top-25-2025">MITRE CWE Top 25 (2025)</h2>
+<p><a href="https://cwe.mitre.org/top25/">Source</a>. The canonical weakness id contributes to the stable finding fingerprint and standards mapping. The current scorer preserves separate scanner findings rather than collapsing cross-scanner evidence.</p>
+<p>The Top 25 list as of 2025-cycle (subject to MITRE's annual refresh):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Rank</th>
+<th>CWE</th>
+<th>Name</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>CWE-79</td>
+<td>Cross-site Scripting</td>
+</tr>
+<tr>
+<td>2</td>
+<td>CWE-787</td>
+<td>Out-of-bounds Write</td>
+</tr>
+<tr>
+<td>3</td>
+<td>CWE-89</td>
+<td>SQL Injection</td>
+</tr>
+<tr>
+<td>4</td>
+<td>CWE-352</td>
+<td>Cross-Site Request Forgery (CSRF)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>CWE-22</td>
+<td>Path Traversal</td>
+</tr>
+<tr>
+<td>6</td>
+<td>CWE-125</td>
+<td>Out-of-bounds Read</td>
+</tr>
+<tr>
+<td>7</td>
+<td>CWE-78</td>
+<td>OS Command Injection</td>
+</tr>
+<tr>
+<td>8</td>
+<td>CWE-416</td>
+<td>Use After Free</td>
+</tr>
+<tr>
+<td>9</td>
+<td>CWE-862</td>
+<td>Missing Authorization</td>
+</tr>
+<tr>
+<td>10</td>
+<td>CWE-434</td>
+<td>Unrestricted Upload of File with Dangerous Type</td>
+</tr>
+<tr>
+<td>11</td>
+<td>CWE-94</td>
+<td>Improper Control of Code Generation</td>
+</tr>
+<tr>
+<td>12</td>
+<td>CWE-20</td>
+<td>Improper Input Validation</td>
+</tr>
+<tr>
+<td>13</td>
+<td>CWE-77</td>
+<td>Command Injection</td>
+</tr>
+<tr>
+<td>14</td>
+<td>CWE-287</td>
+<td>Improper Authentication</td>
+</tr>
+<tr>
+<td>15</td>
+<td>CWE-269</td>
+<td>Improper Privilege Management</td>
+</tr>
+<tr>
+<td>16</td>
+<td>CWE-502</td>
+<td>Deserialization of Untrusted Data</td>
+</tr>
+<tr>
+<td>17</td>
+<td>CWE-200</td>
+<td>Exposure of Sensitive Information</td>
+</tr>
+<tr>
+<td>18</td>
+<td>CWE-863</td>
+<td>Incorrect Authorization</td>
+</tr>
+<tr>
+<td>19</td>
+<td>CWE-918</td>
+<td>Server-Side Request Forgery (SSRF)</td>
+</tr>
+<tr>
+<td>20</td>
+<td>CWE-119</td>
+<td>Improper Restriction within Memory Buffer</td>
+</tr>
+<tr>
+<td>21</td>
+<td>CWE-476</td>
+<td>NULL Pointer Dereference</td>
+</tr>
+<tr>
+<td>22</td>
+<td>CWE-798</td>
+<td>Use of Hard-coded Credentials</td>
+</tr>
+<tr>
+<td>23</td>
+<td>CWE-190</td>
+<td>Integer Overflow / Wraparound</td>
+</tr>
+<tr>
+<td>24</td>
+<td>CWE-400</td>
+<td>Uncontrolled Resource Consumption</td>
+</tr>
+<tr>
+<td>25</td>
+<td>CWE-306</td>
+<td>Missing Authentication for Critical Function</td>
+</tr>
+</tbody>
+</table></div>
+<p>Findings hitting a Top-25 CWE are weighted <strong>1.25×</strong> in the scoring model. Full CWE id space (1700+ ids) is supported — the Top 25 is a weighting hint, not a filter.</p>
+<h2 id="openssf-scorecard">OpenSSF Scorecard</h2>
+<p><a href="https://openssf.org/projects/scorecard/">Source</a>. Upstream repo-hygiene checks are scored 0-10:</p>
+<ul>
+<li><strong>Critical</strong>: <code>Code-Review</code>, <code>Token-Permissions</code>, <code>Branch-Protection</code>, <code>Signed-Releases</code>, <code>Pinned-Dependencies</code></li>
+<li><strong>High</strong>: <code>Maintained</code>, <code>License</code>, <code>Dangerous-Workflow</code>, <code>SAST</code>, <code>Vulnerabilities</code></li>
+<li><strong>Medium</strong>: <code>Binary-Artifacts</code>, <code>CII-Best-Practices</code>, <code>Fuzzing</code>, <code>Packaging</code>, <code>Webhooks</code></li>
+<li><strong>Low</strong>: <code>Contributors</code>, <code>CI-Tests</code>, <code>Security-Policy</code></li>
+</ul>
+<p>We import Scorecard's JSON output and map each check into the <code>supply_chain</code> and <code>policy_docs</code> categories. Scorecard runs in CI; this agent ingests its output rather than re-implementing.</p>
+<h2 id="sarif-210">SARIF 2.1.0</h2>
+<p><a href="https://www.oasis-open.org/standard/sarif-v2-1-0/">Source</a>. The Static Analysis Results Interchange Format — the lingua franca for scanner output. We:</p>
+<ul>
+<li><strong>Ingest</strong> SARIF from CodeQL, Semgrep, Snyk, and any tool that emits compliant SARIF (<code>--sarif-import path/to/file.sarif</code>).</li>
+<li><strong>Emit</strong> SARIF 2.1.0 for the merged + normalized findings so downstream tools (GitHub Code Scanning, IDE extensions, Sonar) can ingest the merged view.</li>
+</ul>
+<p>We emit SARIF 2.1.0-shaped JSON and unit-test required structure plus a local
+round trip. The current CI does not validate every artifact against the full
+OASIS JSON schema, so strict downstream compatibility remains a release check.</p>
+<hr />
+<h2 id="mapping-table">Mapping table</h2>
+<p>The mapping <code>rule_id → (CWE, OWASP Top 10, ASVS, SSDF, category, severity, confidence)</code> lives in <code>src/secure_code_audit/standards.py</code>. PRs adding new mappings need:</p>
+<ol>
+<li>A citation (URL to the scanner's docs page for the rule).</li>
+<li>The CWE id the rule targets when a defensible mapping exists; it becomes a stable fingerprint input.</li>
+<li>The ASVS section (mandatory if a section applies; null otherwise).</li>
+<li>The default category + severity (use the scanner's default unless overriding with justification).</li>
+</ol>
+<p>Mapping updates require source review and focused tests; no automatic refresh is claimed.</p>
+<footer>Rendered from <code>docs/standards.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

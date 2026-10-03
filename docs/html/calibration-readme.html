@@ -1,0 +1,198 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Calibration · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#the-three-files">The three files</a></li>
+<li><a href="#five-choices-that-move-the-result">Five choices that move the result</a></li>
+<li><a href="#unexamined-is-not-clean">Unexamined is not clean</a></li>
+<li><a href="#the-result">The result</a></li>
+<li><a href="#why-subtotals-are-recomputed-rather-than-read">Why subtotals are recomputed rather than read</a></li>
+<li><a href="#known-bias-in-the-corpus">Known bias in the corpus</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Reference</div><h1>Calibration</h1><p>The method <a href="docs-decisions.html">D5</a> owed. It carried <em>"Open — method
+needed"</em> from 2026-09-08 to 2026-09-11: the letter bands were borrowed from
+<code>maintainability-agent</code> without its calibration study, and the dampener was an
+invented normalizer with no corpus behind it.</p>
+<p><strong>D5 is now closed</strong>, by <a href="docs-decisions.html">D16</a> (the normalizer) and
+<a href="docs-decisions.html">D17</a> (the two-population corpus, the <code>secrets</code>
+exception, and what the bands can and cannot mean). This directory is how that
+was measured, and re-running it is how any future change to the scoring model
+is checked.</p>
+<pre><code>python calibration/calibrate.py                       # whole corpus
+python calibration/calibrate.py --only flask,gin      # one or two
+</code></pre>
+<p>Results land in <code>results.json</code>; the study itself is
+<a href="docs-calibration.html"><code>docs/calibration.md</code></a>.</p>
+<h2 id="the-three-files">The three files</h2>
+<p><strong><code>corpus.json</code></strong> — nineteen repositories pinned by commit, in <strong>two
+populations</strong>.</p>
+<p>Fourteen are <code>kind: maintained</code>: well-known, actively maintained projects,
+selected to span the languages the floor actually reads and roughly two orders
+of magnitude of size, because a corpus of similarly-sized repositories cannot
+tell us anything about a size normalizer.</p>
+<p>Five are <code>kind: vulnerable-by-design</code>: OWASP PyGoat, NodeGoat, railsgoat,
+WebGoat and Juice Shop. Without them the corpus had no bad end, so there was
+nothing to place D and F against and D5's band question could not be answered
+at all — which is exactly where it sat, open, from 2026-09-08 to 2026-09-11.
+They are cloned and read by the scanners and <strong>never executed</strong>. WebGoat is
+here to stay <em>unexamined</em>: no offline SAST in the floor reads Java (D12), and
+a deliberately-vulnerable Java application reporting a clean score is the
+sharpest demonstration of why coverage is reported beside the grade.</p>
+<p>The two are never pooled. <code>summarize()</code> reports each separately along with
+<strong>AUC</strong> — the probability a maintained repository outscores a vulnerable one —
+and <strong>separation</strong>, the worst maintained grade minus the best vulnerable one.
+Negative separation means the populations overlap and no band table can tell
+them apart.</p>
+<p><strong><code>calibration-config.json</code></strong> — one config for every repository. Without
+<code>--config</code> the audit loads the <em>audited project's</em> own <code>secure-code-agent.json</code>
+when it has one (release-blockers §7), and a corpus measured under two
+different <code>exclude_patterns</code> is not a distribution. It lives outside every
+audited tree, which is the operator artifact <a href="docs-decisions.html">D1</a>
+supports.</p>
+<p>It carries no explanatory keys, because the loader rejects keys it does not
+read (<a href="docs-decisions.html">D2</a>) — a rule this file's first draft violated and
+the tool correctly refused. Hence this README.</p>
+<p><strong><code>calibrate.py</code></strong> — audits each repository through the real CLI and
+recomputes per-category subtotals from the findings.</p>
+<h2 id="five-choices-that-move-the-result">Five choices that move the result</h2>
+<p>Stated here so they can be argued with, rather than discovered in the numbers.</p>
+<ol>
+<li><strong>Test directories are scanned, and scored on their own axis.</strong> They are
+   not excluded — the run still reports what is in them, and still gates on
+   categories the operator names there. They simply do not grade the code
+   condition, because a project graded on its test fixtures is graded on the
+   wrong thing. Documentation is handled the same way. This is what the
+   product does by default, so the corpus measures the product.</li>
+</ol>
+<p>Getting this wrong was the study's largest input error, twice: first by
+   including test trees at all (median <code>worst_normalized</code> 50.15 → 15.36), then
+   by anchoring finding paths so badly that the split silently did not apply
+   to gitleaks (median score 1.34 → 4.37).
+2. <strong><code>vendor/</code> and <code>target/</code> are excluded</strong> on top of the defaults. Both hold
+   third-party or generated code — Go vendoring, Maven output — and scoring a
+   project on its dependencies' source measures the wrong thing. This is the
+   only deviation from <code>DEFAULT_EXCLUDES</code>.
+3. <strong>No repository has a baseline or suppressions.</strong> This measures untriaged
+   first-run output, which is the worst case by construction. It is also why
+   four frameworks sit at F on true positives they would ordinarily accept —
+   see <a href="docs-calibration.html"><code>docs/calibration.md</code></a>.
+4. <strong>The distribution is computed over repositories a language scanner
+   actually read.</strong> The rest are measured, listed, and kept out — see
+   "Unexamined is not clean" below.
+5. <strong>Scorecard and gosec are not in the scanner set.</strong> Scorecard is
+   repository-cadence and needs a GitHub token; gosec needs each project's own
+   Go toolchain (<a href="docs-decisions.html">D12</a>). Including a tool that runs for
+   some repositories and not others would put the difference into the
+   distribution.</p>
+<h2 id="unexamined-is-not-clean">Unexamined is not clean</h2>
+<p><strong><code>njsscan</code> and <code>rubocop</code> must be installed for a valid run.</strong> Without them
+JavaScript and Ruby have no scanner that reads them, and the study cannot
+tell a clean repository from an unread one.</p>
+<pre><code>pip install njsscan
+gem install rubocop          # 1.28.2 is enough
+</code></pre>
+<p>The difference is not subtle. Before they were installed, Python
+repositories produced 712 to 5,107 real findings each while JavaScript, Ruby,
+Go and Java produced nought to four — three orders of magnitude, and none of
+it about those projects being cleaner. Installing the two moved <code>axios</code>
+5.00 → 4.38, <code>lodash</code> 4.59 → 4.48 and <code>sinatra</code> 3.10 → 2.79.</p>
+<p><strong>Go and Java cannot be fixed this way, and that is <a href="docs-decisions.html">D12</a>.</strong>
+gosec analyses Go by invoking the target's own build tooling and fails
+without the Go toolchain on the host; PMD covers none of the patterns and
+SpotBugs needs compiled bytecode. Four repositories — <code>gin</code>, <code>logrus</code>,
+<code>gson</code>, <code>commons-lang</code> — are therefore unreadable by this floor.</p>
+<p>They were still in the median, and they were holding it up. Their own median
+is <strong>5.00</strong>: four perfect scores for repositories nobody looked at.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>set</th>
+<th style="text-align: right;">n</th>
+<th>median</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>examined</td>
+<td style="text-align: right;">10</td>
+<td><strong>3.38</strong></td>
+</tr>
+<tr>
+<td>unexamined</td>
+<td style="text-align: right;">4</td>
+<td>5.00</td>
+</tr>
+<tr>
+<td>all fourteen</td>
+<td style="text-align: right;">14</td>
+<td>4.37</td>
+</tr>
+</tbody>
+</table></div>
+<p>The product refuses to grade what it did not examine (P7). A study that
+computes percentiles over repositories in the same position is doing the
+thing the product refuses to do, so <code>summarize()</code> reports the examined set
+separately and names the repositories it left out.</p>
+<p><em>(Those figures are from the 2026-09-10 run, kept because they are what
+motivated the change. The current run is below.)</em></p>
+<h2 id="the-result">The result</h2>
+<p>Measured on the nineteen-repository corpus at the pinned commits:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AUC (maintained scores above vulnerable)</td>
+<td style="text-align: right;"><strong>1.00</strong></td>
+</tr>
+<tr>
+<td>separation</td>
+<td style="text-align: right;"><strong>+1.26</strong></td>
+</tr>
+<tr>
+<td>maintained median</td>
+<td style="text-align: right;"><strong>3.41 (B)</strong></td>
+</tr>
+<tr>
+<td>vulnerable-by-design median</td>
+<td style="text-align: right;"><strong>0.00 (F)</strong></td>
+</tr>
+<tr>
+<td>Spearman(LOC, grade)</td>
+<td style="text-align: right;"><strong>−0.05</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>All four <em>examined</em> vulnerable-by-design applications grade F; the maintained
+half spans D to A+. Two band edges are measured — D/F at 1.00 falls inside the
+gap between the populations, and the centre lands in B. A−, B and C hold no
+observation at all, and D17 records why no larger corpus fixes that.</p>
+<h2 id="why-subtotals-are-recomputed-rather-than-read">Why subtotals are recomputed rather than read</h2>
+<p><code>category_grade</code> clamps at 0, so every repository worse than <code>normalized = 10</code>
+reports the same <code>0.0</code> — and the tail is exactly what decides whether the
+dampener works. The JSON report carries every finding, so the harness
+re-derives the unclamped value using the same formula the product uses.</p>
+<p>That means the harness holds a second copy of <code>finding_score</code>, over the JSON
+shape instead of the dataclass. <code>tests/unit/test_calibration_harness.py</code>
+enumerates every severity × confidence × category × top25 combination and
+asserts the two agree, because a study that quietly measures a model the
+product no longer uses is worse than no study: the bands chosen from it would
+acquire an authority they never earned.</p>
+<h2 id="known-bias-in-the-corpus">Known bias in the corpus</h2>
+<p>These are all well-maintained open-source projects with their own security
+processes. The distribution measured here is cleaner than the population this
+tool will be pointed at. A median calibrated to earn a B here means <em>"as clean
+as a well-run OSS project"</em>, not <em>"average code"</em>. That is a defensible target
+and it is a choice — D5's to record, not the harness's to assume.</p>
+<p><code>maintainability-agent</code> has the same limitation; naming it is the difference
+between a known bound and a surprise.</p>
+<footer>Rendered from <code>calibration/README.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

@@ -1,0 +1,189 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Claude Code — session rules · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#where-the-rules-live">Where the rules live</a></li>
+<li><a href="#engineering-workflow-applies-to-every-repo">Engineering workflow — applies to every repo</a></li>
+<li><a href="#cicd-and-why-some-repos-deliberately-do-less-of-it">CI/CD — and why some repos deliberately do less of it</a></li>
+<li><a href="#secure-code-agent">secure-code-agent</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Agent instructions</div><h1>Claude Code — session rules</h1><!-- WORKSPACE-PREAMBLE v6 — managed by [private]. Do not edit below
+     this line by hand; edit [private]/claude/repo-preamble.md and run
+     ./install.sh. Repo-specific rules go AFTER the end marker. -->
+
+<h2 id="where-the-rules-live">Where the rules live</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Core instructions, every project</td>
+<td><code>~/.claude/CLAUDE.md</code></td>
+</tr>
+<tr>
+<td>The standing rulebook</td>
+<td><code>~/repos/RULES.md</code> — read it before acting</td>
+</tr>
+<tr>
+<td>Source of both, and the hooks</td>
+<td><code>~/repos/[private]</code> (<code>./install.sh</code>)</td>
+</tr>
+<tr>
+<td>Reference implementation</td>
+<td><code>~/repos/maintainability-agent</code> — the most mature repo. Look there first for how a thing is done here.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The rulebook beats a compaction summary, a wrap-up, or an agent saying "we
+decided". <strong>When Marshall states a new rule, write it into
+<code>[private]/RULES.md</code> in the same turn</strong> — not the copy at
+<code>~/repos/RULES.md</code>, which <code>install.sh</code> overwrites.</p>
+<h2 id="engineering-workflow-applies-to-every-repo">Engineering workflow — applies to every repo</h2>
+<p><strong>Test-driven development.</strong> The failing test is written first, watched
+failing, and only then is the code written to pass it. Per behaviour. Not
+tests-eventually, not tests-alongside. A test written after the code describes
+the code, including its mistakes.</p>
+<p><strong>Coverage is reported with the work, not when asked.</strong> The house floor is
+<code>fail_under = 92</code> (see <code>maintainability-agent/pyproject.toml</code>). A repo below it
+says so out loud.</p>
+<p><strong>Falsifiers are a separate property and do not substitute for TDD.</strong> Watching
+a check fail afterwards proves the check bites; it says nothing about what was
+never tested at all.</p>
+<p><strong>Roles.</strong> Claude implements. Codex writes tests and edits docs. Grok audits,
+in personal repos only. Claude is not tests-only, and does not audit its own
+work and call it verified.</p>
+<p><strong>Local models.</strong> First-pass sub-agents on this machine, not a seat and not
+the hostile audit. Call <code>~/.ai-profiles/bin/ask-local</code> (absolute path) the
+same way you call <code>codex exec</code>. Name the model and the task in the stream
+before the call, and say what came back. Long calls in the background.
+Details: <code>~/repos/LOCAL-MODELS.md</code>.</p>
+<p><strong>A repo uses only the AI subscriptions its organisation pays for.</strong> The
+repo's <code>.ai-profile</code> marker names the organisation. [private]
+(<code>[private]</code>) pays for Claude and Codex and nothing else. So in an Agile
+Rising repo, Grok and Antigravity are never used, not for audits, prompts or
+images, and nothing from the repo is sent to them. There, audits go to Codex
+and to Claude sub-agents, on a different model from the one that did the work.
+The full rule and the model assignments are in <code>~/repos/RULES.md</code>.</p>
+<p><strong>Do not invent product intent.</strong> If the documents are silent, ask. In
+<code>maintainability-agent</code> it is <code>docs/product-intent.md</code>.</p>
+<p><strong>PR-first.</strong> Feature branch → <code>gh pr create</code> → CI on the PR → merge when
+green. <strong>Never <code>git push</code> without a fresh, per-push go.</strong> Owner is
+<code>marshallguillory86</code>, never outcomes360 — verify before push.</p>
+<p><strong>Never discard uncommitted work.</strong> <code>reset --hard</code>, <code>checkout --</code>, <code>restore</code>,
+<code>clean -fd</code> and <code>stash</code> all destroy it and none is undoable. Commit first. A
+<code>PreToolUse</code> hook enforces this; it exists because that family of command has
+destroyed finished work twice.</p>
+<p><strong>Verify, do not assert.</strong> A claim about the state of the world is checked
+against the world — the API, the file, the deployed page — and a check that
+cannot see what an earlier search found is a check shaped to pass.</p>
+<p><strong>Semantic versioning, for packages and for documents.</strong> <code>MAJOR.MINOR.PATCH</code>:
+major for a breaking change, minor for a feature or new content, patch for a
+fix. Before 1.0 a feature is a minor bump (0.9.1 → 0.10.0).</p>
+<ul>
+<li><strong>Packages bump at release scope.</strong> Not every fix, and never a long run of
+  merged work at a frozen number. When a set of merged work amounts to a
+  release, bump it and say which packages moved and why. If the repo does not
+  say what a release is, ask.</li>
+<li><strong>Every content change to a versioned document bumps its version in the same
+  commit</strong>, a link fix included: patch for fixes and wording, minor for new
+  content or decisions. A version in a file name must match the header, and the
+  rendered copy follows. Where a repo has a version lint or hook, it enforces
+  this; where it does not, you do.</li>
+</ul>
+<p><strong>Docs as code, with an HTML site per repo.</strong> Every repo renders all of its
+documents into one browsable HTML site, committed with them. The rendered copy
+is generated, never hand-edited, and changes in the same commit as its source.
+A repo without one is missing it.</p>
+<p><strong>Every repo runs MA (<code>maintainability-agent</code>) for code quality, first.</strong> Secure
+code is integrated into MA and also runs independently as <code>secure-code-agent</code>.
+Grok's audits are targeted and supplemental to an MA audit. An LLM audit (Grok
+or a sub-agent), including the full top-down after a class-close, runs only when
+he asks for it.</p>
+<p><strong>Local preview first, then the batched PR.</strong> While developing a feature, show
+him the real artifact before the pipeline, adapted to what the repo produces: a
+local server or <code>wrangler dev</code> URL for a web app; for a CLI, library or docs
+repo, before/after of the affected outputs (rendered HTML report or docs on
+localhost, markdown, changed JSON fields, CLI text). The onion, inside out: red
+tests → code → unit tests green → his preview → one batch (branch, gate run,
+PR, CI) → release → his final UAT in production. After a release, confirm the
+version and hand it to him as ready for UAT, not accepted. Each push still
+needs a fresh go.</p>
+<p><strong>Wrap up with: files / tests / still open.</strong></p>
+<h2 id="cicd-and-why-some-repos-deliberately-do-less-of-it">CI/CD — and why some repos deliberately do less of it</h2>
+<p><strong>GitHub Actions minutes are a real, metered cost he pays.</strong> Several repos were
+moved to local gates precisely because CI was burning them. So the shape of a
+repo's pipeline is a <em>decision</em>, not an oversight, and it is not to be
+"improved" without asking.</p>
+<p><strong>Read the repo before assuming the mode:</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>If the repo has</th>
+<th>It gates</th>
+<th>Do this</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.pre-commit-config.yaml</code> and/or a <code>Makefile</code> gate target</td>
+<td><strong>locally, on purpose</strong></td>
+<td>run the local gate before every commit; do NOT add workflows to duplicate it</td>
+</tr>
+<tr>
+<td><code>.github/workflows/*.yml</code> and no local gate</td>
+<td>in CI</td>
+<td>PR-first, let CI run, merge when green</td>
+</tr>
+<tr>
+<td>both</td>
+<td>locally first, CI as the backstop</td>
+<td>run local, keep CI narrow</td>
+</tr>
+<tr>
+<td>neither</td>
+<td>nothing yet</td>
+<td>ask before adding either</td>
+</tr>
+</tbody>
+</table></div>
+<p>Today <code>[private]</code> and <code>[private]</code> are the local-gate repos.
+<code>maintainability-agent</code>, <code>[private]</code>, <code>secure-code-agent</code> and
+<code>[private]</code> carry real CI.</p>
+<p><strong>Rules that follow:</strong></p>
+<ul>
+<li><strong>Never move a gate from local to CI to make it easier for yourself.</strong> That
+  spends his money to save your patience.</li>
+<li><strong>Never add a workflow that duplicates a local gate.</strong> One or the other runs
+  a given check.</li>
+<li><strong>Keep CI narrow and fast.</strong> A job that runs on every push and takes minutes
+  is a bill. Prefer one job that runs the same entry point the local gate runs,
+  so the two cannot disagree.</li>
+<li><strong>A required status check must actually run on pull requests.</strong> Requiring a
+  context that only runs on <code>push</code> deadlocks every merge — this has happened
+  here. Verify with <code>gh api repos/OWNER/REPO/branches/BRANCH/protection</code>; the
+  API is the truth, not a note.</li>
+<li><strong><code>gh pr merge --auto</code> merges immediately when nothing is required.</strong> Do not
+  treat <code>--auto</code> as "wait for checks" without confirming protection requires
+  them.</li>
+<li><strong>Batch changes through the pipeline while developing a feature.</strong> Not one
+  small change per push/PR/CI run: an appropriately sized batch, so Actions
+  time and pipeline wait are both optimized. Local gates and TDD still run on
+  every change; each push still needs a fresh go.</li>
+<li><strong>Deploys are separate from checks.</strong> A deploy workflow that only runs on the
+  default branch must never be a required check.</li>
+<li><strong>Run the checks CI runs, locally, before pushing.</strong> Finding out from a red
+  PR is the slow, expensive version of finding out.</li>
+</ul>
+<!-- END WORKSPACE-PREAMBLE — repo-specific rules follow -->
+
+<h2 id="secure-code-agent">secure-code-agent</h2>
+<footer>Rendered from <code>AGENTS.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

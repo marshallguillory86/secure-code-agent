@@ -1,0 +1,125 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Secure-Code Agent · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#purpose">Purpose</a></li>
+<li><a href="#core-workflow">Core Workflow</a></li>
+<li><a href="#hard-rules-non-negotiable">Hard rules — non-negotiable</a></li>
+<li><a href="#installing-or-running">Installing or running</a></li>
+<li><a href="#generating-per-agent-standards">Generating per-agent standards</a></li>
+<li><a href="#standards-anchors">Standards anchors</a></li>
+<li><a href="#false-positives">False positives</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Agent instructions</div><h1>Secure-Code Agent</h1><hr />
+<p>name: secure-code-agent
+description: Use when the agent needs to run or respond to secure-code-agent audits, generate bounded security remediation prompts, initialize per-agent security standards files, interpret findings against CWE/OWASP/ASVS/NIST-SSDF, or make small security fixes without crypto-roulette / auth rewrites / validation softening.</p>
+<hr />
+<h2 id="purpose">Purpose</h2>
+<p>Use the <code>secure-code-agent</code> CLI as the source of truth for deterministic
+security audits and bounded remediation prompts. The tool wraps best-in-class
+scanners (Bandit, Semgrep, pip-audit, npm audit, Gitleaks, built-in regex
+rules, SARIF ingest from CodeQL/Snyk/Trivy) and normalizes their output across
+CWE / OWASP Top 10 / OWASP ASVS / NIST SSDF.</p>
+<p><strong>The remediation prompt is the differentiator.</strong> It encodes hard constraints
+against the documented anti-patterns for AI security fixes: crypto roulette,
+auth-flow rewrites, validation softening, test deletion, lint disable, scope
+creep, dependency thrash, silent behavior change.</p>
+<h2 id="core-workflow">Core Workflow</h2>
+<ol>
+<li>Inspect the repo's existing instructions and config before running:
+   - <code>AGENTS.md</code>, <code>CLAUDE.md</code>, <code>.github/copilot-instructions.md</code>, or other
+     agent instruction files.
+   - <code>secure-code-agent.json</code> when present.
+   - <code>.scignore.yaml</code> (suppressions).</li>
+<li>Prefer the repo's configured command when it exists. Otherwise:</li>
+</ol>
+<pre><code class="language-bash">secure-code-agent \
+  --config secure-code-agent.json \
+  --fail-on-gate \
+  --output secure-code-report.md \
+  --json-output secure-code-report.json \
+  --sarif-output secure-code.sarif \
+  --prompt-output secure-code-remediation-prompt.md \
+  --comment-output secure-code-pr-comment.md
+</code></pre>
+<ol start="3">
+<li>
+<p>For branch or PR work, pass <code>--changed-only REF</code> (e.g. <code>origin/main</code>). It
+   scans the whole tree and scopes the <em>report</em> to what changed. It issues no
+   grade, deliberately — a scoped run has no denominator it can defend. Pair
+   it with <code>--fail-on-new</code> to gate on regressions.</p>
+</li>
+<li>
+<p>If the audit emits <code>secure-code-remediation-prompt.md</code>, <strong>read it before
+   editing</strong> and treat it as the bounded task.</p>
+</li>
+<li>Fix only the reported findings. Follow the hard constraints verbatim —
+   they're not suggestions.</li>
+<li>Re-run the audit and any native tests/lints required by the repo.</li>
+<li>Report the commands run, whether the gate passed, and any remaining false
+   positives or suppression candidates.</li>
+</ol>
+<h2 id="hard-rules-non-negotiable">Hard rules — non-negotiable</h2>
+<p>When fixing a security finding:</p>
+<ol>
+<li>Fix only the findings listed. Do not touch unrelated code.</li>
+<li>Do not change cryptographic algorithms, key derivation, IV/nonce handling,
+   padding modes, or random sources unless a finding explicitly names them.</li>
+<li>Do not change authentication flows, session handling, token lifetime,
+   cookie attributes, or authorization gates unless a finding explicitly
+   names them.</li>
+<li>Do not weaken input validation, output encoding, sanitization, bounds
+   checks, regex strictness, or rate limits to make existing tests pass.</li>
+<li>Do not disable, delete, or skip security tests. Do not remove
+   <code>@_limiter.limit</code>, <code>@require_auth</code>, <code>@require_csrf</code>, or similar decorators.</li>
+<li>Do not silence linter warnings via <code># nosec</code>, <code># noqa</code>, <code># type: ignore</code>,
+   <code>eslint-disable</code>, <code>sonar-disable</code>.</li>
+<li>Do not introduce new third-party dependencies. Prefer stdlib or
+   already-vendored libraries.</li>
+<li>Preserve behavior. Same inputs → same outputs unless a finding proves
+   current behavior is unsafe.</li>
+<li>Add a focused test that exercises the security boundary you fixed. The
+   test must FAIL on pre-fix code and PASS on post-fix.</li>
+<li>Keep the patch small. If you're rewriting a function rather than patching,
+    stop and report.</li>
+</ol>
+<h2 id="installing-or-running">Installing or running</h2>
+<p>If <code>secure-code-agent</code> is missing from <code>PATH</code>, check the project docs first:</p>
+<pre><code class="language-bash">python3 -m pip install secure-code-agent
+python3 -m pip install -e .
+python3 -m secure_code_audit.cli --config secure-code-agent.json
+</code></pre>
+<h2 id="generating-per-agent-standards">Generating per-agent standards</h2>
+<p>When asked to add AI-agent security standards, use the CLI rather than
+hand-writing each file:</p>
+<pre><code class="language-bash">secure-code-agent --init-agent-standards \
+  --target codex --target claude-code --target cursor \
+  --target copilot --target windsurf
+</code></pre>
+<p>Generated standards are additive to repository-specific rules. Repo rules
+win on conflict.</p>
+<h2 id="standards-anchors">Standards anchors</h2>
+<p>Every finding carries:
+- <strong>CWE id</strong> — the dedupe key (https://cwe.mitre.org/)
+- <strong>OWASP Top 10</strong> bucket (https://owasp.org/Top10/2021/)
+- <strong>OWASP ASVS section</strong> (https://github.com/OWASP/ASVS)
+- <strong>NIST SSDF practice</strong> (https://csrc.nist.gov/pubs/sp/800/218/final)</p>
+<p>Read the linked standard before editing — it is the authoritative description
+of the weakness, not the scanner's terse rule description.</p>
+<h2 id="false-positives">False positives</h2>
+<p>If a finding is a false positive, do NOT silently apply a fix. Add a
+suppression entry to <code>.scignore.yaml</code> with:</p>
+<ul>
+<li><code>rule_id</code> (or <code>*</code> scoped to <code>file</code>/<code>paths</code>)</li>
+<li><code>reason</code> (required, non-empty, what's actually safe about this match)</li>
+<li><code>expires</code> (required, ISO date, ≤ 365 days from today)</li>
+</ul>
+<p>The operator will review the suppression in PR.</p>
+<p>For interpretation guidance on categories + severity weighting, read
+<code>references/finding-taxonomy.md</code>.</p>
+<footer>Rendered from <code>skills/secure-code-agent/SKILL.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

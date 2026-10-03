@@ -1,0 +1,558 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Scanner integrations · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#the-declared-floor">The declared floor</a></li>
+<li><a href="#obtaining-scanners">Obtaining scanners</a><ul>
+<li><a href="#python-packaged-scanners">Python-packaged scanners</a></li>
+<li><a href="#standalone-binaries">Standalone binaries</a></li>
+</ul>
+</li>
+<li><a href="#tier-1-shipped-in-v01">Tier 1 — shipped in v0.1</a></li>
+<li><a href="#tier-2-shipped-in-v02">Tier 2 — shipped in v0.2</a><ul>
+<li><a href="#per-scanner-caveats-tier-2">Per-scanner caveats (Tier 2)</a></li>
+</ul>
+</li>
+<li><a href="#tier-3-documented-no-code-yet">Tier 3 — documented, no code yet</a></li>
+<li><a href="#scanner-protocol">Scanner protocol</a></li>
+<li><a href="#adding-a-new-scanner">Adding a new scanner</a></li>
+<li><a href="#per-scanner-caveats">Per-scanner caveats</a><ul>
+<li><a href="#bandit">Bandit</a></li>
+<li><a href="#njsscan">njsscan</a></li>
+<li><a href="#rubocop">RuboCop</a></li>
+<li><a href="#gosec">gosec</a></li>
+<li><a href="#semgrep">Semgrep</a></li>
+<li><a href="#gitleaks">Gitleaks</a></li>
+<li><a href="#trufflehog">TruffleHog</a></li>
+<li><a href="#npm-audit">npm audit</a></li>
+<li><a href="#pip-audit">pip-audit</a></li>
+<li><a href="#built-in-regex-rules">Built-in regex rules</a></li>
+</ul>
+</li>
+<li><a href="#sarif-import">SARIF import</a><ul>
+<li><a href="#imports-are-coverage">Imports are coverage</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Security and standards</div><h1>Scanner integrations</h1><blockquote>
+<p>Status: <strong>v0.12.11 — 2026-09-11.</strong> The scanner floor, its tiers and install routes.</p>
+</blockquote>
+<p>The agent is an orchestrator — it shells out to each scanner, parses canonical output, and maps to the unified <code>Finding</code> schema. We don't reimplement SAST.</p>
+<h2 id="the-declared-floor">The declared floor</h2>
+<p><code>src/secure_code_audit/scanners/floor.py</code> is the minimum set this project
+asserts, with the licence and rationale for every tool and the reason each
+excluded one is opt-in. <code>gates.require_scanners: ["floor"]</code> requires it without
+enumerating it.</p>
+<p><strong>Floor, commit cadence</strong> — evaluated on every run: <code>builtin_rules</code>, <code>bandit</code>,
+<code>semgrep</code>, <code>njsscan</code>, <code>rubocop</code>, <code>pip_audit</code>, <code>osv_scanner</code>, <code>gitleaks</code>,
+<code>checkov</code>, <code>trivy</code>.</p>
+<p><strong>Floor, repository cadence</strong> — <code>scorecard</code>. It answers questions about the
+project rather than the change, and takes over half an hour, so it runs in
+<a href="../../.github/workflows/supply-chain.yml"><code>supply-chain.yml</code></a> on a schedule and
+reaches an audit by SARIF import. Reports name it as deferred rather than
+omitting it.</p>
+<p><strong>Opt-in</strong> — <code>trufflehog</code> (duplicates gitleaks for detection; AGPL; live
+verification is the genuine gain), <code>hadolint</code> (overlaps checkov and trivy on
+Dockerfiles; GPL), <code>npm_audit</code> (osv_scanner covers the same advisories with
+fewer false positives and without needing Node), <code>gosec</code> (the Go SAST, but it
+loads packages through <code>go list</code>, so reading a target means invoking that
+target's own toolchain — the MA ADR-012 boundary; enable it where Go is
+present).</p>
+<p>Why njsscan and RuboCop are in the floor and gosec is not: every floor tool
+parses source directly and needs only itself to run. See
+<a href="docs-decisions.html#d12--the-coverage-check-run-for-the-other-four-languages">D12</a>
+for the measurements behind all three.</p>
+<p>A floor tool with nothing to scan is <code>not_applicable</code> with a reason, never a
+coverage gap: requiring a Terraform scanner of a pure-Python repository would
+make every such repository permanently incomplete.</p>
+<h2 id="obtaining-scanners">Obtaining scanners</h2>
+<p><strong>The agent never installs a scanner for you.</strong> A security gate that downloads
+and executes binaries to satisfy its own coverage requirement is a supply-chain
+liability, and it is the kind of thing this tool exists to flag. Acquisition
+stays with your package manager or a pinned CI action.</p>
+<p>Run <code>secure-code-agent --preflight</code> to see what resolves on the current host
+before spending a full audit on it. It reports each enabled scanner's resolved
+command and version, prints the install command for anything missing, and exits
+nonzero when a required scanner cannot be resolved.</p>
+<p>Resolution order per scanner is <code>scanners.&lt;name&gt;.command</code>, then <code>PATH</code>, then
+<code>python -m &lt;module&gt;</code> for the Python-packaged ones.</p>
+<h3 id="python-packaged-scanners">Python-packaged scanners</h3>
+<p>Installable as extras, so the version is pinned alongside the agent:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Extra</th>
+<th>Scanners</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>required-scanners</code></td>
+<td>Bandit, pip-audit, njsscan</td>
+<td><code>pip install 'secure-code-agent[required-scanners]'</code></td>
+</tr>
+<tr>
+<td><code>python-scanners</code></td>
+<td>the above plus Semgrep, Checkov</td>
+<td><code>pip install 'secure-code-agent[python-scanners]'</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><code>required-scanners</code> is pinned exactly because the default configuration lists
+those scanners in <code>gates.require_scanners</code>; a gate asserting "Bandit completed"
+should mean a known Bandit completed. It is also included in <code>dev</code>, so a fresh
+checkout can run its own audit.</p>
+<h3 id="standalone-binaries">Standalone binaries</h3>
+<p>These ship as Go/Haskell binaries and <strong>cannot come from PyPI</strong>. Install them
+locally, or — better in CI — run the upstream pinned action and hand us its
+SARIF (see <a href="#sarif-import">SARIF import</a>).</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Scanner</th>
+<th>Local install</th>
+<th>Pinned CI action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Trivy</strong></td>
+<td><code>brew install trivy</code></td>
+<td><code>aquasecurity/trivy-action</code></td>
+</tr>
+<tr>
+<td><strong>Gitleaks</strong></td>
+<td><code>brew install gitleaks</code></td>
+<td><code>gitleaks/gitleaks-action</code></td>
+</tr>
+<tr>
+<td><strong>OSV-Scanner</strong></td>
+<td><code>brew install osv-scanner</code></td>
+<td><code>google/osv-scanner-action</code></td>
+</tr>
+<tr>
+<td><strong>OpenSSF Scorecard</strong></td>
+<td><code>brew install scorecard</code></td>
+<td><code>ossf/scorecard-action</code></td>
+</tr>
+<tr>
+<td><strong>Hadolint</strong></td>
+<td><code>brew install hadolint</code></td>
+<td><code>hadolint/hadolint-action</code></td>
+</tr>
+<tr>
+<td><strong>TruffleHog</strong></td>
+<td><code>brew install trufflehog</code></td>
+<td><code>trufflesecurity/trufflehog</code></td>
+</tr>
+<tr>
+<td><strong>npm audit</strong></td>
+<td>install Node.js</td>
+<td>any Node setup action</td>
+</tr>
+<tr>
+<td><strong>RuboCop</strong></td>
+<td><code>gem install rubocop</code></td>
+<td>any Ruby setup action</td>
+</tr>
+<tr>
+<td><strong>gosec</strong></td>
+<td><code>go install github.com/securego/gosec/v2/cmd/gosec@latest</code></td>
+<td><code>securego/gosec</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Non-Homebrew hosts should take a pinned release archive from each project's
+GitHub releases rather than piping an installer script to a shell.</p>
+<h2 id="tier-1-shipped-in-v01">Tier 1 — shipped in v0.1</h2>
+<p>All Tier-1 scanners are wired and emit canonical findings.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Scanner</th>
+<th>Category</th>
+<th>Binary / Invocation</th>
+<th>Output</th>
+<th>Standards covered</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Bandit</strong></td>
+<td><code>code_vulnerabilities</code></td>
+<td><code>bandit -r &lt;path&gt; -f json -ll -ii</code></td>
+<td>JSON</td>
+<td>CWE per rule, OWASP A03/A07/A02</td>
+</tr>
+<tr>
+<td><strong>Semgrep</strong></td>
+<td><code>code_vulnerabilities</code></td>
+<td><code>semgrep --config=auto --sarif --output=...</code></td>
+<td>SARIF</td>
+<td>CWE per rule (multi-language), OWASP all</td>
+</tr>
+<tr>
+<td><strong>pip-audit</strong></td>
+<td><code>dependencies</code></td>
+<td>requirements, local project, lock, or configured environment mode</td>
+<td>JSON</td>
+<td>CWE-1104, OWASP A06</td>
+</tr>
+<tr>
+<td><strong>npm audit</strong></td>
+<td><code>dependencies</code></td>
+<td><code>npm audit --json</code></td>
+<td>JSON</td>
+<td>CWE-1104, OWASP A06</td>
+</tr>
+<tr>
+<td><strong>Gitleaks</strong></td>
+<td><code>secrets</code></td>
+<td><code>gitleaks dir &lt;t&gt;</code> <strong>and</strong> <code>gitleaks git &lt;t&gt;</code>, both <code>--redact</code></td>
+<td>JSON</td>
+<td>CWE-798, OWASP A07</td>
+</tr>
+<tr>
+<td><strong>TruffleHog</strong></td>
+<td><code>secrets</code></td>
+<td><code>trufflehog filesystem --json --no-update &lt;path&gt;</code></td>
+<td>JSON Lines</td>
+<td>CWE-798, OWASP A07</td>
+</tr>
+<tr>
+<td><strong>njsscan</strong></td>
+<td><code>code_vulnerabilities</code></td>
+<td><code>njsscan --json &lt;target&gt;</code></td>
+<td>JSON</td>
+<td>CWE-327/330/295/79/78 (JS/TS)</td>
+</tr>
+<tr>
+<td><strong>Built-in regex rules</strong></td>
+<td><code>multiple</code></td>
+<td>Internal — no subprocess</td>
+<td>(in-proc)</td>
+<td>CWE-798, CWE-89, CWE-78, CWE-22, CWE-918</td>
+</tr>
+<tr>
+<td><strong>SARIF import</strong></td>
+<td><code>multiple</code></td>
+<td><code>--sarif-import path/to/file.sarif</code></td>
+<td>SARIF</td>
+<td>Whatever the upstream emitted</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="tier-2-shipped-in-v02">Tier 2 — shipped in v0.2</h2>
+<p>All Tier-2 scanners are wired and emit canonical findings.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Scanner</th>
+<th>Category</th>
+<th>Binary / Invocation</th>
+<th>Output</th>
+<th>Standards covered</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Trivy</strong></td>
+<td><code>dependencies</code>, <code>config_iac</code>, <code>secrets</code></td>
+<td><code>trivy fs --format sarif --scanners vuln,secret,misconfig &lt;target&gt;</code></td>
+<td>SARIF</td>
+<td>CWE-1104 (vuln), CWE-1188 (misconfig), CWE-798 (secret)</td>
+</tr>
+<tr>
+<td><strong>Checkov</strong></td>
+<td><code>config_iac</code></td>
+<td><code>checkov -d &lt;target&gt; --output sarif --soft-fail</code></td>
+<td>SARIF</td>
+<td>CWE-1188, OWASP A05</td>
+</tr>
+<tr>
+<td><strong>Hadolint</strong></td>
+<td><code>config_iac</code></td>
+<td><code>hadolint --no-fail --format json &lt;Dockerfile&gt;</code></td>
+<td>JSON</td>
+<td>CWE-250 (USER root), CWE-78 (shell-form CMD)</td>
+</tr>
+<tr>
+<td><strong>OSV-Scanner</strong></td>
+<td><code>dependencies</code></td>
+<td><code>osv-scanner scan source --format=json --recursive &lt;target&gt;</code></td>
+<td>JSON</td>
+<td>CWE-1104, OWASP A06</td>
+</tr>
+<tr>
+<td><strong>TruffleHog</strong></td>
+<td><code>secrets</code></td>
+<td><code>trufflehog filesystem --json --only-verified &lt;target&gt;</code></td>
+<td>JSON Lines</td>
+<td>CWE-798, OWASP A07</td>
+</tr>
+<tr>
+<td><strong>OpenSSF Scorecard</strong></td>
+<td><code>supply_chain</code>, <code>policy_docs</code></td>
+<td><code>scorecard --repo=&lt;github-url&gt; --format=json --show-details</code></td>
+<td>JSON</td>
+<td>CWE-732, CWE-345, CWE-829, CWE-272 (per-check)</td>
+</tr>
+<tr>
+<td><strong>RuboCop</strong></td>
+<td><code>code_vulnerabilities</code></td>
+<td><code>rubocop --only Security --format json --force-default-config</code></td>
+<td>JSON</td>
+<td>CWE-95 (eval), CWE-502 (Marshal/YAML load)</td>
+</tr>
+<tr>
+<td><strong>gosec</strong></td>
+<td><code>code_vulnerabilities</code></td>
+<td><code>gosec -fmt=json -no-fail &lt;target&gt;/...</code></td>
+<td>JSON</td>
+<td>CWE per rule (G1xx–G5xx), OWASP A02/A03</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="per-scanner-caveats-tier-2">Per-scanner caveats (Tier 2)</h3>
+<p><strong>Trivy</strong> — routes findings into <code>dependencies</code> / <code>config_iac</code> / <code>secrets</code> by rule-id prefix (<code>CVE-</code>/<code>GHSA-</code> → deps, <code>AVD-</code> / contains <code>MISCONFIG</code> → IaC, contains <code>SECRET</code> / <code>AWS</code> / <code>PRIVATE-KEY</code> → secrets). Secret findings are bumped to CRITICAL.</p>
+<p><strong>Checkov</strong> — <code>--soft-fail</code> so the tool always exits 0; gate logic is our concern, not Checkov's. Writes <code>results_sarif.sarif</code> (or legacy <code>results.sarif</code>) into the output directory.</p>
+<p><strong>Hadolint</strong> — twelve security-relevant rule ids carry specific severities (<code>DL3002</code> USER root → HIGH; <code>DL3025</code> shell-form CMD → MEDIUM; <code>SC2086</code> unquoted variable → MEDIUM; etc.). Style-only rules (<code>DL3007</code> latest tag, <code>DL3008</code> unpinned apt) → LOW.</p>
+<p><strong>OSV-Scanner</strong> — overlaps <code>pip_audit</code> + <code>npm_audit</code> by design. Findings have stable baseline fingerprints, but the current scorer does not deduplicate across scanners; enabling overlapping SCA adapters can double-count an advisory.</p>
+<p><strong>TruffleHog</strong> — defaults to <code>--only-verified</code> (high-precision matches confirmed live by upstream services). Verified secrets are CRITICAL; if operators opt into unverified findings via <code>scanners.trufflehog.extra_args: ["--no-only-verified"]</code>, those land as HIGH.</p>
+<p><strong>OpenSSF Scorecard</strong> — special-cased. Operates against a remote GitHub URL inferred via <code>git remote get-url origin</code>. Needs <code>GH_TOKEN</code> (or equivalent) in the environment to query GitHub APIs. Score → severity mapping: <code>&lt;0 → INFORMATIONAL</code> (inconclusive), <code>&lt;3 → HIGH</code>, <code>&lt;7 → MEDIUM</code>, <code>&lt;10 → LOW</code>, <code>==10</code> → no finding emitted (passed cleanly).</p>
+<h2 id="tier-3-documented-no-code-yet">Tier 3 — documented, no code yet</h2>
+<p>Will be considered after v0.2 ships.</p>
+<ul>
+<li><strong>gosec</strong> — Go SAST. Add when first Go-heavy repo is dogfooded.</li>
+<li><strong>Brakeman</strong> — Rails SAST.</li>
+<li><strong>SpotBugs / FindSecBugs</strong> — JVM SAST.</li>
+<li><strong>Snyk</strong> — proprietary; out-of-the-box ingest of Snyk SARIF, but no <code>snyk</code> invocation (license + auth burden).</li>
+<li><strong>CodeQL</strong> — <em>ingest only</em> (CodeQL runs in GitHub-hosted analysis; we read the SARIF artifact).</li>
+<li><strong>detect-secrets</strong> — overlaps Gitleaks/TruffleHog; track if customer ask emerges.</li>
+<li><strong>Trivy SBOM</strong> + <strong>Syft / CycloneDX</strong> — SBOM generation is a separate workflow; pair this agent with a dedicated SBOM tool.</li>
+<li><strong>cosign verify</strong> — signature verification on releases; nice-to-have for <code>supply_chain</code> category.</li>
+</ul>
+<h2 id="scanner-protocol">Scanner protocol</h2>
+<pre><code class="language-python"># src/secure_code_audit/scanners/base.py
+
+from typing import Protocol
+from pathlib import Path
+from secure_code_audit.findings import Finding, Category
+
+class Scanner(Protocol):
+    name:     str         # canonical id used in config + reports
+    category: Category    # which audit bucket findings land in
+    binary:   str         # the command we exec (&quot;bandit&quot;, &quot;semgrep&quot;, ...)
+    version_flag: str     # how to ask the binary its version (&quot;--version&quot;)
+
+    def configure(self, target: Path, config: &quot;Config&quot;) -&gt; None:
+        &quot;&quot;&quot;Resolve an explicit command, PATH executable, or Python module.&quot;&quot;&quot;
+
+    def run(self, target: Path, config: &quot;Config&quot;) -&gt; list[Finding]:
+        &quot;&quot;&quot;Execute the scanner against target, parse output, return findings.
+        MUST NOT raise. Errors → return [finding(severity=INFO,
+        rule_id='scanner_error', message=&lt;reason&gt;)].&quot;&quot;&quot;
+
+    @property
+    def command(self) -&gt; tuple[str, ...]:
+        &quot;&quot;&quot;The resolved external command and any configured arguments.&quot;&quot;&quot;
+</code></pre>
+<h2 id="adding-a-new-scanner">Adding a new scanner</h2>
+<ol>
+<li>Subclass <code>scanners.base.Scanner</code> in <code>scanners/&lt;name&gt;_scanner.py</code>.</li>
+<li>Implement <code>run()</code> — invoke binary, parse output, yield <code>Finding</code> objects.</li>
+<li>Add rule-id → standards mappings in <code>src/secure_code_audit/standards.py</code>.</li>
+<li>Register in <code>scanners.registry.SCANNERS</code>.</li>
+<li>Add unit test fixtures in <code>tests/fixtures/&lt;name&gt;/</code> with at least:
+   - one HIGH finding
+   - one false-positive that should be suppressible
+   - one parse-failure to confirm graceful degradation</li>
+<li>Document the scanner's invocation + output format in this file.</li>
+</ol>
+<h2 id="per-scanner-caveats">Per-scanner caveats</h2>
+<h3 id="bandit">Bandit</h3>
+<ul>
+<li><code>--severity-level low --confidence-level low</code> and we filter ourselves (Bandit's own filtering is too coarse for our scoring model).</li>
+<li>Bandit's <code>B101 (assert_used)</code> is noisy in tests; the repository example excludes <code>tests/</code>. Consumers should make that choice explicitly in their own config.</li>
+</ul>
+<h3 id="njsscan">njsscan</h3>
+<ul>
+<li>A Python package that carries its own rules, so a JavaScript repository can be scanned on a host with no Node runtime and no registry access.</li>
+<li>Groups output by rule, not by finding: <code>nodejs</code> and <code>templates</code> each map a rule id to one object holding shared <code>metadata</code> and a <code>files</code> list of occurrences. The adapter flattens that to one finding per occurrence — otherwise the same defect in ten places reports as one.</li>
+<li>Reports no per-finding confidence, so every finding is recorded MEDIUM rather than inventing a signal the tool never sent.</li>
+<li><strong>What it does not cover.</strong> Its <code>eval</code>, <code>child_process.exec</code> and DOM-XSS rules are taint rules gated on an Express handler shape — <code>function ($REQ, $RES, ...)</code> with a <code>$REQ.$QUERY</code> source — and are silent in a CLI script, a library or a Lambda handler. Its TLS rule matches only <code>NODE_TLS_REJECT_UNAUTHORIZED</code>. That residue is what the offline profile's four JavaScript rules cover (D12).</li>
+</ul>
+<h3 id="rubocop">RuboCop</h3>
+<ul>
+<li>Invoked as <code>--only Security</code>. RuboCop is a style linter that ships a Security department; running it whole would bury three real findings under a thousand formatting opinions.</li>
+<li><code>--force-default-config</code> is deliberate and is D1: the audited tree's <code>.rubocop.yml</code> can disable cops and <code>require:</code> Ruby that RuboCop would then load and execute. A scanned repository does not get to choose what is found in it.</li>
+<li>Most Security cops report severity <code>convention</code>, a linter's mildest level. The adapter maps it to MEDIUM: leaving it INFORMATIONAL would put <code>eval</code> in the report and out of the gate.</li>
+<li>Brakeman is the tool people name first for Ruby and is not used here — it analyzes Rails applications and reports nothing on plain Ruby.</li>
+</ul>
+<h3 id="gosec">gosec</h3>
+<ul>
+<li><strong>It cannot read Go without Go.</strong> gosec loads packages through <code>go list</code>; on a host with no toolchain it exits 1 having emitted well-formed JSON with <code>"Issues": []</code>, <code>"Stats": {"files": 0}</code> and the real failure recorded only under <code>"Golang errors"</code>. An adapter that parsed <code>Issues</code> would report a clean scan of a repository gosec never opened.</li>
+<li>The adapter therefore treats package-load errors, and any run reporting zero files read, as a tool failure that fails required coverage. This is why gosec is opt-in rather than floor: analyzing a target means invoking that target's own build tooling, the boundary MA's ADR-012 draws for SpotBugs.</li>
+<li><code>-no-fail</code> is passed so that findings alone do not read as a crash; real failures are detected from the payload, not the exit status.</li>
+</ul>
+<h3 id="semgrep">Semgrep</h3>
+<ul>
+<li><code>scanners.semgrep.online: true</code> (the default) uses <code>--config=auto</code>, the curated Registry pack. <strong>This reaches the network.</strong></li>
+<li><code>scanners.semgrep.online: false</code> uses the ruleset shipped in the wheel at <code>secure_code_audit/data/semgrep-offline.yaml</code>. No registry fetch, no rule server.</li>
+<li>The offline set is the profile <code>sca-offline</code>, cited in reports by id, version and digest — <code>sca-offline@1.0.0 (cff6cb1e…)</code> — so a finding names the rules that produced it and can be re-checked against the same baseline (D10).</li>
+<li>It carries <strong>20 rules across 5 languages</strong> — JavaScript/TypeScript, Go, Ruby, Java, and the two Python patterns Bandit measurably misses. It deliberately does <em>not</em> cover Python broadly: Bandit is in the floor and is already offline, so duplicating it would be a parallel ruleset maintained for nothing (D11). Every rule declares a CWE, an OWASP bucket, a confidence and a version, and every rule is paired-tested: a fixture it must flag and a fixture it must not. CI runs both halves in a dedicated job.</li>
+<li><strong>It refuses framework-specific rules by design</strong> (D9). Framework rules rot with every framework release; framework breadth is what the online registry path is for. A rule naming a framework fails the build.</li>
+<li><strong>The offline set is deliberately narrower than the Registry packs — it is not equivalent, and you should not read a clean offline run as equivalent to a clean <code>auto</code> run.</strong> It is ten high-precision rules covering command injection, unsafe deserialization, weak hashes, disabled TLS verification, debug mode, <code>eval</code>, and DOM XSS, across Python and JavaScript/TypeScript. Every rule carries a CWE, and each is regression-tested to actually match its target pattern.</li>
+<li>If the packaged ruleset is missing from an installation, offline Semgrep fails with a <code>tool_error</code> rather than falling back to anything that would reach the network.</li>
+<li>We pass <code>--no-rewrite-rule-ids</code>. Semgrep otherwise prefixes rule ids with the config file's path, which would vary by install location and destabilize baseline fingerprints.</li>
+<li>Semgrep timeouts on huge repos — we default to a 600s wall clock per run and fail soft (informational finding) on timeout.</li>
+</ul>
+<h3 id="gitleaks">Gitleaks</h3>
+<ul>
+<li>Default config is <code>gitleaks.toml</code> — we ship a curated one in <code>secure_code_audit/data/gitleaks.toml</code>.</li>
+<li><strong>Two passes, every run: <code>gitleaks dir</code> and <code>gitleaks git</code>.</strong> <code>detect</code> (now
+  deprecated) scans commits only, so a plaintext key in the working tree that
+  had not been committed yet reported <em>no leaks found</em> — a clean bill of
+  health for a repository with a key sitting in it. Scanning only the
+  directory instead would drop the case a secret scanner exists for: a
+  credential committed, later deleted, still in the object store and still
+  needing rotation. The two overlap on anything committed and unchanged, and
+  <code>merge_corroborating</code> collapses that to one finding.</li>
+<li>A target with no <code>.git</code> gets the directory pass alone, and the coverage
+  block says so in its <code>scope</code> rather than implying history was examined.</li>
+<li>We render the <strong>redacted</strong> match in the report, not the raw secret. The fingerprint is derived from the redacted evidence and location; the adapter never receives the raw secret from Gitleaks JSON.</li>
+</ul>
+<h3 id="trufflehog">TruffleHog</h3>
+<ul>
+<li>High-noise; we filter to <code>verified: true</code> matches by default (real, currently-valid secrets).</li>
+<li>Set <code>--only-verified</code> in scanner config; expose <code>--include-unverified</code> for noisy adoption mode.</li>
+</ul>
+<h3 id="npm-audit">npm audit</h3>
+<ul>
+<li>npm's "fix" suggestions are often major-version downgrades. We ingest findings only — we never auto-apply <code>npm audit fix</code>.</li>
+<li>Three severity levels in npm output (<code>info / low / moderate / high / critical</code>) — we map <code>moderate → medium</code>.</li>
+</ul>
+<h3 id="pip-audit">pip-audit</h3>
+<ul>
+<li><code>auto</code> discovers <code>requirements*.txt</code> and <code>pyproject.toml</code> recursively while honoring configured exclusions. A requirements file wins over a <code>pyproject.toml</code> in the same directory to avoid duplicate resolution.</li>
+<li><code>requirements</code> invokes <code>pip-audit -r &lt;file&gt;</code>; <code>project</code> invokes <code>pip-audit &lt;project&gt;</code>; <code>locked</code> invokes <code>pip-audit --locked &lt;project&gt;</code>; <code>environment</code> audits the environment belonging to the configured command.</li>
+<li>Use <code>inputs</code> for explicit manifests and <code>command</code> to bind the audit to a specific interpreter or tool environment.</li>
+<li>Dependency resolution can access package indexes and should only be run against trusted project metadata. Suppressions are applied to normalized findings after scanner execution; they are not forwarded as pip-audit arguments.</li>
+</ul>
+<h3 id="built-in-regex-rules">Built-in regex rules</h3>
+<p>Located in <code>src/secure_code_audit/scanners/builtin_rules.py</code>. Each rule:
+- Targets a single CWE.
+- Has a confidence rating documented inline.
+- Is unit-tested with at least one true-positive and one false-positive fixture.</p>
+<p>The built-in set is <strong>opinionated and small</strong> — high-confidence, low-false-positive rules that catch what the big scanners miss. We are not building a parallel Semgrep. Current rules:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Rule id</th>
+<th>CWE</th>
+<th>What it catches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sca.python.eval</code></td>
+<td>CWE-95</td>
+<td><code>eval()</code>, <code>exec()</code>, <code>compile()</code> on non-literal input</td>
+</tr>
+<tr>
+<td><code>sca.python.pickle</code></td>
+<td>CWE-502</td>
+<td><code>pickle.load</code> / <code>pickle.loads</code> on non-literal input</td>
+</tr>
+<tr>
+<td><code>sca.python.yaml.unsafe_load</code></td>
+<td>CWE-502</td>
+<td><code>yaml.load(...)</code> without <code>Loader=SafeLoader</code></td>
+</tr>
+<tr>
+<td><code>sca.python.requests.verify_false</code></td>
+<td>CWE-295</td>
+<td><code>requests.*(... verify=False ...)</code></td>
+</tr>
+<tr>
+<td><code>sca.python.subprocess.shell_true</code></td>
+<td>CWE-78</td>
+<td><code>subprocess.*(shell=True)</code> with non-literal command</td>
+</tr>
+<tr>
+<td><code>sca.python.fstring_sql</code></td>
+<td>CWE-89</td>
+<td><code>f"...SELECT ... {var}..."</code> patterns in <code>.execute()</code>/<code>.executemany()</code></td>
+</tr>
+<tr>
+<td><code>sca.python.hashlib.md5_sha1_security</code></td>
+<td>CWE-327</td>
+<td><code>hashlib.md5()</code>/<code>sha1()</code> in a non-test, non-checksum path</td>
+</tr>
+<tr>
+<td><code>sca.web.dangerously_set_inner_html</code></td>
+<td>CWE-79</td>
+<td>React <code>dangerouslySetInnerHTML={{__html: nonliteral}}</code></td>
+</tr>
+<tr>
+<td><code>sca.web.cors_wildcard</code></td>
+<td>CWE-942</td>
+<td><code>Access-Control-Allow-Origin: *</code> with credentials enabled</td>
+</tr>
+<tr>
+<td><code>sca.shell.curl_pipe_sh</code></td>
+<td>CWE-78</td>
+<td><code>curl ... \| sh</code> / <code>wget ... \| bash</code> patterns in Dockerfiles + scripts</td>
+</tr>
+</tbody>
+</table></div>
+<p>Suppression by file/path/rule via <code>.scignore.yaml</code> per <a href="docs-design.html">design.md §10</a>.</p>
+<h2 id="sarif-import">SARIF import</h2>
+<p><code>--sarif-import path/to/file.sarif</code> ingests external scanner output. The parser
+targets common output from:</p>
+<ul>
+<li><strong>CodeQL</strong> (GitHub's hosted analysis)</li>
+<li><strong>Semgrep Cloud</strong> (<code>semgrep ci --sarif</code>)</li>
+<li><strong>Snyk</strong> (<code>snyk test --sarif-file-output=...</code>)</li>
+<li><strong>Trivy</strong> (<code>trivy fs --format=sarif</code>)</li>
+<li><strong>Checkov</strong> (<code>checkov -d . --output sarif</code>)</li>
+</ul>
+<p>Multiple SARIF imports merge by <code>fingerprint</code>. Standards mappings for imported findings come from the SARIF <code>rules</code> array if present, otherwise from our local <code>rule_map.json</code>.</p>
+<h3 id="imports-are-coverage">Imports are coverage</h3>
+<p>A scanner someone else ran on our behalf covers the same ground as one we
+invoke, so an import produces a scanner execution and <strong>can satisfy
+<code>gates.require_scanners</code></strong>. This is the supported way to gate on a scanner the
+audit host cannot install:</p>
+<pre><code class="language-yaml">- uses: aquasecurity/trivy-action@&lt;pinned-sha&gt;
+  with: { format: sarif, output: trivy.sarif }
+- run: secure-code-agent --fail-on-gate --sarif-import trivy.sarif
+</code></pre>
+<p>with <code>"require_scanners": ["trivy"]</code> in the config. Rules:</p>
+<ul>
+<li>The execution is named from the SARIF <code>tool.driver.name</code>, lowercased with
+  spaces and hyphens folded to underscores — <code>OSV-Scanner</code> becomes
+  <code>osv_scanner</code>. When a driver names itself something else entirely, say so
+  explicitly: <code>--sarif-import trivy=vendor-output.sarif</code>.</li>
+<li><strong>An import is <code>unverified</code>, never <code>completed</code>.</strong> We did not watch the
+  process, so we cannot assert it succeeded — only that you vouched for the
+  file. Even <code>executionSuccessful: true</code> is the artifact describing itself.
+  Unverified coverage satisfies <code>require_scanners</code> (naming the import is your
+  assertion, the same kind we trust from <code>scanners.&lt;name&gt;.command</code>), but every
+  report says so: <code>coverage: COMPLETE (1 unverified: trivy)</code>, <code>coverage.unverified</code>
+  in JSON, <code>unverifiedScanners</code> in the emitted SARIF. If we also ran the scanner
+  ourselves, our observation wins over the import.</li>
+<li>Naming an import on the command line asserts it contributes coverage, so an
+  unreadable, malformed, structurally invalid, or run-less SARIF <strong>fails the
+  gate</strong> rather than ingesting zero findings quietly.</li>
+<li>An import whose own <code>invocations[].executionSuccessful</code> is <code>false</code> is
+  recorded as a failed execution. We do not launder another tool's failure.</li>
+<li>If the same scanner reports twice — once locally, once by import — the worse
+  outcome wins, so a clean import cannot mask a failed local run.</li>
+</ul>
+<footer>Rendered from <code>docs/scanners.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

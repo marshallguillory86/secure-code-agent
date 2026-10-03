@@ -1,0 +1,136 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Mermaid AI Skills · secure-code-agent</title>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
+<div class="layout"><aside><p class="label">On this page</p><div class="toc">
+<ul>
+<li><a href="#applyto">applyTo: "**"</a></li>
+<li><a href="#workflow">Workflow</a></li>
+<li><a href="#lm-tools-call-these-for-every-diagram-interaction">LM Tools — call these for every diagram interaction</a></li>
+<li><a href="#vs-code-commands">VS Code Commands</a><ul>
+<li><a href="#diagram-editing-preview">Diagram editing &amp; preview</a></li>
+<li><a href="#generate-diagrams-github-copilot-required">Generate diagrams (GitHub Copilot required)</a></li>
+<li><a href="#mermaid-cloud">Mermaid cloud</a></li>
+<li><a href="#review-mermaid-sync">Review Mermaid Sync</a></li>
+<li><a href="#install-update-this-pack">Install / update this pack</a></li>
+</ul>
+</li>
+<li><a href="#mermaid-chart-slash-commands">@mermaid-chart slash commands</a></li>
+<li><a href="#rules">Rules</a></li>
+<li><a href="#docs">Docs</a></li>
+</ul>
+</div>
+</aside>
+<main><div class="meta">Agent instructions</div><h1>Mermaid AI Skills</h1><hr />
+<h2 id="applyto">applyTo: "**"</h2>
+<p>When the user asks to create, edit, or visualize any diagram, use the Mermaid
+VS Code extension tools and commands described below.</p>
+<h2 id="workflow">Workflow</h2>
+<ol>
+<li>Determine the diagram type and generate Mermaid syntax.</li>
+<li>Write the diagram to a <code>.mmd</code> file in the project.</li>
+<li>Validate syntax: correct first-line keyword, arrow types, balanced brackets.</li>
+<li>Preview via the Mermaid extension — open the <code>.mmd</code> file (auto-preview) or run
+   <strong>Mermaid: Preview Diagram</strong> (<code>mermaidChart.preview</code>).</li>
+</ol>
+<h2 id="lm-tools-call-these-for-every-diagram-interaction">LM Tools — call these for every diagram interaction</h2>
+<ul>
+<li><code>mermaid-diagram-validator</code> — validate Mermaid syntax before presenting any diagram</li>
+<li><code>mermaid-diagram-preview</code> — render a live preview inside VS Code after generating</li>
+<li><code>get-syntax-docs-mermaid</code> — fetch correct syntax docs for any diagram type</li>
+</ul>
+<h2 id="vs-code-commands">VS Code Commands</h2>
+<p>Invoke via Command Palette or the VS Code command API (GitHub Copilot in VS Code only).
+Do not invent command IDs. Prefer writing/editing <code>.mmd</code> files when a command is not needed.</p>
+<h3 id="diagram-editing-preview">Diagram editing &amp; preview</h3>
+<ul>
+<li><strong>Preview</strong> (<code>mermaidChart.preview</code>) — preview the active Mermaid editor (<code>.mmd</code> / <code>.mermaid</code> must be open).</li>
+<li><strong>Create Diagram</strong> (<code>mermaidChart.createMermaidFile</code>) — creates a demo flowchart and opens preview side by side.</li>
+<li><strong>Repair Diagram</strong> (<code>mermaidChart.repairDiagram</code>) — Mermaid AI repair for the active diagram; uses Mermaid AI credits — tell the user before running.</li>
+<li><strong>Improve Diagram</strong> (<code>mermaidChart.improveDiagram</code>) — uses Copilot / LM API; suggests layout + styling variants for the active diagram.</li>
+</ul>
+<h3 id="generate-diagrams-github-copilot-required">Generate diagrams (GitHub Copilot required)</h3>
+<ul>
+<li><strong>Generate Diagram from Code</strong> (<code>mermaidChart.generateDiagramFromCode</code>)</li>
+<li><strong>Generate Cloud Diagram</strong> (<code>mermaidChart.generateCloudDiagram</code>)</li>
+<li><strong>Generate ER Diagram</strong> (<code>mermaidChart.generateERDiagram</code>)</li>
+<li><strong>Generate Docker Diagram</strong> (<code>mermaidChart.generateDockerDiagram</code>)</li>
+<li><strong>Open AI Chat</strong> (<code>mermaidChart.openCopilotChat</code>)</li>
+</ul>
+<h3 id="mermaid-cloud">Mermaid cloud</h3>
+<ul>
+<li><strong>Login</strong> (<code>mermaidChart.login</code>) / <strong>Logout</strong> (<code>mermaidChart.logout</code>)</li>
+<li><strong>Connect Diagram</strong> (<code>mermaidChart.connectDiagramToMermaidChart</code>) — link a local diagram to Mermaid.</li>
+<li><strong>Sync Diagram</strong> (<code>mermaidChart.syncDiagramWithMermaid</code>) — only for diagrams already connected (frontmatter has <code>id:</code>). Example:
+  ```yaml</li>
+</ul>
+<hr />
+<p>id: cbd9e9ba-a2cb-47c5-a98e-8c28a753428d</p>
+<hr />
+<p>```</p>
+<h3 id="review-mermaid-sync">Review Mermaid Sync</h3>
+<p>For diagrams updated by the Mermaid GitHub Sync app (or pre-commit regenerate):
+- <strong>Review Mermaid Sync</strong> (<code>mermaidChart.reviewAppCommits</code>) — start / open the review flow.
+- <strong>Regenerate with Mermaid AI</strong> (<code>mermaidChart.regenerateDiagramWithMermaidAI</code>) — regenerate from source references.
+Do not manually rewrite diagrams managed by this workflow. Accept/reject/diff UI actions stay in the extension UI.</p>
+<h3 id="install-update-this-pack">Install / update this pack</h3>
+<ul>
+<li><strong>Mermaid: Install AI Skills…</strong> (<code>mermaidChart.installAiSkills</code>)</li>
+</ul>
+<h2 id="mermaid-chart-slash-commands">@mermaid-chart slash commands</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/generate_diagram_from_code</code></td>
+<td>General diagram from any source file</td>
+</tr>
+<tr>
+<td><code>/generate_execution_sequence</code></td>
+<td>Sequence diagram from code flow</td>
+</tr>
+<tr>
+<td><code>/generate_er_diagram</code></td>
+<td>ER diagram from schema / models</td>
+</tr>
+<tr>
+<td><code>/generate_cloud_architecture_diagram</code></td>
+<td>Cloud / CI-CD architecture</td>
+</tr>
+<tr>
+<td><code>/generate_docker_diagram</code></td>
+<td>Architecture from Dockerfiles</td>
+</tr>
+<tr>
+<td><code>/generate_c4_topdown_architecture</code></td>
+<td>C4 top-down architecture</td>
+</tr>
+<tr>
+<td><code>/analyze_code_ownership</code></td>
+<td>Code ownership diagram</td>
+</tr>
+<tr>
+<td><code>/generate_dependency_diagram</code></td>
+<td>Dependency / security visualisation</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="rules">Rules</h2>
+<ol>
+<li>Always call <code>mermaid-diagram-validator</code> before showing any diagram.</li>
+<li>Always call <code>mermaid-diagram-preview</code> after generating a diagram.</li>
+<li>Use <code>get-syntax-docs-mermaid</code> before generating an unfamiliar diagram type.</li>
+<li>Prefer <code>@mermaid-chart</code> slash commands for complex generation.</li>
+<li>Write diagrams to <code>.mmd</code> files; never return unvalidated Mermaid syntax.</li>
+<li>Warn the user before Repair (Mermaid AI credits).</li>
+<li>Cooperate with the Sync workflow — do not manually regenerate managed diagrams.</li>
+</ol>
+<h2 id="docs">Docs</h2>
+<p>More commands and features: https://marketplace.visualstudio.com/items?itemName=MermaidChart.vscode-mermaid-chart</p>
+<footer>Rendered from <code>.github/instructions/mermaid.instructions.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
+</main></div></body></html>

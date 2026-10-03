@@ -243,6 +243,40 @@ def _git() -> str | None:
     return shutil.which("git")
 
 
+def tracked_files(root: Path, *patterns: str) -> list[str]:
+    """Repository-relative paths git tracks, matching any of `patterns`.
+
+    One audited place for git invocation. `tools/render_docs.py` needs the
+    set of tracked documents, and a docs tool calling `subprocess` itself is
+    a second place this project shells out — the self-audit flagged its first
+    cut three ways (B404, B603, and B607 for naming `git` by a partial path).
+    Here the subprocess sits in the module already reviewed for it, behind
+    `_git()`'s absolute path.
+
+    Empty outside a repository, or when git fails: a tarball of the sources
+    is not a checkout, and raising there would be a worse failure than
+    rendering no pages.
+    """
+    import subprocess  # noqa: PLC0415 — only needed on this path
+
+    git = _git()
+    if git is None:
+        return []
+    try:
+        completed = subprocess.run(
+            [git, "-C", str(root), "ls-files", *patterns],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if completed.returncode != 0:
+        return []
+    return [line for line in completed.stdout.split("\n") if line.strip()]
+
+
 def head_commit(root: Path) -> str | None:
     """The commit an audit was taken at, or None outside a git repository.
 
