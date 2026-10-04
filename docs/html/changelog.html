@@ -8,6 +8,7 @@
 <li><a href="#01212-2026-10-04">0.12.12 — 2026-10-04</a><ul>
 <li><a href="#security-nothing-scanned-is-ungraded-not-perfect-d33">Security — nothing scanned is ungraded, not perfect (D33)</a></li>
 <li><a href="#security-the-denominator-is-a-grading-key-too-d32-amended">Security — the denominator is a grading key too (D32, amended)</a></li>
+<li><a href="#fixed-exclude_patterns-did-not-stop-the-scan-d34">Fixed — exclude_patterns did not stop the scan (D34)</a></li>
 <li><a href="#fixed-a-required-scanner-failed-for-months-and-would-not-say-why">Fixed — a required scanner failed for months and would not say why</a></li>
 <li><a href="#fixed">Fixed</a></li>
 <li><a href="#internal">Internal</a></li>
@@ -275,6 +276,64 @@ schema may evolve.</p>
   <code>scanners.&lt;name&gt;.enabled: false</code> from inside the tree yields <code>overall: null</code>
   (ungraded, not perfect), and <code>paths.include_extensions</code> narrowed to a
   non-source suffix leaves the grade honest.</li>
+</ul>
+<h3 id="fixed-exclude_patterns-did-not-stop-the-scan-d34">Fixed — <code>exclude_patterns</code> did not stop the scan (D34)</h3>
+<ul>
+<li>This register has always said <code>exclude_patterns</code> <em>"stops the scan and
+  leaves no trace in the report"</em>. Only the second half was implemented:
+  patterns filtered findings and LOC <em>after</em> the scanners ran, and most
+  adapters were handed the bare target root.</li>
+<li><code>calibration/.corpus/</code> holds <strong>342 MB</strong> of cloned third-party repositories
+  — webgoat, gson, commons-lang, ten <code>pom.xml</code> files between them. It is
+  gitignored, untracked, and the first entry in <code>paths.exclude_patterns</code>.
+  Trivy was still given the root, walked into it, and resolved those Java
+  projects' dependencies against Maven Central until it was rate-limited with
+  a 429. <strong>That is the root cause of the required-scanner failure below</strong>, of
+  sixty consecutive <code>coverage_complete: false</code> rows, of 26 unreported
+  dependency findings in <code>uv.lock</code>, and of a forty-five-minute local suite.</li>
+</ul>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>trivy invocation</th>
+<th>result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the repository root, as the adapter gave it</td>
+<td>fails after minutes of backoff</td>
+</tr>
+<tr>
+<td><code>--skip-dirs calibration/.corpus</code></td>
+<td><strong>exit 0 in 51s</strong></td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>Through the product after the fix: the <strong>first <code>coverage: COMPLETE</code> and
+  <code>gate PASS</code> self-audit in this repository's history</strong>, in 48 seconds, on
+  the sixty-sixth scored run.</li>
+<li>Exclusions are now passed per tool, each flag verified against its own
+  <code>--help</code>: trivy <code>--skip-dirs</code>, semgrep <code>--exclude</code>, checkov <code>--skip-path</code>.
+  Bandit already passed <code>--exclude</code>; <code>builtin_rules</code>, <code>hadolint</code>,
+  <code>npm_audit</code> and <code>pip_audit</code> already filter the inputs they discover.</li>
+<li>Checkov's <code>--skip-path</code> takes a <strong>regex</strong>, so every literal is escaped —
+  <code>calibration/.corpus</code> handed over unescaped would also skip
+  <code>calibration/Xcorpus</code>, because a regex <code>.</code> matches any character.</li>
+<li><strong>Declared, not inferred.</strong> Every adapter now sets <code>honours_exclusions</code>,
+  or sets it False with an <code>exclusion_note</code> giving the reason, and a lint
+  requires one or the other — a new adapter inherits False and an empty note,
+  so it fails until somebody decides. Declined with reasons recorded:
+  <code>gitleaks</code> and <code>rubocop</code> (config-file only), <code>njsscan</code> (no such flag),
+  <code>osv-scanner</code> (experimental flag only), <code>scorecard</code> (scores a remote repo,
+  no local tree), <code>gosec</code> and <code>trufflehog</code> (not installed here, so no flag
+  could be verified against a real binary).</li>
+<li>Finding-level filtering stays authoritative, so this is an optimisation and
+  never the only thing excluding a path. Only the trailing-slash directory
+  form of D21 travels; bare names and file globs stay with the post-filter
+  rather than being guessed at. Under-excluding costs time; over-excluding
+  would silently stop scanning real code.</li>
 </ul>
 <h3 id="fixed-a-required-scanner-failed-for-months-and-would-not-say-why">Fixed — a required scanner failed for months and would not say why</h3>
 <ul>

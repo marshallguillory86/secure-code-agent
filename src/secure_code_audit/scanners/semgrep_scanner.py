@@ -17,6 +17,7 @@ from pathlib import Path
 from secure_code_audit.config import Config, ScannerConfig
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanner_status import ScanResult
+from secure_code_audit.scanners._exclusions import directory_excludes
 from secure_code_audit.scanners.base import Scanner
 
 #: Ruleset shipped inside the wheel, used when `online` is false. Deliberately
@@ -114,6 +115,23 @@ class SemgrepScanner(Scanner):
         profile = ruleset_mod.describe(path) if path else None
         return f"offline profile {profile.cite()}" if profile else "offline profile unavailable"
 
+    honours_exclusions = True
+
+    def exclusion_args(self, config: Config) -> list[str]:
+        """`--exclude`, repeated, which semgrep matches against path components.
+
+        Worth stating because `_restrict_to_changed` argues the opposite for
+        `--changed-only`: there the *scan* stays whole and only the report is
+        scoped, precisely so Semgrep's cross-file dataflow is not narrowed.
+        That reasoning is about a reporting filter. `exclude_patterns` is a
+        scan-scope control — the register says it "stops the scan" — and a
+        vendored clone tree is not a dataflow source for the code under
+        audit.
+        """
+        return [
+            arg for d in directory_excludes(config.exclude_patterns) for arg in ("--exclude", d)
+        ]
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)
@@ -154,6 +172,7 @@ class SemgrepScanner(Scanner):
                 "--no-rewrite-rule-ids",
                 "--output",
                 str(sarif_path),
+                *self.exclusion_args(config),
                 str(target),
             ]
             args.extend(sc_cfg.extra_args)

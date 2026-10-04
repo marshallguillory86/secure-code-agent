@@ -28,6 +28,7 @@ from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.sarif import ingest as sarif_ingest
 from secure_code_audit.scanner_status import ScanResult
+from secure_code_audit.scanners._exclusions import directory_excludes
 from secure_code_audit.scanners.base import Scanner
 
 
@@ -36,6 +37,25 @@ class TrivyScanner(Scanner):
     binary = "trivy"
     default_category = Category.CONFIG_IAC
     install_hint = "brew install trivy, or follow trivy.dev/latest/getting-started/installation"
+
+    honours_exclusions = True
+
+    def exclusion_args(self, config: Config) -> list[str]:
+        """`--skip-dirs`, which is why this adapter stopped failing.
+
+        Trivy was handed the repository root and walked every excluded
+        directory in it. On this project that meant `calibration/.corpus/` —
+        342 MB of cloned third-party repositories, ten `pom.xml` files among
+        them — whose dependencies trivy then resolved against Maven Central
+        until it was rate-limited with a 429. A required scanner, failing for
+        sixty consecutive runs, hiding 26 real dependency findings in
+        `uv.lock` that only trivy reads.
+
+        Measured: the same scan is **exit 0 in 51 seconds** with the excluded
+        directory skipped, against failing after minutes of backoff without.
+        """
+        skip = directory_excludes(config.exclude_patterns)
+        return ["--skip-dirs", ",".join(skip)] if skip else []
 
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
@@ -57,6 +77,7 @@ class TrivyScanner(Scanner):
                 # Skip license findings — we focus on security only.
                 "--scanners",
                 "vuln,secret,misconfig",
+                *self.exclusion_args(config),
                 str(target),
             ]
             args.extend(sc_cfg.extra_args)

@@ -45,6 +45,13 @@ class OsvScanner(Scanner):
         "brew install osv-scanner, or a pinned release from github.com/google/osv-scanner"
     )
 
+    honours_exclusions = False
+    exclusion_note = (
+        "osv-scanner offers only --experimental-exclude, and an experimental flag can "
+        "change or vanish between releases; the finding-level filter removes excluded "
+        "paths meanwhile"
+    )
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)

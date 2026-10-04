@@ -42,6 +42,11 @@ class PipAuditScanner(Scanner):
             parts.append(f"extra_args={' '.join(config.extra_args)}")
         return "; ".join(parts)
 
+    honours_exclusions = True
+    exclusion_note = (
+        "filters the requirement and project files it discovers before invoking pip-audit"
+    )
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)

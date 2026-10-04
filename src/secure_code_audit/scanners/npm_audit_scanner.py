@@ -31,6 +31,9 @@ class NpmAuditScanner(Scanner):
     default_category = Category.DEPENDENCIES
     install_hint = "Install Node.js from nodejs.org so npm is on PATH"
 
+    honours_exclusions = True
+    exclusion_note = "filters the package directories it discovers before invoking npm"
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)

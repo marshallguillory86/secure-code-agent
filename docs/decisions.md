@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.12 — 2026-10-04.** The decision register. D1–D33.
+> Status: **v0.12.12 — 2026-10-04.** The decision register. D1–D34.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -46,6 +46,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D31 | An overriding CWE decides the OWASP category derived from it | 2026-10-02 | Accepted |
 | D32 | The audited tree does not grade itself | 2026-10-02 | Accepted (amended 2026-10-04) |
 | D33 | A run that scanned nothing is ungraded, not perfect | 2026-10-04 | Accepted |
+| D34 | An adapter declares whether it honours `exclude_patterns` | 2026-10-04 | Accepted |
 
 ---
 
@@ -2152,3 +2153,103 @@ trend history will also show a gap rather than a spike of perfect scores for
 any run that scanned nothing: the row records `score: null`, verified against
 a first-run history, where the summary correctly reads *"no scored history
 yet"* rather than inventing a point.
+
+---
+
+## D34 — An adapter declares whether it honours `exclude_patterns`
+
+**Status:** Accepted · 2026-10-04 · makes good on the claim quoted in
+[D24](#d24--a-project-may-declare-what-it-is-and-be-reported-rather-than-scored)
+
+**Context.** This register already says what `exclude_patterns` does:
+*"`exclude_patterns` stops the scan and leaves no trace in the report."*
+Only the second half was ever implemented. Patterns filtered findings and
+LOC *after* the scanners ran, and most adapters were handed the bare target
+root.
+
+Four adapters did honour them, in two different ways, and nothing recorded
+which: `bandit` passed the tool its own `--exclude`, while `hadolint`,
+`npm_audit`, `pip_audit` and `builtin_rules` filter the inputs they discover
+so an excluded path never reaches the tool. The other nine did not.
+
+**What it cost, on this repository.** `calibration/.corpus/` holds 342 MB of
+cloned third-party repositories — `webgoat`, `gson`, `commons-lang`, ten
+`pom.xml` files between them. It is gitignored, untracked, and the first
+entry in `paths.exclude_patterns`. Trivy was still given the root, walked
+into it, and resolved those Java projects' dependencies against Maven
+Central until it was rate-limited:
+
+```text
+FATAL  remote Maven repository returned 429 Too Many Requests
+       Retry-After: 1313.
+```
+
+That is why `trivy` — a **required** scanner — failed, why all sixty
+committed rows in `.secure-code/history.jsonl` read
+`coverage_complete: false`, and why 26 real dependency findings in `uv.lock`
+were never reported, trivy being the only scanner in the floor that reads
+it. It is also why the local suite took forty-five minutes: backoff retries
+against Maven, invocation after invocation.
+
+Measured, same tree, same command, one flag apart:
+
+| trivy invocation | result |
+| --- | --- |
+| the repository root, as the adapter gave it | fails after minutes of backoff |
+| `--skip-dirs calibration/.corpus` | **exit 0 in 51s**, 147 KB of SARIF |
+
+And through the product, after the fix: the first `coverage: COMPLETE` and
+`gate PASS` self-audit in this repository's history, in 48 seconds, on the
+sixty-sixth scored run.
+
+**Decision.** An adapter states its position and the statement is checked.
+`honours_exclusions` is True and the adapter either emits exclusion flags or
+filters its own inputs; or it is False and `exclusion_note` says *why*,
+which `test_every_adapter_declares_its_exclusion_support.py` requires. A new
+adapter inherits False and an empty note, so the lint fails until somebody
+decides.
+
+The reason is mandatory because "this tool cannot express it" and "nobody
+got round to it" are identical in code and completely different facts for an
+operator staring at a slow, noisy scan.
+
+**The invariant that makes it safe.** Finding-level filtering stays
+authoritative. Passing exclusions to a tool is an optimisation — work and
+network egress — and is never the only thing excluding a path. A tool that
+ignores its flag, or a pattern the translation declines to pass on, changes
+nothing in the report.
+
+That asymmetry sets the translation's scope. Under-excluding is the status
+quo and costs time; **over-excluding silently stops scanning real code**,
+which is the class of silence this project exists to find in other people's
+pipelines. So only patterns that unambiguously name a directory subtree
+travel — the trailing-slash form of D21, which every tool expresses natively.
+Bare names and file globs stay with the post-filter rather than being
+guessed at, and a pattern that normalises to nothing is dropped rather than
+handed over as "skip your own target".
+
+**Per tool, verified against `--help` rather than assumed:** trivy
+`--skip-dirs`, semgrep `--exclude`, bandit `--exclude`, checkov
+`--skip-path` — which takes a *regex*, so every literal is escaped;
+`calibration/.corpus` unescaped would also skip `calibration/Xcorpus`.
+
+**Declined, with reasons recorded rather than left blank.** `gitleaks` and
+`rubocop` express path exclusions only in their own config files;
+`njsscan` advertises none; `osv-scanner` offers only
+`--experimental-exclude`, and an experimental flag can change between
+releases; `scorecard` scores a remote repository through an API and has no
+local tree to scope. `gosec` and `trufflehog` are not installed here, so no
+flag could be verified against a real binary — and guessing one would make
+the tool error out, which is worse than the slow scan it would save.
+
+**Why not use the exclude matcher directly.** `git_tools.matches_pattern` is
+the authority on what a pattern means, and no tool accepts a Python
+callable. Translation is unavoidable; keeping it conservative, and keeping
+the matcher authoritative over the findings, is what stops a translation bug
+from becoming a coverage gap.
+
+**Semgrep, specifically.** `_restrict_to_changed` argues the opposite for
+`--changed-only` — there the scan stays whole and only the report is scoped,
+so Semgrep's cross-file dataflow is not narrowed. That reasoning is about a
+*reporting* filter. `exclude_patterns` is a scan-scope control, and a
+vendored clone tree is not a dataflow source for the code under audit.

@@ -82,6 +82,50 @@ schema may evolve.
   (ungraded, not perfect), and `paths.include_extensions` narrowed to a
   non-source suffix leaves the grade honest.
 
+### Fixed — `exclude_patterns` did not stop the scan (D34)
+
+- This register has always said `exclude_patterns` *"stops the scan and
+  leaves no trace in the report"*. Only the second half was implemented:
+  patterns filtered findings and LOC *after* the scanners ran, and most
+  adapters were handed the bare target root.
+- `calibration/.corpus/` holds **342 MB** of cloned third-party repositories
+  — webgoat, gson, commons-lang, ten `pom.xml` files between them. It is
+  gitignored, untracked, and the first entry in `paths.exclude_patterns`.
+  Trivy was still given the root, walked into it, and resolved those Java
+  projects' dependencies against Maven Central until it was rate-limited with
+  a 429. **That is the root cause of the required-scanner failure below**, of
+  sixty consecutive `coverage_complete: false` rows, of 26 unreported
+  dependency findings in `uv.lock`, and of a forty-five-minute local suite.
+
+  | trivy invocation | result |
+  | --- | --- |
+  | the repository root, as the adapter gave it | fails after minutes of backoff |
+  | `--skip-dirs calibration/.corpus` | **exit 0 in 51s** |
+
+- Through the product after the fix: the **first `coverage: COMPLETE` and
+  `gate PASS` self-audit in this repository's history**, in 48 seconds, on
+  the sixty-sixth scored run.
+- Exclusions are now passed per tool, each flag verified against its own
+  `--help`: trivy `--skip-dirs`, semgrep `--exclude`, checkov `--skip-path`.
+  Bandit already passed `--exclude`; `builtin_rules`, `hadolint`,
+  `npm_audit` and `pip_audit` already filter the inputs they discover.
+- Checkov's `--skip-path` takes a **regex**, so every literal is escaped —
+  `calibration/.corpus` handed over unescaped would also skip
+  `calibration/Xcorpus`, because a regex `.` matches any character.
+- **Declared, not inferred.** Every adapter now sets `honours_exclusions`,
+  or sets it False with an `exclusion_note` giving the reason, and a lint
+  requires one or the other — a new adapter inherits False and an empty note,
+  so it fails until somebody decides. Declined with reasons recorded:
+  `gitleaks` and `rubocop` (config-file only), `njsscan` (no such flag),
+  `osv-scanner` (experimental flag only), `scorecard` (scores a remote repo,
+  no local tree), `gosec` and `trufflehog` (not installed here, so no flag
+  could be verified against a real binary).
+- Finding-level filtering stays authoritative, so this is an optimisation and
+  never the only thing excluding a path. Only the trailing-slash directory
+  form of D21 travels; bare names and file globs stay with the post-filter
+  rather than being guessed at. Under-excluding costs time; over-excluding
+  would silently stop scanning real code.
+
 ### Fixed — a required scanner failed for months and would not say why
 
 - Found by running this repository's own audit. All sixty committed rows in

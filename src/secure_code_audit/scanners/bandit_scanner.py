@@ -52,6 +52,9 @@ class BanditScanner(Scanner):
     python_module = "bandit"
     install_hint = "pip install 'secure-code-agent[required-scanners]'"
 
+    honours_exclusions = True
+    exclusion_note = "passes the operator's patterns to bandit's own --exclude"
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)

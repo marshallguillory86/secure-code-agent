@@ -42,11 +42,12 @@
 <li><a href="#d31-an-overriding-cwe-decides-the-owasp-category-derived-from-it">D31 — An overriding CWE decides the OWASP category derived from it</a></li>
 <li><a href="#d32-the-audited-tree-does-not-grade-itself">D32 — The audited tree does not grade itself</a></li>
 <li><a href="#d33-a-run-that-scanned-nothing-is-ungraded-not-perfect">D33 — A run that scanned nothing is ungraded, not perfect</a></li>
+<li><a href="#d34-an-adapter-declares-whether-it-honours-exclude_patterns">D34 — An adapter declares whether it honours exclude_patterns</a></li>
 </ul>
 </div>
 </aside>
 <main><div class="meta">Decisions and architecture</div><h1>Decision register</h1><blockquote>
-<p>Status: <strong>v0.12.12 — 2026-10-04.</strong> The decision register. D1–D33.</p>
+<p>Status: <strong>v0.12.12 — 2026-10-04.</strong> The decision register. D1–D34.</p>
 </blockquote>
 <p>Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on <code>maintainability-agent</code>'s register, which exists
@@ -260,6 +261,12 @@ architecture belongs in <a href="docs-architecture.html"><code>architecture.md</
 <tr>
 <td>D33</td>
 <td>A run that scanned nothing is ungraded, not perfect</td>
+<td>2026-10-04</td>
+<td>Accepted</td>
+</tr>
+<tr>
+<td>D34</td>
+<td>An adapter declares whether it honours <code>exclude_patterns</code></td>
 <td>2026-10-04</td>
 <td>Accepted</td>
 </tr>
@@ -2265,5 +2272,99 @@ trend history will also show a gap rather than a spike of perfect scores for
 any run that scanned nothing: the row records <code>score: null</code>, verified against
 a first-run history, where the summary correctly reads <em>"no scored history
 yet"</em> rather than inventing a point.</p>
+<hr />
+<h2 id="d34-an-adapter-declares-whether-it-honours-exclude_patterns">D34 — An adapter declares whether it honours <code>exclude_patterns</code></h2>
+<p><strong>Status:</strong> Accepted · 2026-10-04 · makes good on the claim quoted in
+<a href="#d24--a-project-may-declare-what-it-is-and-be-reported-rather-than-scored">D24</a></p>
+<p><strong>Context.</strong> This register already says what <code>exclude_patterns</code> does:
+<em>"<code>exclude_patterns</code> stops the scan and leaves no trace in the report."</em>
+Only the second half was ever implemented. Patterns filtered findings and
+LOC <em>after</em> the scanners ran, and most adapters were handed the bare target
+root.</p>
+<p>Four adapters did honour them, in two different ways, and nothing recorded
+which: <code>bandit</code> passed the tool its own <code>--exclude</code>, while <code>hadolint</code>,
+<code>npm_audit</code>, <code>pip_audit</code> and <code>builtin_rules</code> filter the inputs they discover
+so an excluded path never reaches the tool. The other nine did not.</p>
+<p><strong>What it cost, on this repository.</strong> <code>calibration/.corpus/</code> holds 342 MB of
+cloned third-party repositories — <code>webgoat</code>, <code>gson</code>, <code>commons-lang</code>, ten
+<code>pom.xml</code> files between them. It is gitignored, untracked, and the first
+entry in <code>paths.exclude_patterns</code>. Trivy was still given the root, walked
+into it, and resolved those Java projects' dependencies against Maven
+Central until it was rate-limited:</p>
+<pre><code class="language-text">FATAL  remote Maven repository returned 429 Too Many Requests
+       Retry-After: 1313.
+</code></pre>
+<p>That is why <code>trivy</code> — a <strong>required</strong> scanner — failed, why all sixty
+committed rows in <code>.secure-code/history.jsonl</code> read
+<code>coverage_complete: false</code>, and why 26 real dependency findings in <code>uv.lock</code>
+were never reported, trivy being the only scanner in the floor that reads
+it. It is also why the local suite took forty-five minutes: backoff retries
+against Maven, invocation after invocation.</p>
+<p>Measured, same tree, same command, one flag apart:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>trivy invocation</th>
+<th>result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the repository root, as the adapter gave it</td>
+<td>fails after minutes of backoff</td>
+</tr>
+<tr>
+<td><code>--skip-dirs calibration/.corpus</code></td>
+<td><strong>exit 0 in 51s</strong>, 147 KB of SARIF</td>
+</tr>
+</tbody>
+</table></div>
+<p>And through the product, after the fix: the first <code>coverage: COMPLETE</code> and
+<code>gate PASS</code> self-audit in this repository's history, in 48 seconds, on the
+sixty-sixth scored run.</p>
+<p><strong>Decision.</strong> An adapter states its position and the statement is checked.
+<code>honours_exclusions</code> is True and the adapter either emits exclusion flags or
+filters its own inputs; or it is False and <code>exclusion_note</code> says <em>why</em>,
+which <code>test_every_adapter_declares_its_exclusion_support.py</code> requires. A new
+adapter inherits False and an empty note, so the lint fails until somebody
+decides.</p>
+<p>The reason is mandatory because "this tool cannot express it" and "nobody
+got round to it" are identical in code and completely different facts for an
+operator staring at a slow, noisy scan.</p>
+<p><strong>The invariant that makes it safe.</strong> Finding-level filtering stays
+authoritative. Passing exclusions to a tool is an optimisation — work and
+network egress — and is never the only thing excluding a path. A tool that
+ignores its flag, or a pattern the translation declines to pass on, changes
+nothing in the report.</p>
+<p>That asymmetry sets the translation's scope. Under-excluding is the status
+quo and costs time; <strong>over-excluding silently stops scanning real code</strong>,
+which is the class of silence this project exists to find in other people's
+pipelines. So only patterns that unambiguously name a directory subtree
+travel — the trailing-slash form of D21, which every tool expresses natively.
+Bare names and file globs stay with the post-filter rather than being
+guessed at, and a pattern that normalises to nothing is dropped rather than
+handed over as "skip your own target".</p>
+<p><strong>Per tool, verified against <code>--help</code> rather than assumed:</strong> trivy
+<code>--skip-dirs</code>, semgrep <code>--exclude</code>, bandit <code>--exclude</code>, checkov
+<code>--skip-path</code> — which takes a <em>regex</em>, so every literal is escaped;
+<code>calibration/.corpus</code> unescaped would also skip <code>calibration/Xcorpus</code>.</p>
+<p><strong>Declined, with reasons recorded rather than left blank.</strong> <code>gitleaks</code> and
+<code>rubocop</code> express path exclusions only in their own config files;
+<code>njsscan</code> advertises none; <code>osv-scanner</code> offers only
+<code>--experimental-exclude</code>, and an experimental flag can change between
+releases; <code>scorecard</code> scores a remote repository through an API and has no
+local tree to scope. <code>gosec</code> and <code>trufflehog</code> are not installed here, so no
+flag could be verified against a real binary — and guessing one would make
+the tool error out, which is worse than the slow scan it would save.</p>
+<p><strong>Why not use the exclude matcher directly.</strong> <code>git_tools.matches_pattern</code> is
+the authority on what a pattern means, and no tool accepts a Python
+callable. Translation is unavoidable; keeping it conservative, and keeping
+the matcher authoritative over the findings, is what stops a translation bug
+from becoming a coverage gap.</p>
+<p><strong>Semgrep, specifically.</strong> <code>_restrict_to_changed</code> argues the opposite for
+<code>--changed-only</code> — there the scan stays whole and only the report is scoped,
+so Semgrep's cross-file dataflow is not narrowed. That reasoning is about a
+<em>reporting</em> filter. <code>exclude_patterns</code> is a scan-scope control, and a
+vendored clone tree is not a dataflow source for the code under audit.</p>
 <footer>Rendered from <code>docs/decisions.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
 </main></div></body></html>
