@@ -16,7 +16,7 @@ import json
 from pathlib import Path
 
 from secure_code_audit.config import Config
-from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
@@ -97,16 +97,11 @@ class OsvScanner(Scanner):
                     severity_str = self._extract_severity(vuln)
                     severity = _OSV_SEVERITY.get(severity_str, Severity.MEDIUM)
                     out.append(
-                        self._make_finding(
-                            rule_id=f"osv_scanner.{vid}",
-                            message=f"{pkg_name} {pkg_ver} — {vid}: {summary}",
-                            file_path=file_path,
-                            line_start=0,
-                            line_end=None,
-                            code_snippet=None,
-                            severity=severity,
-                            confidence=Confidence.HIGH,
-                            category=Category.DEPENDENCIES,
+                        self._dependency_finding(
+                            f"osv_scanner.{vid}",
+                            f"{pkg_name} {pkg_ver} — {vid}: {summary}",
+                            file_path,
+                            severity,
                         )
                     )
         return out

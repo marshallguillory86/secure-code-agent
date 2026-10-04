@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 from secure_code_audit.config import Config
-from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
 
@@ -95,16 +95,11 @@ class NpmAuditScanner(Scanner):
             if not advisories:
                 # Indirect-only entry; collapse to a single finding.
                 findings.append(
-                    self._make_finding(
-                        rule_id=f"npm_audit.{pkg_name}.indirect",
-                        message=f"{pkg_name}: vulnerable via transitive dep.",
-                        file_path=manifest,
-                        line_start=0,
-                        line_end=None,
-                        code_snippet=None,
-                        severity=severity,
-                        confidence=Confidence.HIGH,
-                        category=Category.DEPENDENCIES,
+                    self._dependency_finding(
+                        f"npm_audit.{pkg_name}.indirect",
+                        f"{pkg_name}: vulnerable via transitive dep.",
+                        manifest,
+                        severity,
                     )
                 )
                 continue
@@ -113,16 +108,11 @@ class NpmAuditScanner(Scanner):
                 msg = adv.get("title") or adv.get("name") or pkg_name
                 url = adv.get("url") or ""
                 findings.append(
-                    self._make_finding(
-                        rule_id=rule_id,
-                        message=f"{pkg_name}: {msg} {url}".strip(),
-                        file_path=manifest,
-                        line_start=0,
-                        line_end=None,
-                        code_snippet=None,
-                        severity=severity,
-                        confidence=Confidence.HIGH,
-                        category=Category.DEPENDENCIES,
+                    self._dependency_finding(
+                        rule_id,
+                        f"{pkg_name}: {msg} {url}".strip(),
+                        manifest,
+                        severity,
                     )
                 )
         return findings

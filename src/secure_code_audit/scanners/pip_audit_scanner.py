@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from secure_code_audit.config import Config, ScannerConfig
-from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.git_tools import is_excluded
 from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
@@ -200,16 +200,11 @@ class PipAuditScanner(Scanner):
                 description = (vulnerability.get("description") or "").strip()
                 fix_note = f" Fix in: {', '.join(fixes)}" if fixes else " No fix available."
                 findings.append(
-                    self._make_finding(
-                        rule_id=f"pip_audit.{vuln_id}",
-                        message=f"{name} {version} — {vuln_id}: {description[:200]}{fix_note}",
-                        file_path=source,
-                        line_start=0,
-                        line_end=None,
-                        code_snippet=None,
-                        severity=Severity.HIGH,
-                        confidence=Confidence.HIGH,
-                        category=Category.DEPENDENCIES,
+                    self._dependency_finding(
+                        f"pip_audit.{vuln_id}",
+                        f"{name} {version} — {vuln_id}: {description[:200]}{fix_note}",
+                        source,
+                        Severity.HIGH,
                     )
                 )
         return findings

@@ -328,6 +328,34 @@ current figures come from the audit.
 - **`environment: name: pypi`** in `release.yml` requires that environment to
   exist in repository settings before the first tagged release will publish.
 
+## 6a. Duplication findings that are not duplication
+
+Three duplicate blocks under `src/` are recorded here as **dispositioned,
+not outstanding**. Each is real duplication of *bytes* and none is a defect,
+so none is being removed — and saying which is which is the point, because
+an undispositioned finding and a decided one look identical in a count.
+
+The two that *were* defects have been fixed: a dependency advisory built at
+four sites across `npm_audit`, `osv_scanner` and `pip_audit`, and a synthetic
+suppression finding built twice in one file. Both now have one constructor,
+and `tests/unit/test_one_place_builds_each_finding_shape.py` blocks a third
+copy. Those were defects precisely because a field could drift in one copy —
+`category=Category.DEPENDENCIES` is what keeps advisories off the
+code-condition score.
+
+| Block | Why it stays |
+| --- | --- |
+| `cli.py:163`, 36 lines ×3 | `p.add_argument(... help=(...))`, three times. The repetition is argparse's call shape; each flag is a different flag. Collapsing it into a loop over flag specs would hide the one thing a reader wants to see — what the CLI accepts — behind a data structure. |
+| `bandit`/`gosec`/`njsscan`, 8 lines ×3 | Identical import blocks. Three adapters importing the same four names is what implementing one interface looks like. There is nothing to extract: an import is already the shortest form of itself. |
+| `osv_scanner.py:44` / `trufflehog_scanner.py:32`, 12 lines | The adapter preamble — `name`, `binary`, `default_category`, `install_hint`, then `scan`'s availability check and `cfg` call. That is the `Scanner` contract being implemented the same way twice, which is the abstraction working. Hoisting it into the base class would move per-adapter facts out of the adapter that owns them. |
+
+The generated reading copy is a separate story and is no longer counted at
+all: `docs/html/` pages and the copied stylesheet now open with an
+`@generated` banner, which maintainability-agent 4.2.0 honours. Before that
+it scored the copy as source and the numbers moved without anything being
+found — files 195, duplicate blocks doubled, three risk findings that were
+`docs/html/` copies of three others. Raised as maintainability-agent#292.
+
 ## 7. Recommended sequence
 
 1. ~~**`ScanResult` for adapters** (§2).~~ **Done 2026-09-09** (D13). Highest
