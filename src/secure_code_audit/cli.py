@@ -10,7 +10,7 @@ import argparse
 import contextlib
 import json
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import MISSING, dataclass, fields, replace
 from pathlib import Path
 
 from secure_code_audit import (
@@ -1194,7 +1194,26 @@ def _install_standards_overlay(cfg: config_mod.Config, root: Path) -> int | None
 #: `SEVERITY_WEIGHT`, so re-labelling removes a finding from the score while
 #: leaving it in the report. `category_overrides` moves it between the
 #: per-category rates, and the worst category drives the overall.
-_GRADING_KEYS = ("severity_overrides", "category_overrides")
+#: `loc_for_scoring` is the denominator. Every category but `secrets` is a
+#: density — weighted findings per thousand scanned lines — so a tree that
+#: declares its own line count declares its own grade, and declaring ten
+#: million lines took the same one-finding fixture from 0.00/F to 4.999/A+
+#: with no flag and no warning. It was missed the first time because this
+#: tuple was written as a list of the two keys the attack had been
+#: demonstrated through, rather than derived from what the attack *is*.
+_GRADING_KEYS = ("severity_overrides", "category_overrides", "loc_for_scoring")
+
+
+def _unset_value(key: str) -> object:
+    """What this config field holds when no config set it.
+
+    Read from `Config`'s own dataclass fields, so "ignore this key" means
+    exactly "behave as though the file had not mentioned it" — including for
+    a key whose empty state is `None` rather than `{}`, which is the kind of
+    difference a hand-written clearing expression gets wrong.
+    """
+    spec = next(f for f in fields(config_mod.Config) if f.name == key)
+    return spec.default_factory() if spec.default_factory is not MISSING else spec.default
 
 
 def _refuse_target_policy(cfg: config_mod.Config, target: Path) -> config_mod.Config:
@@ -1231,7 +1250,14 @@ def _refuse_target_policy(cfg: config_mod.Config, target: Path) -> config_mod.Co
             f"changes the grade, so it was ignored. Pass --trust-target-config, or "
             f"keep the configuration outside the tree, to apply it.\n"
         )
-    return replace(cfg, severity_overrides={}, category_overrides={})
+    # Cleared to each field's own default, derived from `_GRADING_KEYS` rather
+    # than restated. The two lists used to be written out separately — the
+    # warning loop read the tuple and the `replace` named two keys by hand —
+    # so adding a third key told the operator it had been ignored and then
+    # applied it anyway. A warning that says the opposite of what happened is
+    # worse than no warning, and `test_every_grading_key_is_actually_cleared`
+    # is what holds the two together now.
+    return replace(cfg, **{key: _unset_value(key) for key in ignored})
 
 
 def _record_trend(
@@ -1504,11 +1530,20 @@ def _declaration_delta(score, undeclared_score, declarations) -> str | None:
     named = ", ".join(
         f"{name} ({count})" for name, count in sorted(declarations.accounted.items()) if count
     )
-    line = (
-        f"declared: {declarations.total_accounted} finding(s) accounted for by "
-        f"{named}; without declarations "
-        f"{undeclared_score.overall:.2f} ({undeclared_score.letter})"
-    )
+    line = f"declared: {declarations.total_accounted} finding(s) accounted for by {named}"
+    if undeclared_score.overall is None:
+        # No grade either way, so there is no cost to state. Reachable since
+        # D33: nothing counted as scanned, every finding suppressed so no
+        # category has a count — and `summarize_declarations` counts matched
+        # findings without skipping suppressed ones, so the accounting is
+        # non-empty while the grade is absent. `:.2f` on that raised, in
+        # shipped code, on the summary path.
+        #
+        # The accounting is still printed. It is true, it is the disclosure
+        # this mechanism exists for, and dropping the line would hide it to
+        # avoid admitting there is no number.
+        return f"{line}; no grade either way, so no without-declarations comparison"
+    line += f"; without declarations {undeclared_score.overall:.2f} ({undeclared_score.letter})"
     if declarations.unexercised:
         # A declaration that matched nothing describes something this project
         # does not do. Named rather than dropped, so a config cannot be padded

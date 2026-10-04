@@ -123,13 +123,18 @@ class PipAuditScanner(Scanner):
                 projects = [path for path in paths if path.parent not in covered_dirs]
                 paths = [*requirements, *projects]
 
-        if sc_cfg.mode == "requirements":
-            return [self._requirement_input(path) for path in paths]
-        if sc_cfg.mode == "locked":
-            return [self._project_input(path, locked=True) for path in paths]
-        if sc_cfg.mode == "project":
-            return [self._project_input(path, locked=False) for path in paths]
+        builder = {
+            "requirements": self._requirement_input,
+            "locked": lambda path: self._project_input(path, locked=True),
+            "project": lambda path: self._project_input(path, locked=False),
+        }.get(sc_cfg.mode)
+        if builder is not None:
+            return [builder(path) for path in paths]
 
+        # `auto`, the default, and the only mode that guesses. A path named
+        # `requirements*` is a requirements file and anything else is a
+        # project — which is a heuristic, and is what asking for `auto`
+        # means. An operator who knows says so with an explicit mode.
         return [
             self._requirement_input(path)
             if path.name.startswith("requirements")

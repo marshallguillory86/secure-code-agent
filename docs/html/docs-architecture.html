@@ -22,6 +22,7 @@
 </li>
 <li><a href="#5-problem-4-the-scores-null-state-is-perfect-closed-2026-09-09">5. Problem 4 — the score's null state is "perfect" — CLOSED 2026-09-09</a><ul>
 <li><a href="#closed">Closed</a></li>
+<li><a href="#reopened-2026-10-04-and-closed-through-the-other-door-d33">Reopened 2026-10-04, and closed through the other door — D33</a></li>
 <li><a href="#open-question">Open question</a></li>
 </ul>
 </li>
@@ -32,7 +33,7 @@
 </div>
 </aside>
 <main><div class="meta">Decisions and architecture</div><h1>secure-code-agent — Architecture Audit</h1><blockquote>
-<p>Status: <strong>v0.12.11 — 2026-10-03.</strong> Assessment of the system as built.
+<p>Status: <strong>v0.12.12 — 2026-10-04.</strong> Assessment of the system as built.
 Companion docs: <a href="docs-design.html"><code>design.md</code></a> states the intended architecture;
 this document records where the implementation diverges from it and which
 divergences are generating recurring defects.</p>
@@ -296,6 +297,62 @@ removing a scanner <em>raises</em> the raw estimate — 0.00/F to 5.00/A+ — an
 that the grade was withheld anyway. The estimate no longer rises. It
 disappears: the run that looked at nothing reports no number at all, and
 <code>min_score</code> refuses it rather than passing by default.</p>
+<h3 id="reopened-2026-10-04-and-closed-through-the-other-door-d33">Reopened 2026-10-04, and closed through the other door — D33</h3>
+<p>The close above is about <em>measurability</em>: whether a scanner in the run could
+have read a category. It is not about whether there was any code. Those are
+two doors into one state, and this section shut one of them while listing the
+other as a "smaller consequence" two paragraphs up — <em>"<code>paths.exclude_patterns</code>
+is simultaneously the scan scope and that denominator."</em></p>
+<p>So an empty directory still reported <strong>5.00/A+</strong>, exit 0, nothing on stderr.
+<code>normalize</code> divides by <code>max(loc_scanned, 1) / 1000</code>, which answers "no
+denominator" with "one line", and zero findings over one line is a perfect
+density. Measured on a tree with one shell-injection finding, every row a
+single config key away from the honest run:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>run</th>
+<th style="text-align: right;">overall</th>
+<th style="text-align: right;"><code>loc_scanned</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>honest</td>
+<td style="text-align: right;">0.00 (F)</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr>
+<td><code>exclude_patterns: ["**"]</code></td>
+<td style="text-align: right;"><strong>5.00 (A+)</strong></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>test_patterns: ["**"]</code></td>
+<td style="text-align: right;"><strong>5.00 (A+)</strong></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td><code>docs_patterns: ["**"]</code></td>
+<td style="text-align: right;"><strong>5.00 (A+)</strong></td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>an empty directory</td>
+<td style="text-align: right;"><strong>5.00 (A+)</strong></td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table></div>
+<p>A category with no findings and no scanned lines now grades <code>None</code>. A scanned
+clean tree still grades 5.00, and a finding over zero counted lines is still
+graded — see <a href="docs-decisions.html#d33--a-run-that-scanned-nothing-is-ungraded-not-perfect">D33</a>
+for why both halves of that conjunction are load-bearing.</p>
+<p>The lesson this section should carry: <em>"CLOSED"</em> on a problem stated as a
+property — "the null state is perfect" — is a claim about every route into
+that state, and this one was written after closing the route that had been
+demonstrated. The same mistake, in the same week, produced the D32 amendment:
+a rule implemented as a list of the keys the attack had been shown through.</p>
 <h3 id="open-question">Open question</h3>
 <p>Should the deliverable be a single verdict rather than a score plus a coverage
 status the reader must combine? Resolve this before touching the scoring code;

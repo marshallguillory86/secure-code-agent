@@ -4,6 +4,122 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.12.12 — 2026-10-04
+
+**A run that scanned nothing reported a perfect score.**
+
+### Security — nothing scanned is ungraded, not perfect (D33)
+
+- Pointed at an **empty directory**, the audit reported `overall: 5.00`,
+  letter **A+**, exit 0, and nothing on stderr. No attacker is required: a
+  path typo, a failed checkout, or one `exclude_patterns` entry matching more
+  than its author meant produces the same result. Measured on a tree holding
+  a single shell-injection finding, each row one config key from the honest
+  run:
+
+  | run | overall | `loc_scanned` |
+  | --- | ---: | ---: |
+  | honest | 0.00 (F) | 3 |
+  | `paths.exclude_patterns: ["**"]` | **5.00 (A+)** | 0 |
+  | `paths.test_patterns: ["**"]` | **5.00 (A+)** | 0 |
+  | `paths.docs_patterns: ["**"]` | **5.00 (A+)** | 0 |
+  | an empty directory | **5.00 (A+)** | 0 |
+
+- `normalize` divides the weighted subtotal by `max(loc_scanned, 1) / 1000`.
+  The `max(..., 1)` avoids a division by zero and in exchange answers "no
+  denominator" with "a denominator of one line", so zero findings over zero
+  lines was a density of zero — a perfect grade.
+- A category with no findings **and** no scanned lines now grades `None`, as a
+  category no scanner covers already did. A scanned clean tree still grades
+  **5.00/A+**, and a finding on a tree that counted no lines is still graded —
+  `loc_scanned` counts only configured source extensions, so a credential in a
+  `.env` is evidence even though it contributes no lines.
+- The `min_score` gate now trips on such a run with *"nothing measurable was
+  scanned"*. That branch already existed and was unreachable from this
+  direction: an operator with a `min_score` floor and a broken path was shown
+  **PASS**.
+- **No configured gate is satisfied by a run that measured nothing** — the
+  more dangerous half, because the grade is read by a person and the gate is
+  read by the build. An empty directory with a real severity gate and
+  `--fail-on-gate` reported `gate PASS` at **exit 0**: every gate asks "are
+  there offending findings", and zero findings is zero offenders. Such a run
+  now trips `nothing_measured` whenever any gate is configured, and exits 1.
+  With no gate configured it still only reports, which is what
+  `--fail-on-gate` already refuses outright.
+- `--changed-only` is not affected: it scopes the report and still scans the
+  whole tree, so a commit touching no source keeps a real `loc_scanned` and a
+  real grade.
+- `architecture.md` §5 declared this problem CLOSED on 2026-09-09. It closed
+  the *measurability* door — which is why disabling every scanner already
+  behaved correctly — and listed this one as a "smaller consequence".
+- One consequence of making `None` reachable, found and fixed in the same
+  change: the declaration-disclosure line formatted the without-declarations
+  grade with `:.2f` and guarded only the whole report being absent, not its
+  `overall`. With nothing counted as scanned, every finding suppressed, and
+  one of them matched by a declared capability — `summarize_declarations`
+  counts matched findings without skipping suppressed ones — it raised
+  `TypeError` on the summary path. It now reports the accounting, which is
+  the disclosure the mechanism exists for, and says there is no comparison
+  rather than inventing one.
+
+### Security — the denominator is a grading key too (D32, amended)
+
+- D32 refused `severity_overrides` and `category_overrides` from a config
+  inside the audited tree. It did not refuse `loc_for_scoring`, and every
+  category except `secrets` is a density, so the tree declaring its own line
+  count declares its own grade: the same one-finding fixture went **0.00 (F) →
+  4.999 (A+)** with an in-tree `loc_for_scoring: {value: 10000000}`, no flag
+  and no warning.
+- `loc_for_scoring` is now refused on the same terms, with the same two escape
+  hatches: `--trust-target-config`, or a config kept outside the tree.
+- The warning and the clearing are now one list. `_refuse_target_policy` warned
+  for each key in `_GRADING_KEYS` and then cleared the keys in a separately
+  written expression, so a key added to the tuple would have told the operator
+  it was ignored and then applied it. The clearing is derived from the tuple,
+  each key restored to its own dataclass default.
+- Measured and **not** holes, recorded so they are not re-closed:
+  `scanners.<name>.enabled: false` from inside the tree yields `overall: null`
+  (ungraded, not perfect), and `paths.include_extensions` narrowed to a
+  non-source suffix leaves the grade honest.
+
+### Fixed
+
+- `calibrate --only` with a name matching no repository in the corpus audited
+  nothing and exited **0**. The loop never ran, so `failed` stayed empty —
+  which is what the exit code keys on — and the run wrote empty distributions
+  and reported success. It now names the unmatched selectors, lists the known
+  names and exits 2. Sibling of the exit-code defect fixed in 0.12.11; that
+  fix keyed on `failed` and could not see this case.
+- The calibration test harness captured only stdout, so no test in that file
+  could observe a refusal. It now captures both streams.
+- The calibration study could not handle a repository the product declined to
+  grade — the state D33 makes reachable, and which `overall: null` has always
+  meant. `summarize` sorted `None` against floats and the per-repository line
+  formatted it with `:.2f`; the raise was caught by the guard that keeps one
+  bad repository from ending a study, so a **successful** audit was recorded
+  as `FAILED — TypeError: unsupported format string passed to NoneType`,
+  attributed to the repository, and the study exited nonzero because of it.
+  An ungraded repository is now `unexamined` — the harness's existing concept
+  for "the floor could not read this", whose own docstring says it works
+  "exactly as the product keeps an ungraded run out of a trend" — and the
+  distributions that read product values skip it while the counts still
+  include it. Latent until now only because `calibration-config.json` happens
+  to list an extension for every language in the corpus.
+
+### Internal
+
+- `_gate_fail_on_severity` and `_gate_fail_on_category` were a near-duplicate
+  pair at similarity 1.0 — fourteen lines differing in a config key, an
+  attribute and a noun. Each separately lowercased its configured values and
+  separately excluded suppressed findings, and both break silently: a gate
+  that stops lowercasing accepts its config, matches nothing and passes the
+  build. They now share one evaluator and one table, with a lint pairing the
+  table against the schema so a third vocabulary gate cannot arrive as a third
+  copy.
+- New lint: every `subprocess` call in the package carries a `timeout`. All
+  eight already did; the class was unguarded, and an audit that never returns
+  is worse than one that fails.
+
 ## 0.12.11 — 2026-10-03
 
 **The audited repository could set its own grade.**

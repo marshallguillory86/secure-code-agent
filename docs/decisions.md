@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.11 — 2026-10-03.** The decision register. D1–D32.
+> Status: **v0.12.12 — 2026-10-04.** The decision register. D1–D33.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -44,7 +44,8 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D29 | An untrusted config does not choose a scanner's command | 2026-10-02 | Accepted |
 | D30 | An adapter judges its own tool's exit codes, and `_exec` judges none | 2026-10-02 | Accepted |
 | D31 | An overriding CWE decides the OWASP category derived from it | 2026-10-02 | Accepted |
-| D32 | The audited tree does not grade itself | 2026-10-02 | Accepted |
+| D32 | The audited tree does not grade itself | 2026-10-02 | Accepted (amended 2026-10-04) |
+| D33 | A run that scanned nothing is ungraded, not perfect | 2026-10-04 | Accepted |
 
 ---
 
@@ -2021,3 +2022,133 @@ question 3 asks for may add mapping entries and may **not** restate
 `severity`, `confidence` or `category`. Those three are the scoring inputs,
 and an overlay that set them would reopen this exact hole through a second
 door.
+
+**Amended 2026-10-04: the denominator is a grading key too.** This decision
+named two keys, and the implementation listed those two. `loc_for_scoring`
+was not among them, and every category except `secrets` is a *density* —
+weighted findings per thousand scanned lines — so the tree declaring its own
+line count declares its own grade. Measured on the same one-finding fixture:
+
+| run | overall |
+| --- | ---: |
+| honest | **0.00 (F)** |
+| plus an in-tree `loc_for_scoring: {value: 10000000}` | **4.999 (A+)** |
+
+No flag, no warning. The decision above was right and its implementation was
+an enumeration of the two routes the attack had been *demonstrated* through,
+which is how the third was missed. `loc_for_scoring` is now refused on the
+same terms, with the same two escape hatches.
+
+Two further routes were measured and are **not** holes, which is worth
+recording so the next reader does not re-close them:
+
+- `scanners.<name>.enabled: false` from inside the tree yields `overall:
+  null` — ungraded, not perfect. Disabling the evidence does not buy a
+  grade, because measurability is derived from what actually ran.
+- `paths.test_patterns`, `docs_patterns` and `exclude_patterns` set to match
+  everything now yield `overall: null` as well, via
+  [D33](#d33--a-run-that-scanned-nothing-is-ungraded-not-perfect). Before
+  D33 all three returned **5.00 (A+)**.
+
+**And the warning and the clearing are now one list.** `_refuse_target_policy`
+warned for each key in `_GRADING_KEYS` and then cleared the keys in a
+separately written expression. A key added to the tuple would have told the
+operator it was ignored and then applied it — a warning stating the opposite
+of what happened, which is worse than no warning. The clearing is derived
+from the tuple, each key restored to its own dataclass default, and
+`test_every_grading_key_is_actually_cleared_not_merely_warned_about` holds
+the two together.
+
+---
+
+## D33 — A run that scanned nothing is ungraded, not perfect
+
+**Status:** Accepted · 2026-10-04 · closes the second door of
+[architecture.md §5](architecture.md#5-problem-4--the-scores-null-state-is-perfect--closed-2026-09-09)
+
+**Context.** Pointed at an empty directory, this tool reported `overall:
+5.00`, letter **A+**, exit 0, and nothing on stderr.
+
+It needs no attacker. A path typo, a failed checkout, a clone that produced
+an empty directory, or one `exclude_patterns` entry matching more than its
+author meant all end the same way. Measured, on a tree holding a single
+shell-injection finding:
+
+| run | overall | `loc_scanned` |
+| --- | ---: | ---: |
+| honest | **0.00 (F)** | 3 |
+| `paths.exclude_patterns: ["**"]` | **5.00 (A+)** | 0 |
+| `paths.test_patterns: ["**"]` | **5.00 (A+)** | 0 |
+| `paths.docs_patterns: ["**"]` | **5.00 (A+)** | 0 |
+| an empty directory | **5.00 (A+)** | 0 |
+
+`normalize` divides the weighted subtotal by `max(loc_scanned, 1) / 1000`.
+The `max(..., 1)` avoids a division by zero, and what it does in exchange is
+answer *"no denominator"* with *"a denominator of one line"* — so zero
+findings over zero lines is a density of zero, and a density of zero is a
+perfect grade. Absence read as a value, in the one part of this codebase
+where the doctrine against it is written down.
+
+**§5 was closed through one door.** Its *Closed* section covers
+measurability: `per_category` grades `None` where no scanner in the run could
+read a category, and `overall` is `None` when nothing was measurable. That
+is why disabling every scanner already behaved correctly. §5 also listed, as
+a *"smaller consequence"*, that "`paths.exclude_patterns` is simultaneously
+the scan scope and that denominator" — the mechanism was noted and not
+closed. Two doors into one state; one of them was shut.
+
+**Decision.** A category with no findings **and** no scanned lines grades
+`None`, exactly as a category no scanner covers does. `overall` and `letter`
+follow, as they already do. The condition is a conjunction, and both halves
+are load-bearing:
+
+- **A tree that was scanned and is clean still grades 5.00/A+.** Anything
+  else would punish the honest case this product exists to reward, and would
+  be hiding the defect rather than fixing it.
+- **A finding on a tree that counted no lines is still graded.** LOC counts
+  only the configured source extensions, so a scanner can legitimately
+  report on a file contributing no lines — a credential in a `.env`, a
+  misconfiguration in a bare dotfile. A finding is evidence that something
+  was examined, which is the opposite of what the ungraded state asserts.
+  `score` already reasons this way for the `measurable` set.
+
+**Why not refuse to run.** An empty or fully-excluded tree is not
+necessarily an error: `--changed-only` legitimately produces one on a commit
+that touched no source, and a monorepo audit of a path with no code is a
+normal step in a matrix. The run reports what it found, which is nothing,
+and says it is ungraded. What it may not do is call that a pass.
+
+**And no configured gate is satisfied by such a run.** This is the more
+dangerous half, because the grade is read by a person and the gate is read by
+the build. Measured on an empty directory with a real severity gate supplied
+from outside the tree, `--fail-on-gate` passed:
+
+```text
+secure-code-agent · no score — nothing measurable was scanned · gate PASS
+exit 0
+```
+
+The gate was configured, it was enforced, and it was satisfied by there being
+nothing to find — because every gate asks *"are there offending findings"* and
+zero findings is zero offenders. `_gate_min_score` already refused this for
+its own gate and nothing generalised it. A run that measured nothing now
+trips `nothing_measured` whenever any gate is configured, which is a property
+of the run rather than of a gate, so it sits beside the coverage check.
+
+Conditioned on a gate being configured: with no policy there is nothing to
+fail, the run is a report, and `--fail-on-gate` is already refused outright
+in that case.
+
+**`--changed-only` is not an exception.** It scopes the *report* and still
+scans the whole tree — "scanners read trees rather than diffs" — so a
+commit touching no source keeps a real `loc_scanned` and a real grade. There
+is no legitimate run with zero scanned lines and a configured gate.
+
+**Consequences.** The `min_score` gate trips on such a run, with
+*"nothing measurable was scanned"* — a branch that existed, was written for
+exactly this, and could not be reached from this direction. An operator with
+a `min_score` floor and a broken path was previously shown **PASS**. A
+trend history will also show a gap rather than a spike of perfect scores for
+any run that scanned nothing: the row records `score: null`, verified against
+a first-run history, where the summary correctly reads *"no scored history
+yet"* rather than inventing a point.

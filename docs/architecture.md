@@ -1,6 +1,6 @@
 # secure-code-agent — Architecture Audit
 
-> Status: **v0.12.11 — 2026-10-03.** Assessment of the system as built.
+> Status: **v0.12.12 — 2026-10-04.** Assessment of the system as built.
 > Companion docs: [`design.md`](design.md) states the intended architecture;
 > this document records where the implementation diverges from it and which
 > divergences are generating recurring defects.
@@ -281,6 +281,39 @@ removing a scanner *raises* the raw estimate — 0.00/F to 5.00/A+ — and then
 that the grade was withheld anyway. The estimate no longer rises. It
 disappears: the run that looked at nothing reports no number at all, and
 `min_score` refuses it rather than passing by default.
+
+### Reopened 2026-10-04, and closed through the other door — D33
+
+The close above is about *measurability*: whether a scanner in the run could
+have read a category. It is not about whether there was any code. Those are
+two doors into one state, and this section shut one of them while listing the
+other as a "smaller consequence" two paragraphs up — *"`paths.exclude_patterns`
+is simultaneously the scan scope and that denominator."*
+
+So an empty directory still reported **5.00/A+**, exit 0, nothing on stderr.
+`normalize` divides by `max(loc_scanned, 1) / 1000`, which answers "no
+denominator" with "one line", and zero findings over one line is a perfect
+density. Measured on a tree with one shell-injection finding, every row a
+single config key away from the honest run:
+
+| run | overall | `loc_scanned` |
+| --- | ---: | ---: |
+| honest | 0.00 (F) | 3 |
+| `exclude_patterns: ["**"]` | **5.00 (A+)** | 0 |
+| `test_patterns: ["**"]` | **5.00 (A+)** | 0 |
+| `docs_patterns: ["**"]` | **5.00 (A+)** | 0 |
+| an empty directory | **5.00 (A+)** | 0 |
+
+A category with no findings and no scanned lines now grades `None`. A scanned
+clean tree still grades 5.00, and a finding over zero counted lines is still
+graded — see [D33](decisions.md#d33--a-run-that-scanned-nothing-is-ungraded-not-perfect)
+for why both halves of that conjunction are load-bearing.
+
+The lesson this section should carry: *"CLOSED"* on a problem stated as a
+property — "the null state is perfect" — is a claim about every route into
+that state, and this one was written after closing the route that had been
+demonstrated. The same mistake, in the same week, produced the D32 amendment:
+a rule implemented as a list of the keys the attack had been shown through.
 
 ### Open question
 

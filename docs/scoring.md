@@ -1,6 +1,6 @@
 # Scoring model
 
-> Status: **v0.12.11 — 2026-09-11.** The scoring model, currently model 2.
+> Status: **v0.12.12 — 2026-10-04.** The scoring model, currently model 2.
 
 > Letter-grade A+ → F, mapped from a 0.0 → 5.0 axis. Mirrors `maintainability-agent` so operators have one mental model for both gates.
 
@@ -117,6 +117,24 @@ One committed private key is one committed private key whether the repository is
 This was found the hard way. OWASP Juice Shop — a training application written to be insecure — carries four hardcoded API keys and three private keys, and under straight density graded **B+**, because 115,340 lines of surrounding code divided seven committed credentials down to nothing. Flask, with no secrets at all, graded F.
 
 `sqrt` rather than an absolute count, because a larger codebase genuinely does carry more configuration surface, and an absolute count failed Django on two low-confidence hits. Damped, not exempted.
+
+### No findings and no code is `None`, not 5.0
+
+A category with no findings **and** `loc_scanned == 0` grades `None`, and `overall` and `letter` follow. Nothing was examined, so there is nothing to be clean about.
+
+```python
+# `None`, not 5.0 — and not 0.0 either, which would claim knowledge of poor
+# quality nobody has.
+if count == 0 and (loc_scanned <= 0 or category not in measurable):
+    per_category[category] = None
+```
+
+Both halves of that conjunction matter:
+
+- **A tree that was scanned and is clean still grades 5.00/A+.** That is the honest case, and it keeps its grade.
+- **A finding on a tree that counted no lines is still graded.** `loc_scanned` counts only the extensions in `paths.include_extensions`, so a scanner can report on a file contributing no lines — a credential in a `.env`, a misconfiguration in a bare dotfile. A finding is evidence something was looked at.
+
+Until 0.12.12 this was reversed in effect: `normalize` divides by `max(loc_scanned, 1) / 1000`, so zero findings over zero lines was a density of zero and graded **A+**. An empty directory reported 5.00 at exit 0. See [decisions.md](decisions.md) D33 for the measurements and for why the run reports rather than refuses.
 
 ## Letter grade
 
