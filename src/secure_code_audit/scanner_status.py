@@ -164,8 +164,18 @@ def evaluate_coverage(
         if execution is None:
             failures.append(f"required scanner {name!r} was not selected")
         elif execution.outcome not in COVERING_OUTCOMES:
+            # The reason, when the adapter recorded one. These strings reach
+            # `coverage.failures`, which is what the `require_scanners` gate
+            # reports and what the summary prints — so composing them from the
+            # outcome alone told an operator "failed" while the cause sat one
+            # field away in the same record. On this repository's own audit
+            # that cause was a 429 from Maven Central with a `Retry-After`
+            # and a remedy, and sixty committed trend rows carried the word
+            # "failed" and nothing else.
+            detail = (execution.reason or "").strip()
             failures.append(
                 f"required scanner {name!r} did not complete: {execution.outcome.value}"
+                + (f" — {detail}" if detail else "")
             )
 
     # An unverified import covers the ground, so it does not degrade status to

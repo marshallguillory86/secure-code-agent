@@ -82,6 +82,38 @@ schema may evolve.
   (ungraded, not perfect), and `paths.include_extensions` narrowed to a
   non-source suffix leaves the grade honest.
 
+### Fixed — a required scanner failed for months and would not say why
+
+- Found by running this repository's own audit. All sixty committed rows in
+  `.secure-code/history.jsonl` carry `coverage_complete: false`, because
+  `trivy` is required and has been failing, and the reason recorded every
+  time was **`trivy emitted no SARIF output`** — a dead end for the operator.
+  What trivy was actually saying, captured by reproducing the adapter's own
+  invocation:
+
+  ```text
+  FATAL  remote Maven repository returned 429 Too Many Requests for
+  https://repo.maven.apache.org/... Retry-After: 1313.
+  To avoid this, populate the local Maven cache before scanning.
+  ```
+
+  A cause and a remedy, held in `r.stderr` and discarded. The adapter's other
+  two failure paths — timeout and bad exit — both carry that text; the one
+  path with no diagnosis of its own was the one that threw it away. It also
+  explains twenty-minute trivy invocations in the local suite: it was retrying
+  against Maven with backoff.
+- The empty-output failure now reports the exit code and what trivy said. The
+  exit code is reported rather than judged: trivy returns 1 both for a fatal
+  error and, with `--exit-code`, for findings, so *output* decides success
+  (D30) and a trivy that returns 1 with usable SARIF is still parsed.
+- Second half, one layer up: `evaluate_coverage` composed its failure strings
+  from the outcome alone, so `coverage.failures` — what the `require_scanners`
+  gate reports and what the summary prints — said `did not complete: failed`
+  while `ScannerExecution.reason` held the cause in the same record. A
+  diagnosis that only reaches a JSON field nobody reads is not a diagnosis.
+  Both halves are the same mistake in the same direction: the tool had the
+  evidence and reported its absence.
+
 ### Fixed
 
 - `calibrate --only` with a name matching no repository in the corpus audited

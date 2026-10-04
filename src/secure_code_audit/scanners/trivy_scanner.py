@@ -67,7 +67,30 @@ class TrivyScanner(Scanner):
             if r.returncode not in (0, 1):
                 return self.failed(target, f"trivy failed: {r.stderr[:300]}")
             if not sarif_path.exists() or sarif_path.stat().st_size == 0:
-                return self.failed(target, "trivy emitted no SARIF output")
+                # Say what trivy said. This was "trivy emitted no SARIF
+                # output" and nothing else, while `r.stderr` held the cause
+                # and the remedy — the two paths above both carry it, and the
+                # one path with no diagnosis of its own was the one that threw
+                # the text away.
+                #
+                # Found by this repository's own audit, where every one of
+                # sixty committed trend rows reads `coverage_complete: false`
+                # on a required scanner. What trivy was actually saying:
+                # a 429 from Maven Central with a `Retry-After`, and
+                # "populate the local Maven cache before scanning". The
+                # operator was told a required scanner failed and given
+                # nowhere to go, which is the absence-of-evidence failure this
+                # tool exists to prevent, committed by the tool itself.
+                #
+                # The exit code is reported rather than judged: trivy returns
+                # 1 both for a fatal error and, with `--exit-code`, for
+                # findings, so output decides success here (D30) and the code
+                # only helps a reader place the message.
+                detail = (r.stderr or "").strip()
+                reason = f"trivy emitted no SARIF output (exit {r.returncode})"
+                if detail:
+                    reason += f": {detail[:300]}"
+                return self.failed(target, reason)
 
             ingested = sarif_ingest(sarif_path, default_scanner="trivy")
             # Trivy tags its rules with a category prefix (CVE-, AVD-, etc.);

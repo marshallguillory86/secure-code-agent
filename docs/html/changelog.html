@@ -8,6 +8,7 @@
 <li><a href="#01212-2026-10-04">0.12.12 — 2026-10-04</a><ul>
 <li><a href="#security-nothing-scanned-is-ungraded-not-perfect-d33">Security — nothing scanned is ungraded, not perfect (D33)</a></li>
 <li><a href="#security-the-denominator-is-a-grading-key-too-d32-amended">Security — the denominator is a grading key too (D32, amended)</a></li>
+<li><a href="#fixed-a-required-scanner-failed-for-months-and-would-not-say-why">Fixed — a required scanner failed for months and would not say why</a></li>
 <li><a href="#fixed">Fixed</a></li>
 <li><a href="#internal">Internal</a></li>
 </ul>
@@ -275,6 +276,35 @@ schema may evolve.</p>
   (ungraded, not perfect), and <code>paths.include_extensions</code> narrowed to a
   non-source suffix leaves the grade honest.</li>
 </ul>
+<h3 id="fixed-a-required-scanner-failed-for-months-and-would-not-say-why">Fixed — a required scanner failed for months and would not say why</h3>
+<ul>
+<li>Found by running this repository's own audit. All sixty committed rows in
+  <code>.secure-code/history.jsonl</code> carry <code>coverage_complete: false</code>, because
+  <code>trivy</code> is required and has been failing, and the reason recorded every
+  time was <strong><code>trivy emitted no SARIF output</code></strong> — a dead end for the operator.
+  What trivy was actually saying, captured by reproducing the adapter's own
+  invocation:</li>
+</ul>
+<p><code>text
+  FATAL  remote Maven repository returned 429 Too Many Requests for
+  https://repo.maven.apache.org/... Retry-After: 1313.
+  To avoid this, populate the local Maven cache before scanning.</code></p>
+<p>A cause and a remedy, held in <code>r.stderr</code> and discarded. The adapter's other
+  two failure paths — timeout and bad exit — both carry that text; the one
+  path with no diagnosis of its own was the one that threw it away. It also
+  explains twenty-minute trivy invocations in the local suite: it was retrying
+  against Maven with backoff.
+- The empty-output failure now reports the exit code and what trivy said. The
+  exit code is reported rather than judged: trivy returns 1 both for a fatal
+  error and, with <code>--exit-code</code>, for findings, so <em>output</em> decides success
+  (D30) and a trivy that returns 1 with usable SARIF is still parsed.
+- Second half, one layer up: <code>evaluate_coverage</code> composed its failure strings
+  from the outcome alone, so <code>coverage.failures</code> — what the <code>require_scanners</code>
+  gate reports and what the summary prints — said <code>did not complete: failed</code>
+  while <code>ScannerExecution.reason</code> held the cause in the same record. A
+  diagnosis that only reaches a JSON field nobody reads is not a diagnosis.
+  Both halves are the same mistake in the same direction: the tool had the
+  evidence and reported its absence.</p>
 <h3 id="fixed">Fixed</h3>
 <ul>
 <li><code>calibrate --only</code> with a name matching no repository in the corpus audited
