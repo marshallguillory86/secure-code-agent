@@ -93,25 +93,30 @@ class BanditScanner(Scanner):
         except json.JSONDecodeError as e:
             return self.failed(target, f"bandit JSON parse failure: {e}")
 
-        findings: list[Finding] = []
-        for result in payload.get("results", []):
-            rule_id = result.get("test_id") or result.get("test_name") or "unknown"
-            findings.append(
-                self._make_finding(
-                    rule_id=rule_id,
-                    scanner_cwe=_cwe_of(result),
-                    message=str(result.get("issue_text") or "").strip(),
-                    file_path=Path(result.get("filename", "")),
-                    line_start=int(result.get("line_number") or 0),
-                    line_end=int(result.get("line_range", [0])[-1] or 0)
-                    if isinstance(result.get("line_range"), list)
-                    else None,
-                    code_snippet=str(result.get("code") or "").strip() or None,
-                    severity=Severity.from_string(result.get("issue_severity", "")),
-                    confidence=Confidence.from_string(result.get("issue_confidence", "")),
-                )
-            )
-        return self.completed(findings)
+        return self.completed(
+            self._finding_from_result(result) for result in payload.get("results", [])
+        )
+
+    def _finding_from_result(self, result: dict) -> Finding:
+        """One bandit result as a Finding.
+
+        Split out of `scan` because adding the exit-code guard above took that
+        method to complexity 16 against a limit of 15 — and the guard is the
+        half worth reading, since it is what stops a failed bandit being
+        reported as a clean scan.
+        """
+        line_range = result.get("line_range")
+        return self._make_finding(
+            rule_id=result.get("test_id") or result.get("test_name") or "unknown",
+            scanner_cwe=_cwe_of(result),
+            message=str(result.get("issue_text") or "").strip(),
+            file_path=Path(result.get("filename", "")),
+            line_start=int(result.get("line_number") or 0),
+            line_end=int(line_range[-1] or 0) if isinstance(line_range, list) else None,
+            code_snippet=str(result.get("code") or "").strip() or None,
+            severity=Severity.from_string(result.get("issue_severity", "")),
+            confidence=Confidence.from_string(result.get("issue_confidence", "")),
+        )
 
     @staticmethod
     def _bandit_excludes(target: Path, patterns: tuple[str, ...]) -> list[str]:

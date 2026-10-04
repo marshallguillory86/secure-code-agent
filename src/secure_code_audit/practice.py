@@ -204,23 +204,19 @@ def _ci_files(root: Path) -> list[Path]:
     return found
 
 
-def assess(root: Path) -> PracticeLevel:
-    """Score the repository's security practice from its configuration and CI.
+def _ci_evidence(
+    root: Path, ci_files: list[Path], configs: list[str]
+) -> tuple[list[Signal], list[Signal]]:
+    """What CI actually runs, and what declares a threshold.
 
-    Never reads source. A source finding is code condition, which is the other
-    axis and is measured by the scanners.
+    Two lists rather than one because the difference between them is the
+    whole point of the level: a scanner in CI is enforcement, a threshold in
+    a config is intent, and `_apply_caps` needs to tell them apart.
+
+    A gate can also be declared in configuration that CI then runs, so the
+    config sweep appends after the CI sweep — that order reaches the report
+    and is preserved from when this was one function.
     """
-    signals: list[Signal] = []
-    caps: list[str] = []
-
-    configs = [name for name in SCANNER_CONFIGS if (root / name).is_file()]
-    for name in configs:
-        signals.append(Signal("security configuration present", name))
-
-    ci_files = _ci_files(root)
-    if ci_files:
-        signals.append(Signal("continuous integration present", str(ci_files[0].relative_to(root))))
-
     scanner_in_ci: list[Signal] = []
     gates_in_ci: list[Signal] = []
     for path in ci_files:
@@ -237,17 +233,17 @@ def assess(root: Path) -> PracticeLevel:
                 gates_in_ci.append(Signal(f"CI enforces {marker}", relative))
                 break
 
-    # A gate can also be declared in configuration that CI then runs.
     for name in configs:
         text = _read(root / name)
         for marker in GATE_MARKERS:
             if marker in text:
                 gates_in_ci.append(Signal(f"gate declared: {marker}", name))
                 break
+    return scanner_in_ci, gates_in_ci
 
-    signals.extend(scanner_in_ci)
-    signals.extend(gates_in_ci)
 
+def _discipline_evidence(root: Path) -> list[Signal]:
+    """Practice files, and suppressions that carry an expiry."""
     discipline: list[Signal] = [
         Signal("security practice file", name)
         for name in DISCIPLINE_FILES
@@ -257,11 +253,21 @@ def assess(root: Path) -> PracticeLevel:
         path = root / name
         if path.is_file() and re.search(r"^\s*expires\s*:", _read(path), re.MULTILINE):
             discipline.append(Signal("suppressions carry an expiry", name))
-    signals.extend(discipline)
+    return discipline
 
-    # The level the evidence *claims*, before any cap. Computed separately so a
-    # config that declares a strict gate nothing executes can be capped **and
-    # told why** — the number alone would read as though the gate were real.
+
+def _intended_level(
+    configs: list[str],
+    scanner_in_ci: list[Signal],
+    gates_in_ci: list[Signal],
+    discipline: list[Signal],
+) -> int:
+    """The level the evidence *claims*, before any cap.
+
+    Computed separately from the cap so that a config declaring a strict gate
+    nothing executes can be capped **and told why** — the number alone would
+    read as though the gate were real.
+    """
     intended = 1
     if configs:
         intended = 2
@@ -271,26 +277,59 @@ def assess(root: Path) -> PracticeLevel:
         intended = 4
     if intended == 4 and discipline:
         intended = 5
+    return intended
 
-    # Intent is not enforcement. A repository can hold every scanner config
-    # ever written, declare every threshold in it, and still merge anything.
-    level = intended
-    if not ci_files:
-        if intended > MAX_WITHOUT_CI:
-            caps.append(
-                f"no continuous integration found, so the level is capped at "
-                f"{MAX_WITHOUT_CI}: configuration that nothing runs is a "
-                f"preference, not an enforcement"
-            )
-        level = min(intended, MAX_WITHOUT_CI)
-    elif not scanner_in_ci:
-        if intended > MAX_WITHOUT_CI:
-            caps.append(
-                f"CI exists but runs no recognised security scanner, so the "
-                f"level is capped at {MAX_WITHOUT_CI}: a threshold nothing "
-                f"evaluates is not a gate"
-            )
-        level = min(intended, MAX_WITHOUT_CI)
+
+def _apply_caps(
+    intended: int, ci_files: list[Path], scanner_in_ci: list[Signal]
+) -> tuple[int, list[str]]:
+    """Intent is not enforcement.
+
+    A repository can hold every scanner config ever written, declare every
+    threshold in it, and still merge anything. Each cap carries its reason,
+    because a level with no explanation reads as a measurement of the code
+    rather than of what runs against it.
+    """
+    if ci_files and scanner_in_ci:
+        return intended, []
+    reason = (
+        f"no continuous integration found, so the level is capped at "
+        f"{MAX_WITHOUT_CI}: configuration that nothing runs is a "
+        f"preference, not an enforcement"
+        if not ci_files
+        else f"CI exists but runs no recognised security scanner, so the "
+        f"level is capped at {MAX_WITHOUT_CI}: a threshold nothing "
+        f"evaluates is not a gate"
+    )
+    caps = [reason] if intended > MAX_WITHOUT_CI else []
+    return min(intended, MAX_WITHOUT_CI), caps
+
+
+def assess(root: Path) -> PracticeLevel:
+    """Score the repository's security practice from its configuration and CI.
+
+    Never reads source. A source finding is code condition, which is the other
+    axis and is measured by the scanners.
+
+    The signal order is load-bearing: it reaches the report, so configs come
+    before CI presence, then what CI runs, then what declares a gate, then
+    discipline. That order is why this reads as a sequence of appends rather
+    than one comprehension.
+    """
+    configs = [name for name in SCANNER_CONFIGS if (root / name).is_file()]
+    ci_files = _ci_files(root)
+    scanner_in_ci, gates_in_ci = _ci_evidence(root, ci_files, configs)
+    discipline = _discipline_evidence(root)
+
+    signals: list[Signal] = [Signal("security configuration present", name) for name in configs]
+    if ci_files:
+        signals.append(Signal("continuous integration present", str(ci_files[0].relative_to(root))))
+    signals.extend(scanner_in_ci)
+    signals.extend(gates_in_ci)
+    signals.extend(discipline)
+
+    intended = _intended_level(configs, scanner_in_ci, gates_in_ci, discipline)
+    level, caps = _apply_caps(intended, ci_files, scanner_in_ci)
 
     return PracticeLevel(
         level=level,
