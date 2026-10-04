@@ -400,7 +400,13 @@ def _severity_table(score: ScoreReport) -> str:
         Severity.LOW,
         Severity.INFORMATIONAL,
     ):
-        out.append(f"| **{sev.value}** | {score.per_severity_count.get(sev, 0)} |")
+        # Indexed, not `.get(..., 0)`, like the two sites below and for the
+        # same reason: `score()` is the only producer of a `ScoreReport` and
+        # fills every Severity, so a default here could never fire — and if
+        # that ever stopped being true, this table would quietly print 0
+        # while the PR comment raised. `test_a_score_report_carries_every_severity`
+        # is what holds the invariant now, rather than these comments.
+        out.append(f"| **{sev.value}** | {score.per_severity_count[sev]} |")
     out.append("")
     return "\n".join(out)
 
