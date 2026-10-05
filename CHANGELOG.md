@@ -125,6 +125,37 @@ schema may evolve.
   form of D21 travels; bare names and file globs stay with the post-filter
   rather than being guessed at. Under-excluding costs time; over-excluding
   would silently stop scanning real code.
+- **A path exclusion no longer deletes a dependency advisory.** `_classify`
+  settled the same argument one layer up — *"a dependency advisory is about
+  the dependency, not about the file that happened to declare it… the path
+  routing gets it wrong"* — and nothing applied it to exclusion. A dependency
+  finding is filed against the manifest that pins the version, because that is
+  the only file there is to point at, so any pattern matching that path
+  removed it. `**/*.lock` is in this repository's own config, and the effect
+  was **19 advisories against `uv.lock`, ten of them high, invisible while the
+  `dependencies` category graded 5.0** — a perfect score for a category whose
+  only evidence source was excluded. Everything else in an excluded file stays
+  excluded: a secret or a code finding there is about the file, which is what
+  the operator asked to be rid of.
+- **Those 19 are not a change in this release, and nothing is suppressed for
+  them.** `uv.lock` is deliberately gitignored — the comment beside the entry
+  says why: pyproject is the one source of dependency truth, and "committing a
+  lock nothing enforces would create a second one, free to drift unnoticed".
+  CI installs with `pip install -e`, so no lockfile exists there and this
+  exemption changes nothing about this project's own CI audit. The advisories
+  are a property of a developer's resolved environment, and they will now be
+  reported in one — which is the point.
+- Recorded rather than dispositioned, because they are not ours to fix. Read
+  from the installed metadata rather than inferred: `njsscan==1.0.1` requires
+  `semgrep==1.172.0`, which requires `mcp==1.23.3` and
+  `pyjwt[crypto]~=2.13.0` — a compatible-release pin forbidding the 2.14.0
+  that carries the fix. `checkov 3.3.22` pins `asteval` and `ecdsa`, and
+  `ecdsa` has no fixed version published at all. None of it reaches a
+  published install path: this package's only runtime dependency is `PyYAML`,
+  and none of its exact pins is affected.
+- The exemption matters most for the projects that *do* commit a lockfile,
+  which is nearly all of them: there, excluding it had been deleting the whole
+  dependency axis.
 
 ### Fixed — a required scanner failed for months and would not say why
 

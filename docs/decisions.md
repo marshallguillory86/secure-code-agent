@@ -2253,3 +2253,54 @@ from becoming a coverage gap.
 so Semgrep's cross-file dataflow is not narrowed. That reasoning is about a
 *reporting* filter. `exclude_patterns` is a scan-scope control, and a
 vendored clone tree is not a dataflow source for the code under audit.
+
+**Scope note: a path exclusion does not delete a dependency advisory.**
+`_classify` settled the same argument one layer up and said why — *"a
+dependency advisory is about the dependency, not about the file that
+happened to declare it. Classified by category before path, because the path
+routing gets it wrong: `requirements.txt` matches the documentation pattern
+`**/*.txt`, so every CVE in a pip manifest was filed under documentation."*
+Nothing applied it to exclusion.
+
+A dependency finding is reported against the manifest or lockfile that pins
+the version, because that is the only file there is to point at. So any
+pattern matching that path deleted the advisory. `**/*.lock` is in this
+repository's own config and is an ordinary thing to write — a lockfile is
+generated, enormous, and full of hashes that read like secrets — and the
+effect was that nineteen advisories against `uv.lock`, ten of them high,
+never reached the report while the `dependencies` category graded **5.0**: a
+perfect score for a category whose only evidence source was excluded.
+
+So `DEPENDENCIES` findings survive a path exclusion and everything else in
+the same file does not. A secret or a code finding inside an excluded
+lockfile stays excluded, which is what the operator asked for; only the
+advisory about the *package* survives, because the path was never what it
+was about.
+
+**What it surfaced here, and what was *not* done about it.** The nineteen
+are all against `uv.lock`, which this repository deliberately gitignores:
+pyproject is the one source of dependency truth, and *"committing a lock
+nothing enforces would create a second one, free to drift unnoticed"*. CI
+installs with `pip install -e`, so no lockfile exists there and this
+exemption changes nothing about this project's own CI audit. The advisories
+describe a developer's resolved environment, and they will now be reported
+in one.
+
+They were briefly suppressed, and that was wrong twice over: nineteen
+permanent entries in a committed file, pointing at a path no commit
+contains — which this repository's own
+`test_no_suppression_path_matches_nothing` lint caught immediately, being
+exactly the "suppression that silently stopped covering anything" it exists
+to prevent. The suppressions are gone; the chain is recorded here instead.
+
+Every one is held by an upstream pin, read from the installed metadata
+rather than inferred: `njsscan==1.0.1` requires `semgrep==1.172.0`, which
+requires `mcp==1.23.3` and `pyjwt[crypto]~=2.13.0` — a compatible-release
+pin forbidding the 2.14.0 that carries the fix. `checkov 3.3.22` pins
+`asteval` and `ecdsa`, and `ecdsa` has no fixed version published at all.
+None of it reaches a published install path: this package's only runtime
+dependency is `PyYAML`, and none of its exact pins is affected.
+
+**So the exemption matters most for the projects that do commit a
+lockfile**, which is nearly all of them. There, excluding it had been
+deleting the entire dependency axis while the category reported 5.0.

@@ -1053,7 +1053,25 @@ def _drop_excluded(
             continue
         if path.resolve() in own_artifacts:
             continue
-        if is_excluded(path, root, cfg.exclude_patterns):
+        # A dependency advisory outlives the exclusion of the file it is filed
+        # against, for the reason `_classify` already gives one layer up: the
+        # finding is about the pinned package, and the manifest or lockfile is
+        # only the one file there is to point at. A pattern matching that path
+        # was never a statement about the package.
+        #
+        # `**/*.lock` is the ordinary case, and it is in this repository's own
+        # config — a lockfile is generated, enormous, and full of hashes that
+        # read like secrets. The effect was that trivy's 19 advisories against
+        # `uv.lock`, one CRITICAL, never reached the report, and the
+        # `dependencies` category graded 5.0: a perfect score for a category
+        # whose only evidence source was excluded.
+        #
+        # Everything else in that file stays excluded — a secret or a code
+        # finding inside it is about the file, which is what the operator
+        # asked to be rid of. D34's scope note, and the question §8 asked.
+        if finding.category is not Category.DEPENDENCIES and is_excluded(
+            path, root, cfg.exclude_patterns
+        ):
             continue
         kept.append(finding)
     return kept
