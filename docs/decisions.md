@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.12 — 2026-10-04.** The decision register. D1–D34.
+> Status: **v0.13.0 — 2026-10-05.** The decision register. D1–D35.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -47,6 +47,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D32 | The audited tree does not grade itself | 2026-10-02 | Accepted (amended 2026-10-04) |
 | D33 | A run that scanned nothing is ungraded, not perfect | 2026-10-04 | Accepted |
 | D34 | An adapter declares whether it honours `exclude_patterns` | 2026-10-04 | Accepted |
+| D35 | Coverage names a language nothing read; depth is still open | 2026-10-05 | Accepted, with an open question |
 
 ---
 
@@ -2145,6 +2146,40 @@ scans the whole tree — "scanners read trees rather than diffs" — so a
 commit touching no source keeps a real `loc_scanned` and a real grade. There
 is no legitimate run with zero scanned lines and a configured gate.
 
+**Amended 2026-10-05: a control finding is not evidence.** This decision
+said *"a finding is evidence that something was examined"*, and that is true
+of a scanner's findings and false of a scanner's notice about itself.
+
+Found by UAT on the published 0.12.12 wheel rather than by any test here. A
+clean `pip install secure-code-agent` ships no scanners, so on an empty tree
+every adapter emits its own `{name}.tool_unavailable` control finding —
+`POLICY_DOCS`, `INFORMATIONAL`. That counted as evidence, graded the
+category, and because `INFORMATIONAL` is 0.0 in `SEVERITY_WEIGHT` the
+subtotal was zero and the grade a perfect 5.0. Being the only graded
+category it became the overall:
+
+```text
+per_category: { ...all null..., "policy_docs": 5.0 }
+overall: 5.0   letter: A+   loc_scanned: 0
+```
+
+A notice saying *"this tool could not run"* is evidence of the opposite of
+examination, and it was buying an A+.
+
+**Only a finding that could move the score is evidence that a score may be
+produced.** Expressed as weight rather than as a list of control rule ids:
+`scoring` must not know about the scanner layer, the four suffixes would
+drift, and the real property is simply "could this have changed the number".
+The notice is still *reported* — `per_category_count` counts it, because that
+is how a reader finds it — it just no longer grades anything.
+
+**Why the local suite could not catch it.** A development checkout has the
+scanner floor installed, so no unavailable notice is ever emitted and the
+branch was never reachable. It took installing the published artifact into a
+clean virtualenv. That is now the argument for UAT on the artifact rather
+than on the branch, and the reproduction is recorded in
+`test_nothing_scanned_is_not_a_perfect_score.py`.
+
 **Consequences.** The `min_score` gate trips on such a run, with
 *"nothing measurable was scanned"* — a branch that existed, was written for
 exactly this, and could not be reached from this direction. An operator with
@@ -2304,3 +2339,58 @@ dependency is `PyYAML`, and none of its exact pins is affected.
 **So the exemption matters most for the projects that do commit a
 lockfile**, which is nearly all of them. There, excluding it had been
 deleting the entire dependency axis while the category reported 5.0.
+
+
+---
+
+## D35 — Coverage names a language nothing read; depth is still open
+
+**Status:** Accepted, with an open question · 2026-10-05
+
+**Context.** `coverage: COMPLETE` meant "every configured scanner ran". That
+is a fact about the scanner list, not about the tree. Audited
+`calibration/.corpus/gin` — 7,146 lines of Go:
+
+```text
+coverage:             complete
+code_vulnerabilities: 5.0
+overall:              5.00 (A+)
+```
+
+**The first diagnosis of this was wrong, and the error is instructive.** It
+said no scanner in the run read Go. Semgrep's offline profile carries five Go
+rules — command injection, weak hash, weak cipher, TLS verification disabled,
+weak random — and they fire on the shipped Go fixture. Go was read, by five
+rules and no dedicated scanner.
+
+The error came from lifting `LANGUAGE_SCANNERS` out of
+`calibration/calibrate.py` without asking what it means there. Inside a study
+with a fixed scanner set, `python: ("bandit",)` is a proxy for coverage
+*depth*. Read as "what reads Python at all" it is false — `builtin_rules` is
+Python-only and finds plenty. It broke
+`test_a_grade_is_issued_only_when_a_declared_scanner_set_actually_ran`, which
+declares `builtin_rules` and nothing else. The test was right.
+
+**Decision.** Coverage knows which languages the **scored** tree contains and
+names any that **nothing** in the run read, with the remedy, in the summary
+and in the JSON. The map lists every verified reader. Scoped to the primary
+tree exactly as the scoring denominator is, so a Go fixture under `tests/`
+does not oblige a Python project to install `gosec`.
+
+`PARTIAL`, not `FAILED`: `PARTIAL` withholds the verified grade and leaves
+`require_scanners` alone, while `FAILED` would refuse to audit any repository
+containing a shell script. An operator wanting the stricter reading of P7 has
+`require_scanners`.
+
+**Open question, deliberately unanswered.** Whether five generic rules counts
+as *covering* a language. `COMPLETE` and `PARTIAL` cannot express depth, so
+answering it needs a third state or a threshold — a statement about what this
+tool promises rather than a bug fix. Until it is settled, a thinly-covered
+language reports `COMPLETE` and a reader must look at the scanner list to see
+how thinly. That is the honest description of the current behaviour, and it is
+the question an audit should start from.
+
+**What it does catch.** C, Rust, PHP and shell — nothing in the floor reads
+any of them. On this repository the only shell file is
+`examples/local-ci.sh`, which matches `docs_patterns` and therefore sits on
+the documentation axis, correctly creating no obligation for the scored tree.
