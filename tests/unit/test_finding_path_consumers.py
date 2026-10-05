@@ -202,6 +202,7 @@ def _git(root: Path, *args: str) -> None:
         check=True,
         capture_output=True,
         env={**os.environ, "GIT_IDENTITY_OVERRIDE": "1"},
+        timeout=120,
     )
 
 
@@ -229,7 +230,11 @@ def test_scope_cites_a_relative_path_from_a_subdirectory(tmp_path, monkeypatch):
     """A bare `resolve()` from `src/` would cite `src/src/a.py`."""
     root = _committed_repo(tmp_path)
     head = subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=120,
     ).stdout.strip()
     (root / "src" / "a.py").write_text("x = 2\n", encoding="utf-8")
     monkeypatch.chdir(root / "src")

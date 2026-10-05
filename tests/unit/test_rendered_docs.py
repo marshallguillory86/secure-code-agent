@@ -67,7 +67,7 @@ render_docs = _load()
 
 def _git(*args: str) -> list[str]:
     return subprocess.run(
-        ["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=True
+        ["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=True, timeout=120
     ).stdout.split()
 
 
@@ -111,12 +111,14 @@ def test_an_untracked_file_is_never_rendered(tmp_path):
     document this repository publishes, and the difference is that git does
     not track them.
     """
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, timeout=120)
     (tmp_path / "docs").mkdir()
     (tmp_path / "README.md").write_text("# Readme\n", encoding="utf-8")
     (tmp_path / "docs" / "guide.md").write_text("# Guide\n", encoding="utf-8")
     (tmp_path / "scratch-note.md").write_text("# Not a document\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(tmp_path), "add", "README.md", "docs/guide.md"], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", "README.md", "docs/guide.md"], check=True, timeout=120
+    )
 
     assert {str(p) for p in render_docs.sources(tmp_path)} == {"README.md", "docs/guide.md"}
 

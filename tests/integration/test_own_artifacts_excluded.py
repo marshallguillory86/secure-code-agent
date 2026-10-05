@@ -65,6 +65,7 @@ def _audit(target: Path, *extra: str) -> dict:
         capture_output=True,
         text=True,
         cwd=str(REPO),
+        timeout=120,
     )
     assert out.exists()
     return json.loads(out.read_text(encoding="utf-8"))

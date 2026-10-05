@@ -44,6 +44,7 @@ def _run(target, *extra: str):
         capture_output=True,
         text=True,
         cwd=str(REPO),
+        timeout=120,
     )
 
 

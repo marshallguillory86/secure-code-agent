@@ -63,6 +63,25 @@ def _sources() -> list[Path]:
     return sorted(SRC.rglob("*.py"))
 
 
+#: The suite spawns children too, and an unbounded one there hangs CI rather
+#: than an audit. That is not hypothetical: on 2026-10-04 a `Python 3.13` job
+#: sat in the test step for **44 minutes 40 seconds** and was killed at 45:01,
+#: while every other interpreter in the same matrix finished in about two and
+#: a half minutes. The run went red, and because the required
+#: `Required scanner coverage` job needs the test job, it was *skipped* — a
+#: required check that never reports, which is the one arrangement that
+#: deadlocks a merge outright.
+#:
+#: Twenty-nine of the suite's thirty-six child-process calls had no timeout
+#: when this was written. The `src/` half of this lint had shipped a day
+#: earlier and simply did not look here.
+TESTS = Path(__file__).resolve().parent.parent
+
+
+def _test_sources() -> list[Path]:
+    return sorted(TESTS.rglob("*.py"))
+
+
 def test_the_source_tree_is_not_empty():
     """A glob that matched nothing would make the check below vacuous."""
     assert len(_sources()) >= 20, len(_sources())
@@ -117,3 +136,38 @@ def test_the_detector_proves_itself(tmp_path):
 
     assert _unbounded_calls(unbounded) == ["unbounded.py:5 subprocess.run()"]
     assert _unbounded_calls(bounded) == []
+
+
+def test_the_suite_spawns_at_least_one_child():
+    """Guards the inventory the check below judges, as above for `src/`."""
+    spawns = 0
+    for path in _test_sources():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        spawns += sum(
+            1
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and ast.unparse(node.func).endswith(_SPAWNERS)
+        )
+
+    assert spawns >= 20, (
+        f"found {spawns} child-process calls in the suite; there were 36. A drop "
+        "means they were removed or are spelled in a way this lint cannot see."
+    )
+
+
+def test_no_test_spawns_a_child_without_a_timeout():
+    """A hung test costs Actions minutes and blocks the merge.
+
+    The suite shells out to git, to this tool's own CLI, and to installed
+    scanners. Any of those can wait forever — on a credential prompt, on a
+    rate-limited index, on a scanner that never returns — and a test has no
+    `_execution` wrapper to bound it. The bound does not need to be tight;
+    it needs to exist.
+    """
+    offenders = [hit for path in _test_sources() for hit in _unbounded_calls(path)]
+
+    assert offenders == [], (
+        f"test spawned a child process with no timeout: {offenders}. Pass "
+        "`timeout=`; one of these hung a CI job for 45 minutes and left a "
+        "required check skipped, which blocks the merge rather than failing it."
+    )

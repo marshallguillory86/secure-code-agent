@@ -51,6 +51,7 @@ def _tracked_paths() -> list[str]:
         check=True,
         capture_output=True,
         text=True,
+        timeout=120,
     )
     return [line for line in r.stdout.splitlines() if line]
 

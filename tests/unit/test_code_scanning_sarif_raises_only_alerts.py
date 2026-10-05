@@ -201,6 +201,7 @@ def test_the_cli_writes_the_record_and_the_upload(tmp_path):
         check=False,
         capture_output=True,
         text=True,
+        timeout=120,
     )
     assert upload.exists(), result.stdout[-800:] + result.stderr[-800:]
 
@@ -247,6 +248,7 @@ def test_the_configured_output_is_written_too(tmp_path):
         cwd=tmp_path,
         check=False,
         capture_output=True,
+        timeout=120,
     )
 
     assert (tree / "alerts.sarif").exists()
