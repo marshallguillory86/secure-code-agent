@@ -47,6 +47,9 @@ class HadolintScanner(Scanner):
     default_category = Category.CONFIG_IAC
     install_hint = "brew install hadolint, or a pinned release from github.com/hadolint/hadolint"
 
+    honours_exclusions = True
+    exclusion_note = "filters the Dockerfiles it discovers, so hadolint never sees an excluded path"
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)

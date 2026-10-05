@@ -481,8 +481,42 @@ def _apply_capabilities(cfg: Config, raw: dict[str, Any]) -> None:
     cfg.capabilities = dict(capabilities_raw)
 
 
+def _scanner_config(name: str, sc_raw: dict[str, Any]) -> ScannerConfig:
+    """One scanner's config, or a `ValueError` naming the field that is wrong.
+
+    Every message carries `scanners.<name>.<field>`, because an operator
+    editing a block of fifteen scanners needs to know which one.
+    """
+    for field_name in ("enabled", "online"):
+        if field_name in sc_raw and not isinstance(sc_raw[field_name], bool):
+            raise ValueError(f"scanners.{name}.{field_name} must be a boolean")
+    timeout = sc_raw.get("timeout_seconds")
+    if timeout is not None and (
+        isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0
+    ):
+        raise ValueError(f"scanners.{name}.timeout_seconds must be a positive integer")
+    mode = sc_raw.get("mode") or "auto"
+    if not isinstance(mode, str):
+        raise ValueError(f"scanners.{name}.mode must be a string")
+
+    return ScannerConfig(
+        enabled=sc_raw.get("enabled", True),
+        timeout_seconds=timeout,
+        online=sc_raw.get("online", False),
+        extra_args=_string_list(sc_raw.get("extra_args") or [], f"scanners.{name}.extra_args"),
+        command=_string_list(sc_raw.get("command") or [], f"scanners.{name}.command"),
+        mode=mode,
+        inputs=_string_list(sc_raw.get("inputs") or [], f"scanners.{name}.inputs"),
+    )
+
+
 def _apply_scanners(cfg: Config, raw: dict[str, Any]) -> None:
-    """The `scanners` block."""
+    """The `scanners` block.
+
+    The per-scanner validation is `_scanner_config`: carrying it in the loop
+    put this at complexity 17 and cognitive 21 against limits of 15 and 25,
+    and the loop's own job is only to check the shape of the mapping.
+    """
     scanners_raw = raw.get("scanners", {})
     if not isinstance(scanners_raw, dict):
         raise ValueError("scanners must be a JSON object")
@@ -491,32 +525,7 @@ def _apply_scanners(cfg: Config, raw: dict[str, Any]) -> None:
             raise ValueError("scanner names must be non-empty strings")
         if not isinstance(sc_raw, dict):
             raise ValueError(f"scanners.{name} must be a JSON object")
-        command = _string_list(sc_raw.get("command") or [], f"scanners.{name}.command")
-        inputs = _string_list(sc_raw.get("inputs") or [], f"scanners.{name}.inputs")
-        extra_args = _string_list(sc_raw.get("extra_args") or [], f"scanners.{name}.extra_args")
-        enabled = sc_raw.get("enabled", True)
-        online = sc_raw.get("online", False)
-        if not isinstance(enabled, bool):
-            raise ValueError(f"scanners.{name}.enabled must be a boolean")
-        if not isinstance(online, bool):
-            raise ValueError(f"scanners.{name}.online must be a boolean")
-        timeout = sc_raw.get("timeout_seconds")
-        if timeout is not None and (
-            isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0
-        ):
-            raise ValueError(f"scanners.{name}.timeout_seconds must be a positive integer")
-        mode = sc_raw.get("mode") or "auto"
-        if not isinstance(mode, str):
-            raise ValueError(f"scanners.{name}.mode must be a string")
-        cfg.scanners[name] = ScannerConfig(
-            enabled=enabled,
-            timeout_seconds=timeout,
-            online=online,
-            extra_args=extra_args,
-            command=command,
-            mode=mode,
-            inputs=inputs,
-        )
+        cfg.scanners[name] = _scanner_config(name, sc_raw)
 
 
 def _apply_overrides_and_gates(cfg: Config, raw: dict[str, Any]) -> None:
@@ -660,37 +669,67 @@ def _string_mapping(value: object, field_name: str) -> dict[str, str]:
     return {key: item.lower() for key, item in value.items()}
 
 
-def _validate_gates(value: object) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise ValueError("gates must be a JSON object")
-    gates = dict(value)
+def _validated_min_score(score: object) -> None:
+    """`gates.min_score` is a number on the same 0..5 scale as the report."""
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or not 0 <= score <= 5:
+        raise ValueError("gates.min_score must be a number from 0 through 5")
+
+
+def _validated_max_unsuppressed(limits: object) -> None:
+    """`gates.max_unsuppressed` maps a severity to a non-negative count.
+
+    `informational` is excluded deliberately: its weight is 0.0, so a cap on
+    it would gate on findings that cannot move the score.
+    """
+    if not isinstance(limits, dict) or not all(
+        isinstance(limit, int) and not isinstance(limit, bool) and limit >= 0
+        for limit in limits.values()
+    ):
+        raise ValueError("gates.max_unsuppressed must map severities to non-negative integers")
+    invalid = set(limits) - (_SEVERITIES - {"informational"})
+    if invalid:
+        raise ValueError(f"invalid gates.max_unsuppressed key: {sorted(invalid)[0]}")
+
+
+def _validated_gate_lists(gates: dict[str, Any]) -> None:
+    """The three list-valued gates, and the vocabularies they draw from.
+
+    A misspelled severity is the dangerous case: ignored, `fail_on_severity`
+    would silently gate on nothing, and the run would read as a passing gate
+    rather than an absent one.
+    """
     for name in ("fail_on_severity", "fail_on_category", "require_scanners"):
         if name in gates:
             gates[name] = _string_list(gates[name], f"gates.{name}")
     if "require_scanners" in gates and not gates["require_scanners"]:
         raise ValueError("gates.require_scanners must contain at least one scanner")
-    invalid_severities = set(gates.get("fail_on_severity", [])) - _SEVERITIES
-    if invalid_severities:
-        raise ValueError(f"invalid gates.fail_on_severity value: {sorted(invalid_severities)[0]}")
-    invalid_categories = set(gates.get("fail_on_category", [])) - _CATEGORIES
-    if invalid_categories:
-        raise ValueError(f"invalid gates.fail_on_category value: {sorted(invalid_categories)[0]}")
+    for name, vocabulary in (
+        ("fail_on_severity", _SEVERITIES),
+        ("fail_on_category", _CATEGORIES),
+    ):
+        invalid = set(gates.get(name, [])) - vocabulary
+        if invalid:
+            raise ValueError(f"invalid gates.{name} value: {sorted(invalid)[0]}")
+
+
+def _validate_gates(value: object) -> dict[str, Any]:
+    """Every gate key, or a `ValueError` naming the first one that is wrong.
+
+    Split into three helpers because carrying all of it here put this at
+    complexity 21 and cognitive 21 against limits of 15 and 25. The order of
+    checks is preserved: a configuration with two faults reports the same
+    one it reported before.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("gates must be a JSON object")
+    gates = dict(value)
+    _validated_gate_lists(gates)
     if "fail_on_new" in gates and not isinstance(gates["fail_on_new"], bool):
         raise ValueError("gates.fail_on_new must be a boolean")
     if "min_score" in gates:
-        score = gates["min_score"]
-        if isinstance(score, bool) or not isinstance(score, (int, float)) or not 0 <= score <= 5:
-            raise ValueError("gates.min_score must be a number from 0 through 5")
+        _validated_min_score(gates["min_score"])
     if "max_unsuppressed" in gates:
-        limits = gates["max_unsuppressed"]
-        if not isinstance(limits, dict) or not all(
-            isinstance(limit, int) and not isinstance(limit, bool) and limit >= 0
-            for limit in limits.values()
-        ):
-            raise ValueError("gates.max_unsuppressed must map severities to non-negative integers")
-        invalid_limits = set(limits) - (_SEVERITIES - {"informational"})
-        if invalid_limits:
-            raise ValueError(f"invalid gates.max_unsuppressed key: {sorted(invalid_limits)[0]}")
+        _validated_max_unsuppressed(gates["max_unsuppressed"])
     return gates
 
 

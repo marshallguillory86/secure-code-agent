@@ -30,7 +30,9 @@ def _repo(tmp_path: Path) -> Path:
     (root / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
     (root / "src" / "b.py").write_text("y = 2\n", encoding="utf-8")
     for args in (["init", "-q"], ["add", "-A"]):
-        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(root), *args], check=True, capture_output=True, timeout=120
+        )
     # Inherited environment plus `--no-verify`: this machine runs a
     # commit-identity hook, and a stripped env broke it in a way that read as
     # the feature failing rather than the fixture.
@@ -51,13 +53,18 @@ def _repo(tmp_path: Path) -> Path:
         check=True,
         capture_output=True,
         env={**os.environ, "GIT_IDENTITY_OVERRIDE": "1"},
+        timeout=120,
     )
     return root
 
 
 def _head(root: Path) -> str:
     return subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=120,
     ).stdout.strip()
 
 
@@ -278,7 +285,9 @@ def _scoped_fixture(tmp_path: Path) -> tuple[Path, str]:
         "import subprocess\ndef a(x):\n    return subprocess.call('ls '+x, " + "shell=True)\n",
         encoding="utf-8",
     )
-    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(root), "add", "-A"], check=True, capture_output=True, timeout=120
+    )
     subprocess.run(
         [
             "git",
@@ -296,6 +305,7 @@ def _scoped_fixture(tmp_path: Path) -> tuple[Path, str]:
         check=True,
         capture_output=True,
         env={**os.environ, "GIT_IDENTITY_OVERRIDE": "1"},
+        timeout=120,
     )
     since = _head(root)
     (root / "src" / "new.py").write_text(

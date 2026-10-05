@@ -350,6 +350,17 @@ def examined(row: dict) -> bool:
     of the distribution, exactly as the product keeps an ungraded run out of
     a trend.
     """
+    # The product itself declined to grade this one — `overall: null`, which
+    # it returns for a run it could not measure (P7) and, since D33, for a run
+    # that counted no scanned lines. That is this function's own case, stated
+    # by the product instead of inferred from the language table, so it is
+    # checked first: a repository can be in a language the floor reads and
+    # still come back ungraded, and before this it reached the distributions
+    # and raised there — `sorted` on None, then `:.2f` on None, partway
+    # through a study whose audits had already been paid for.
+    if (row.get("measure") or {}).get("reported_overall") is None:
+        return False
+
     language = (row.get("language") or "").lower()
     required = LANGUAGE_SCANNERS.get(language)
     if not required:
@@ -380,6 +391,12 @@ def summarize(rows: list[dict]) -> dict:
     ok = [r for r in rows if "error" not in r]
     seen = [r for r in ok if r.get("examined")]
     unexamined = [r["name"] for r in ok if not r.get("examined")]
+    # Rows carrying a grade the product was willing to state. `ok` means "the
+    # audit completed", which is not the same thing: a completed audit may
+    # report `overall: null`. Only the distributions that read a *product*
+    # value need this — `unclamped_overall`, `worst_normalized` and `loc` are
+    # computed here from subtotals and are always numbers.
+    graded = [r for r in ok if r["measure"]["reported_overall"] is not None]
 
     def by_kind(kind: str) -> list[dict]:
         return [r for r in seen if (r.get("kind") or "maintained") == kind]
@@ -424,13 +441,13 @@ def summarize(rows: list[dict]) -> dict:
         "examined_worst_normalized": percentiles([r["measure"]["worst_normalized"] for r in seen])
         if seen
         else None,
-        "reported_overall": percentiles([r["measure"]["reported_overall"] for r in ok]),
+        "reported_overall": percentiles([r["measure"]["reported_overall"] for r in graded]),
         "unclamped_overall": percentiles([r["measure"]["unclamped_overall"] for r in ok]),
         "worst_normalized": percentiles([r["measure"]["worst_normalized"] for r in ok]),
         "loc": percentiles([float(r["measure"]["loc_scanned"]) for r in ok]),
         "letters": {
-            letter: sum(1 for r in ok if r["measure"]["reported_letter"] == letter)
-            for letter in sorted({r["measure"]["reported_letter"] for r in ok})
+            letter: sum(1 for r in graded if r["measure"]["reported_letter"] == letter)
+            for letter in sorted({r["measure"]["reported_letter"] for r in graded})
         },
     }
 
@@ -451,7 +468,27 @@ def main() -> int:
     corpus = json.loads(Path(args.corpus).read_text(encoding="utf-8"))
     entries = corpus["repositories"]
     if args.only:
-        wanted = {name.strip() for name in args.only.split(",")}
+        wanted = {name.strip() for name in args.only.split(",") if name.strip()}
+        known = {e["name"] for e in entries}
+        # `--only` is an assertion about names the operator believes exist, so
+        # one that matches nothing is a typo. Left to filter silently it
+        # selected zero repositories: the loop never ran, `failed` stayed
+        # empty — which is what the exit code keys on — and the run wrote
+        # empty distributions and exited 0, having measured nothing.
+        #
+        # The sibling of this was fixed by keying the exit code on `failed`,
+        # and that fix could not see this case. Both are "the run measured
+        # nothing and said success". Same treatment as a named config that
+        # does not exist, or a configured pip_audit input that does not: fail
+        # loudly and name it.
+        unknown = sorted(wanted - known)
+        if unknown:
+            print(
+                f"--only names {len(unknown)} repository(ies) not in the corpus: "
+                f"{', '.join(unknown)}. Known names: {', '.join(sorted(known))}.",
+                file=sys.stderr,
+            )
+            return 2
         entries = [e for e in entries if e["name"] in wanted]
 
     work = Path(args.work)
@@ -472,9 +509,16 @@ def main() -> int:
             row["measure"] = measure(payload)
             row["coverage"] = payload.get("coverage") or {}
             row["examined"] = examined(row)
+            overall = row["measure"]["reported_overall"]
+            # `overall` is None when the product declined to grade the run.
+            # Formatted with `:.2f` that raised, and the raise was caught by
+            # the per-repository guard below — so a *successful* audit was
+            # recorded as `FAILED — TypeError: unsupported format string`,
+            # against the repository, and the study exited nonzero blaming it.
+            # The audit worked; it reported "ungraded", which is an answer.
             print(
-                f"{row['measure']['reported_overall']:.2f} "
-                f"({row['measure']['reported_letter']})  "
+                f"{'  —  ' if overall is None else f'{overall:.2f} '}"
+                f"({row['measure']['reported_letter'] or 'ungraded'})  "
                 f"loc={row['measure']['loc_scanned']:,}  "
                 f"findings={row['measure']['finding_count']}  "
                 f"{'' if row['examined'] else 'UNEXAMINED  '}"

@@ -34,7 +34,7 @@ _HARD_CONSTRAINTS = """\
 6. Do not silence warnings: no `# nosec`, `# noqa`, `# type: ignore`, `eslint-disable` or equivalent.
 7. Do not add dependencies. If one is genuinely required, stop and ask.
 8. Preserve behaviour. If a finding proves current behaviour unsafe, name the input → old/new output.
-9. Add one focused test per fix that FAILS before and PASSES after. No "TODO: add test later".
+9. Add one focused test per fix that FAILS before and PASSES after. Do not defer the test to a later change.
 10. Keep the patch small. If you are rewriting a function rather than patching it, stop and report why.
 """
 

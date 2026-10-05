@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any
 
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
@@ -708,13 +709,30 @@ def score(
     per_category_count: dict[Category, int] = {}
     per_severity_count: dict[Severity, int] = dict.fromkeys(Severity, 0)
 
+    # Nothing was scanned, so there is no code any category could be clean
+    # about. `normalize` divides by `max(loc_scanned, 1)`, which answers "no
+    # denominator" with "one line" — and zero findings over one line is a
+    # density of zero, which is a perfect grade. That is how an empty
+    # directory reported 5.00/A+ at exit 0 with nothing on stderr, and how
+    # one over-broad `exclude_patterns` entry moved a real finding's tree
+    # from 0.00/F to 5.00/A+ on `loc_scanned: 0`.
+    #
+    # It is the same "nothing was measured" state that disabling every
+    # scanner already reaches through `measured` below, which is why that
+    # path returned None correctly while this one did not: two doors into
+    # one state, and only one of them was closed.
+    nothing_scanned = loc_scanned <= 0
     for cat in Category:
         count = sum(1 for f in findings if f.category == cat and not f.suppressed)
         per_category_count[cat] = count
         # A finding *is* evidence the category was measurable, whatever the
         # scanner inventory says — otherwise a tool reporting outside its
-        # declared domain would have its findings graded as unmeasured.
-        if cat not in measured and count == 0:
+        # declared domain would have its findings graded as unmeasured. The
+        # same reasoning is why `nothing_scanned` is a conjunction: a finding
+        # on a tree that counted no lines (a credential in a `.env`, a
+        # misconfiguration in a bare dotfile — LOC counts only configured
+        # source extensions) is still evidence, and is still graded.
+        if count == 0 and (nothing_scanned or cat not in measured):
             per_category[cat] = None
             continue
         subtotal = category_subtotal(findings, cat)
@@ -812,9 +830,10 @@ def evaluate_gates(
     reasons: list[str] = []
     tripped: list[str] = []
 
+    # Order reaches the report, so the vocabulary gates stay where their two
+    # separate functions were: severity, then category, then the rest.
     for check in (
-        _gate_fail_on_severity,
-        _gate_fail_on_category,
+        *(partial(_gate_fail_on_vocabulary, gate) for gate in _VOCABULARY_GATES),
         _gate_fail_on_new,
         _gate_min_score,
         _gate_max_unsuppressed,
@@ -824,6 +843,29 @@ def evaluate_gates(
     if coverage is not None and coverage.status is CoverageStatus.FAILED:
         tripped.append("require_scanners")
         reasons.append("; ".join(coverage.failures))
+
+    # A property of the run rather than of any one gate, which is why it sits
+    # here beside the coverage check instead of inside an evaluator.
+    #
+    # Every other gate asks "are there offending findings", and zero findings
+    # is zero offenders — so a real, enforced severity gate was *satisfied* by
+    # an empty directory: `gate PASS`, exit 0, with `--fail-on-gate` passed.
+    # The grade is read by a person and the gate is read by the build, so this
+    # was the more dangerous half of D33. `_gate_min_score` already refused it
+    # for its own gate ("withholding evidence must not buy a pass") and
+    # nothing generalised that.
+    #
+    # Conditioned on a gate actually being configured: with no policy there is
+    # nothing to fail, the run is a report, and `_require_configured_gates`
+    # already refuses `--fail-on-gate` in that case. `--changed-only` is not
+    # an exception — it scopes the report and still scans the whole tree, so
+    # a docs-only commit keeps a real `loc_scanned` and a real grade.
+    if report.overall is None and active_gates(gate_config):
+        tripped.append("nothing_measured")
+        reasons.append(
+            "nothing measurable was scanned, so no gate could be satisfied — "
+            "check the scan path, the checkout, and paths.exclude_patterns"
+        )
 
     return GateResult(
         passed=not tripped,
@@ -839,36 +881,62 @@ def evaluate_gates(
 # maintainability standard and dogfood it here).
 
 
-def _gate_fail_on_severity(
+@dataclass(frozen=True, slots=True)
+class _VocabularyGate:
+    """A gate that fails on findings whose attribute is in a configured set.
+
+    `fail_on_severity` and `fail_on_category` were two fourteen-line
+    functions differing in a config key, an attribute and a noun — MA
+    reported them as a near-duplicate pair at similarity 1.0. Each copy
+    separately lowercased the configured values and separately excluded
+    suppressed findings, and both of those break *silently*: a gate that
+    stops lowercasing accepts its config, matches nothing and passes the
+    build, and one that stops honouring suppressions fails builds on
+    findings an operator already dispositioned. One evaluator, one table,
+    and the schema decides who is in it.
+    """
+
+    #: The gate's name — also its key in the `gates` config block.
+    name: str
+    #: The `Finding` attribute whose `.value` is matched against the set.
+    attribute: str
+    #: How the operator-facing reason names the vocabulary, kept per gate
+    #: because the reason is what tells them which gate stopped them.
+    phrase: str
+
+
+#: Every gate in the schema whose items carry an `enum`. A lint pairs this
+#: against the schema, so a third vocabulary gate cannot arrive as a third
+#: copy of the evaluator.
+_VOCABULARY_GATES = (
+    _VocabularyGate("fail_on_severity", "severity", "at severity in"),
+    _VocabularyGate("fail_on_category", "category", "in categories"),
+)
+
+
+def _gate_fail_on_vocabulary(
+    gate: _VocabularyGate,
     findings: list[Finding],
     report: ScoreReport,
     gate_config: dict,
     tripped: list[str],
     reasons: list[str],
 ) -> None:
-    fail_on = {s.lower() for s in gate_config.get("fail_on_severity", [])}
-    if not fail_on:
-        return
-    offenders = [f for f in findings if not f.suppressed and f.severity.value in fail_on]
-    if offenders:
-        tripped.append("fail_on_severity")
-        reasons.append(f"{len(offenders)} finding(s) at severity in {sorted(fail_on)}")
+    """Trip `gate` if any unsuppressed finding's value is in its configured set.
 
-
-def _gate_fail_on_category(
-    findings: list[Finding],
-    report: ScoreReport,
-    gate_config: dict,
-    tripped: list[str],
-    reasons: list[str],
-) -> None:
-    fail_cats = {c.lower() for c in gate_config.get("fail_on_category", [])}
-    if not fail_cats:
+    An absent or empty list means "not configured" rather than "match
+    everything": a gate block an operator has not filled in must not fail
+    their build.
+    """
+    wanted = {value.lower() for value in gate_config.get(gate.name, [])}
+    if not wanted:
         return
-    offenders = [f for f in findings if not f.suppressed and f.category.value in fail_cats]
+    offenders = [
+        f for f in findings if not f.suppressed and getattr(f, gate.attribute).value in wanted
+    ]
     if offenders:
-        tripped.append("fail_on_category")
-        reasons.append(f"{len(offenders)} finding(s) in categories {sorted(fail_cats)}")
+        tripped.append(gate.name)
+        reasons.append(f"{len(offenders)} finding(s) {gate.phrase} {sorted(wanted)}")
 
 
 def _gate_fail_on_new(

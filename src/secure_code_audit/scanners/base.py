@@ -43,6 +43,32 @@ class Scanner(CommandResolution, SubprocessExecution, FindingConstruction, ABC):
     #: should not have to discover that from a timeout.
     default_timeout_seconds: int = 600
 
+    #: Whether this adapter tells its tool about `paths.exclude_patterns`.
+    #:
+    #: The register says `exclude_patterns` *"stops the scan"*, and for a long
+    #: time nothing did: every adapter got the bare target root and the
+    #: patterns only filtered the findings afterwards. Trivy consequently
+    #: walked 342 MB of vendored clones in this repository's own excluded
+    #: `calibration/.corpus/`, resolved their Maven dependencies, and was
+    #: rate-limited into failing — a *required* scanner, for sixty runs.
+    #:
+    #: Declared rather than inferred, with `exclusion_note` giving the reason
+    #: when it is False, so an adapter cannot quietly ignore the setting; a
+    #: lint pairs the two. Finding-level filtering stays authoritative either
+    #: way, so this is an optimisation and never the only thing excluding a
+    #: path — under-excluding costs time, over-excluding hides real code.
+    honours_exclusions: bool = False
+    #: Why not, when `honours_exclusions` is False. Required by the lint.
+    exclusion_note: str = ""
+
+    def exclusion_args(self, config: Config) -> list[str]:
+        """Flags telling this tool which directories not to walk.
+
+        Empty by default: a tool with no way to express it gets nothing, and
+        says so in `exclusion_note`.
+        """
+        return []
+
     # ----- main entrypoint ------------------------------------------------
 
     @abstractmethod

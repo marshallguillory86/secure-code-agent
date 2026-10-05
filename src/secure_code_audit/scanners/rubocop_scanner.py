@@ -56,6 +56,12 @@ class RubocopScanner(Scanner):
     binary = "rubocop"
     install_hint = "gem install rubocop"
 
+    honours_exclusions = False
+    exclusion_note = (
+        "rubocop expresses Exclude only in .rubocop.yml, not on the command line, so "
+        "the finding-level filter is what removes excluded paths here"
+    )
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)

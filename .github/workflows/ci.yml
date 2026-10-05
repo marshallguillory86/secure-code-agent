@@ -17,6 +17,17 @@ jobs:
   test:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    # A hung child process cost 45 minutes of billed runner time on
+    # 2026-10-04 before anything killed it, while the same job on every
+    # other interpreter finished in about two and a half minutes. Worse than
+    # the bill: the required `Required scanner coverage` job needs this one,
+    # so it was *skipped* rather than failed, and a required check that never
+    # reports blocks a merge instead of refusing it. These bounds are
+    # generous against the real runtimes and exist to make the next hang
+    # cheap and legible. `test_every_child_process_is_bounded` is the other
+    # half: it stops the suite spawning an unbounded child in the first
+    # place.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -57,6 +68,7 @@ jobs:
   ruleset:
     name: Offline ruleset
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,6 +114,7 @@ jobs:
     name: Required scanner coverage
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       security-events: write

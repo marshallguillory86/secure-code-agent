@@ -69,12 +69,21 @@ def _row(
     letter: str = "B",
     worst_normalized: float = 1.0,
     loc: int = 10_000,
+    unclamped: float | None = None,
 ) -> dict:
     """One measured corpus row, with `examined` decided by the harness itself.
 
     `language="java"` is how a row becomes unexamined, because that is how it
     happens in the real corpus: the scanners ran, and none of them reads the
     language (D12).
+
+    `unclamped` defaults to `overall` because for a graded repository the two
+    track each other, which is all these tests needed. They are *not* the same
+    field: `reported_overall` is the product's clamped grade and may be
+    `None`, while `unclamped_overall` is computed by `measure()` from the
+    subtotals and is always a number — it is the raw value the study keeps so
+    the tail survives. Tying them together made an ungraded row carry an
+    impossible `unclamped_overall: None`, so pass it explicitly there.
     """
     row = {
         "name": name,
@@ -89,7 +98,7 @@ def _row(
             "reported_overall": overall,
             "reported_letter": letter,
             "worst_normalized": worst_normalized,
-            "unclamped_overall": overall,
+            "unclamped_overall": overall if unclamped is None else unclamped,
             "loc_scanned": loc,
         },
     }
@@ -331,6 +340,75 @@ def test_each_repository_keeps_its_own_letter_in_the_per_name_listing():
     assert summary["maintained_letters"] == [("alpha", "F"), ("zeta", "A")]
 
 
+def test_a_repository_the_product_refused_to_grade_does_not_crash_the_study():
+    """PRODUCT BUG — an ungraded repository raises instead of being reported.
+
+    The product returns `overall: null` for a run it could not grade — P7,
+    and since D33 also for a run that counted no scanned lines. This harness
+    reads that value straight through (`"reported_overall":
+    payload["score"]["overall"]`) and then sorts it and formats it with
+    `:.2f`. Both raise:
+
+        summarize:      TypeError: '<' not supported between 'NoneType' and 'float'
+        the row print:  TypeError: unsupported format string passed to NoneType.__format__
+
+    Latent only because `calibration-config.json` happens to list an
+    extension for every language in the corpus. Add a repository in a
+    language it does not list — the corpus already carries three Java ones,
+    and `examined` names Java as the language no scanner in the floor reads
+    — and it breaks.
+
+    Not by killing the study: `main` wraps each repository in a broad
+    `except Exception` precisely so one bad repository cannot end the run.
+    So the `:.2f` raise was *caught*, and a successful audit was recorded as
+    `FAILED — TypeError: unsupported format string passed to NoneType`,
+    attributed to the repository, with the study exiting nonzero because of
+    it. The audit worked and reported "ungraded", which is an answer; the
+    harness called it a crash. See the `main`-level test below.
+
+    The harness already owns the right concept. `examined` exists to keep
+    repositories the floor cannot read out of the distribution, and its
+    docstring says it does this "exactly as the product keeps an ungraded run
+    out of a trend". An ungraded repository is that case by definition.
+    """
+    harness = _harness()
+    # Both Python, so a language scanner read both and `examined` cannot
+    # exclude either on the language path. The only thing separating them is
+    # that the product declined to grade one.
+    graded = _row(harness, "flask", overall=3.4, letter="B")
+    ungraded = _row(harness, "narrow", overall=None, letter=None, unclamped=5.0)
+
+    summary = harness.summarize([graded, ungraded])
+
+    assert summary["measured"] == 2, "both repositories were audited and both are counted"
+    assert "narrow" in summary["unexamined"], (
+        "a repository the product refused to grade belongs with the unexamined, "
+        f"not in a distribution: {summary['unexamined']}"
+    )
+    assert summary["maintained_overall"]["median"] == 3.4, (
+        "the ungraded repository must not reach the distribution it would skew"
+    )
+    assert None not in dict(summary["maintained_letters"]).values()
+    assert None not in summary["letters"], summary["letters"]
+
+
+def test_an_all_ungraded_study_reports_no_distribution_rather_than_raising():
+    """The degenerate case: every repository ungraded.
+
+    `percentiles([])` already returns `{}`, and the printer already says "no
+    distribution to calibrate from", so the honest outcome exists — it was
+    just unreachable through a crash.
+    """
+    harness = _harness()
+
+    summary = harness.summarize([_row(harness, "narrow", overall=None, letter=None, unclamped=5.0)])
+
+    assert summary["examined"] == 0
+    assert summary["maintained_overall"] is None
+    assert summary["separation"] is None
+    assert summary["reported_overall"] == {}, summary["reported_overall"]
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -376,7 +454,7 @@ def _payload(
 class _Study:
     """One `main()` run with the network and the CLI substituted out."""
 
-    def __init__(self, rc, harness, out_path, out, audited, config, work, stdout):
+    def __init__(self, rc, harness, out_path, out, audited, config, work, stdout, stderr):
         self.rc = rc
         self.harness = harness
         self.out_path = out_path
@@ -385,6 +463,10 @@ class _Study:
         self.config = config
         self.work = work
         self.stdout = stdout
+        # Both streams, because an operator error belongs on stderr while the
+        # distribution report goes to stdout. Capturing only `.out` meant no
+        # test here could see a refusal at all.
+        self.stderr = stderr
 
 
 def _run(
@@ -441,9 +523,9 @@ def _run(
     monkeypatch.setattr(sys, "argv", argv)
 
     rc = harness.main()
-    captured = capsys.readouterr().out
+    captured = capsys.readouterr()
     out = json.loads(out_path.read_text(encoding="utf-8")) if out_path.exists() else None
-    return _Study(rc, harness, out_path, out, audited, config, work, captured)
+    return _Study(rc, harness, out_path, out, audited, config, work, captured.out, captured.err)
 
 
 def test_the_run_writes_a_results_file_naming_the_inputs_it_used(tmp_path, monkeypatch, capsys):
@@ -581,6 +663,91 @@ def test_a_run_where_every_repository_failed_exits_nonzero(tmp_path, monkeypatch
 
     assert study.out["summary"]["failed"] == ["django", "flask"]
     assert study.rc != 0, "a run that measured nothing reported success"
+
+
+def test_an_only_name_that_matches_no_repository_is_an_error(tmp_path, monkeypatch, capsys):
+    """PRODUCT BUG — a typo in `--only` audits nothing and reports success.
+
+    `--only` filters the corpus by name. A name that matches nothing leaves
+    `entries` empty, so the loop never runs, no row is produced and
+    `summary["failed"]` is empty — which is what the exit code keys on. The
+    run writes a `results.json` with empty distributions, prints "no
+    distribution to calibrate from" as though an all-Java corpus had been
+    asked for, and exits 0.
+
+    This is the sibling of the defect fixed in the same file earlier: that
+    one was "some repositories failed and the run said success", this is
+    "none were selected and the run said success". Fixing the first by
+    keying on `failed` left this one standing.
+
+    `--only` is an operator assertion about names they believe exist, so a
+    name that does not is a typo — and this repository fails loudly on the
+    same shape elsewhere: a named config that does not exist, and a
+    configured `pip_audit` input that does not exist, both raise rather than
+    quietly audit less.
+    """
+    study = _run(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        [_entry("django"), _entry("flask")],
+        {"django": _payload(overall=3.5)},
+        only="djangoo",
+    )
+
+    assert study.rc != 0, "a --only typo audited nothing and reported success"
+    assert "djangoo" in study.stdout + study.stderr, (
+        "the run must name the unmatched selector, not just fail"
+    )
+
+
+def test_an_only_name_that_does_match_still_runs(tmp_path, monkeypatch, capsys):
+    """The falsifier. Rejecting every `--only` would break the flag itself."""
+    study = _run(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        [_entry("django"), _entry("flask")],
+        {"django": _payload(overall=3.5)},
+        only="django",
+    )
+
+    assert study.rc == 0
+    assert [row["name"] for row in study.out["rows"]] == ["django"]
+
+
+def test_an_ungraded_repository_is_not_reported_as_a_failed_audit(tmp_path, monkeypatch, capsys):
+    """A successful audit that reports "ungraded" is not a failure.
+
+    The per-repository `except Exception` exists so one bad repository cannot
+    end the study. It also meant the `:.2f` raise on `overall: null` was
+    swallowed and re-attributed: the row got `error: "TypeError: unsupported
+    format string passed to NoneType.__format__"`, printed `FAILED`, and
+    `main` exited nonzero — naming the repository as the thing that broke.
+
+    This is the shape the product refuses in its own reports: an absence
+    presented as a result. Here the absence was a *correct* product answer
+    and the harness converted it into a defect report against the wrong
+    party.
+    """
+    study = _run(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        [_entry("flask"), _entry("narrow")],
+        {"flask": _payload(overall=3.4), "narrow": _payload(overall=None, letter=None, loc=0)},
+    )
+
+    assert study.out["summary"]["failed"] == [], (
+        f"an audit that completed and reported ungraded was recorded as failed: "
+        f"{study.out['summary']['failed']}"
+    )
+    assert study.rc == 0, (
+        f"the study exited {study.rc} because one repository was ungraded; stderr: {study.stderr}"
+    )
+    assert "TypeError" not in study.stdout + study.stderr
+    assert "narrow" in study.out["summary"]["unexamined"]
+    assert study.out["summary"]["measured"] == 2
 
 
 def test_a_clean_run_still_exits_zero(tmp_path, monkeypatch, capsys):

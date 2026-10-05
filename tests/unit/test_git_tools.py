@@ -39,14 +39,16 @@ def test_tracked_files_lists_what_git_tracks(tmp_path):
     """
     import subprocess
 
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, timeout=120)
     (tmp_path / "docs").mkdir()
     (tmp_path / "README.md").write_text("# Readme\n", encoding="utf-8")
     (tmp_path / "docs" / "guide.md").write_text("# Guide\n", encoding="utf-8")
     (tmp_path / "untracked.md").write_text("# Not added\n", encoding="utf-8")
     (tmp_path / "code.py").write_text("x = 1\n", encoding="utf-8")
     subprocess.run(
-        ["git", "-C", str(tmp_path), "add", "README.md", "docs/guide.md", "code.py"], check=True
+        ["git", "-C", str(tmp_path), "add", "README.md", "docs/guide.md", "code.py"],
+        check=True,
+        timeout=120,
     )
 
     assert set(git_tools.tracked_files(tmp_path, "*.md")) == {"README.md", "docs/guide.md"}
@@ -66,9 +68,9 @@ def test_tracked_files_accepts_several_patterns(tmp_path):
     """The index links standalone HTML as well as markdown."""
     import subprocess
 
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, timeout=120)
     (tmp_path / "a.md").write_text("# A\n", encoding="utf-8")
     (tmp_path / "b.html").write_text("<p>b</p>\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(tmp_path), "add", "a.md", "b.html"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "a.md", "b.html"], check=True, timeout=120)
 
     assert set(git_tools.tracked_files(tmp_path, "*.md", "*.html")) == {"a.md", "b.html"}

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from secure_code_audit.config import Config, ScannerConfig
-from secure_code_audit.findings import Category, Confidence, Finding, Severity
+from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.git_tools import is_excluded
 from secure_code_audit.scanner_status import ScanResult
 from secure_code_audit.scanners.base import Scanner
@@ -41,6 +41,11 @@ class PipAuditScanner(Scanner):
         if config.extra_args:
             parts.append(f"extra_args={' '.join(config.extra_args)}")
         return "; ".join(parts)
+
+    honours_exclusions = True
+    exclusion_note = (
+        "filters the requirement and project files it discovers before invoking pip-audit"
+    )
 
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
@@ -123,13 +128,18 @@ class PipAuditScanner(Scanner):
                 projects = [path for path in paths if path.parent not in covered_dirs]
                 paths = [*requirements, *projects]
 
-        if sc_cfg.mode == "requirements":
-            return [self._requirement_input(path) for path in paths]
-        if sc_cfg.mode == "locked":
-            return [self._project_input(path, locked=True) for path in paths]
-        if sc_cfg.mode == "project":
-            return [self._project_input(path, locked=False) for path in paths]
+        builder = {
+            "requirements": self._requirement_input,
+            "locked": lambda path: self._project_input(path, locked=True),
+            "project": lambda path: self._project_input(path, locked=False),
+        }.get(sc_cfg.mode)
+        if builder is not None:
+            return [builder(path) for path in paths]
 
+        # `auto`, the default, and the only mode that guesses. A path named
+        # `requirements*` is a requirements file and anything else is a
+        # project — which is a heuristic, and is what asking for `auto`
+        # means. An operator who knows says so with an explicit mode.
         return [
             self._requirement_input(path)
             if path.name.startswith("requirements")
@@ -200,16 +210,11 @@ class PipAuditScanner(Scanner):
                 description = (vulnerability.get("description") or "").strip()
                 fix_note = f" Fix in: {', '.join(fixes)}" if fixes else " No fix available."
                 findings.append(
-                    self._make_finding(
-                        rule_id=f"pip_audit.{vuln_id}",
-                        message=f"{name} {version} — {vuln_id}: {description[:200]}{fix_note}",
-                        file_path=source,
-                        line_start=0,
-                        line_end=None,
-                        code_snippet=None,
-                        severity=Severity.HIGH,
-                        confidence=Confidence.HIGH,
-                        category=Category.DEPENDENCIES,
+                    self._dependency_finding(
+                        f"pip_audit.{vuln_id}",
+                        f"{name} {version} — {vuln_id}: {description[:200]}{fix_note}",
+                        source,
+                        Severity.HIGH,
                     )
                 )
         return findings

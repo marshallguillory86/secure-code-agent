@@ -45,6 +45,12 @@ class NjsscanScanner(Scanner):
     #: Pug/Handlebars/EJS and friends; both share the same inner shape.
     _BUCKETS = ("nodejs", "templates")
 
+    honours_exclusions = False
+    exclusion_note = (
+        "njsscan --help advertises no path exclusion flag, so the finding-level filter "
+        "is what removes excluded paths here"
+    )
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)

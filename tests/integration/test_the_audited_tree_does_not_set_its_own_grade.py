@@ -56,6 +56,20 @@ _DOWNGRADE = {
     "category_overrides": {"B602": "policy_docs"},
 }
 
+#: The same attack through the denominator. Every category but `secrets` is
+#: a density — weighted findings per thousand scanned lines — so a tree that
+#: declares its own line count declares its own grade. Measured on this
+#: fixture: 0.00/F honestly, **4.999/A+** with this config inside the tree,
+#: no flag and no warning. D32 closed `severity_overrides` and
+#: `category_overrides` by name and left this one open, which is what comes
+#: of listing the keys instead of deriving them from the rule.
+_DILUTE = {
+    "version": 1,
+    "scanners": {"bandit": {"enabled": True}},
+    "gates": {},
+    "loc_for_scoring": {"value": 10_000_000, "reason": "most of this tree is generated"},
+}
+
 
 @pytest.fixture
 def audit(tmp_path, monkeypatch):
@@ -139,6 +153,85 @@ def test_trust_target_config_still_honours_the_overrides(audit):
     assert severities.get("B602") == "informational", (
         "--trust-target-config was passed and the override was still ignored; "
         "the operator's explicit assertion must be honoured"
+    )
+
+
+def test_an_in_tree_config_cannot_declare_its_own_scoring_denominator(audit):
+    """`loc_for_scoring` is the grade's denominator, so it is a grading key.
+
+    Every category except `secrets` is a density. Ten million declared lines
+    divide one HIGH finding down to nothing, and the tree gets to pick the
+    number: 0.00/F honestly, 4.999/A+ with this config and no flag.
+
+    It is the same defect D32 was written to close, reached through the key
+    D32 did not list — which is why `_GRADING_KEYS` is now paired against
+    what `_refuse_target_policy` actually clears, below.
+    """
+    report = audit(_DILUTE)
+
+    assert report["score"]["loc_scanned"] < 1_000, (
+        f"the audited tree declared {report['score']['loc_scanned']} lines of its own; "
+        "the denominator of its grade is not its own to set"
+    )
+    assert report["score"]["overall"] < 1.0, (
+        f"the grade rose to {report['score']['overall']} on a declared line count"
+    )
+
+
+def test_trust_target_config_still_honours_the_declared_line_count(audit):
+    """The escape hatch, for the key just closed.
+
+    An operator whose tree really is mostly generated says so with the flag
+    or with a config outside the tree, exactly as for the overrides. This is
+    the falsifier for the test above: without it, "refuse it always" would
+    pass and a real feature would be gone.
+    """
+    report = audit(_DILUTE, extra_argv=("--trust-target-config",))
+
+    assert report["score"]["loc_scanned"] == 10_000_000, (
+        "--trust-target-config was passed and the declared line count was still "
+        "ignored; the operator's explicit assertion must be honoured"
+    )
+
+
+def test_every_grading_key_is_actually_cleared_not_merely_warned_about(audit):
+    """The lint for the class, rather than for the three instances.
+
+    `_refuse_target_policy` warns for each key in `_GRADING_KEYS` and then
+    clears the keys in a separate expression. Those two lists were written
+    by hand and independently, so a key added to the tuple warns the
+    operator that it was ignored and then applies anyway — a warning that
+    states the opposite of what happened, which is worse than silence.
+
+    This reads the refusal's own output: every key the policy names as
+    ignored must be falsy on the config it returns.
+    """
+    from dataclasses import replace
+    from pathlib import Path
+
+    from secure_code_audit import config as config_mod
+    from secure_code_audit.cli import _GRADING_KEYS, _refuse_target_policy
+
+    tree = Path.cwd()
+    loaded = replace(
+        config_mod.Config(),
+        source_path=tree / "secure-code-agent.json",
+        severity_overrides={"B602": "informational"},
+        category_overrides={"B602": "policy_docs"},
+        loc_for_scoring={"value": 10_000_000, "reason": "generated"},
+    )
+    assert all(getattr(loaded, key) for key in _GRADING_KEYS), (
+        f"this test must set every key in {_GRADING_KEYS} to something truthy, "
+        "or it proves nothing about the ones it left empty"
+    )
+
+    refused = _refuse_target_policy(loaded, tree)
+
+    still_applied = [key for key in _GRADING_KEYS if getattr(refused, key)]
+    assert still_applied == [], (
+        f"{still_applied} are named in _GRADING_KEYS, so the operator is warned they "
+        "were ignored, and they were still applied. Derive the clearing from the "
+        "tuple rather than restating it."
     )
 
 

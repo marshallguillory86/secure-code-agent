@@ -10,7 +10,7 @@ import argparse
 import contextlib
 import json
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import MISSING, dataclass, fields, replace
 from pathlib import Path
 
 from secure_code_audit import (
@@ -493,104 +493,46 @@ def _split_axes(
     )
 
 
-def _do_audit(args: argparse.Namespace) -> int:
-    cfg, target, root = _prepare_audit(args)
-    # Before any consumer reads them: the audited tree does not grade itself.
-    cfg = _refuse_target_policy(cfg, target)
-    _require_configured_gates(args, cfg)
-    if (failed := _install_standards_overlay(cfg, root)) is not None:
-        return failed
-    # Before anything is resolved or written, and before any scanner runs.
-    _assert_config_writes_are_contained(cfg, root, target)
-    # Resolved before the scan so the run can recognise its own artifacts.
-    paths = _resolve_outputs(args, cfg, root)
+@dataclass(frozen=True)
+class _Scored:
+    """What the scoring phase produces, and nothing else.
 
-    # ----- scanners -----
-    scan = _run_scanners(args, cfg, target)
-    all_findings = scan.findings
-    ran, unavailable, executions = scan.ran, scan.unavailable, scan.executions
+    The phase assigns 31 names and only these 8 are read afterwards —
+    measured, not guessed. The other 23 were locals in a 120-line stretch of
+    `_do_audit`, which is what `architecture.md` §6 means by "a straight-line
+    function threading a dozen locals". Same shape as `_Axes`.
+    """
 
-    # ----- SARIF imports -----
-    # An imported SARIF is coverage: a scanner someone else ran on our behalf.
-    imported, imported_executions = _ingest_sarif_imports(args.sarif_import)
-    all_findings.extend(imported)
-    executions.extend(imported_executions)
+    all_findings: list[Finding]
+    axes: object
+    coverage: object
+    declarations: object
+    gate: object
+    score: object
+    undeclared_score: object
+    verdict: object
 
-    # ----- one path convention, before anything reads a path -----
-    # Repository-relative from here on, whichever tool reported the finding.
-    # Suppressions, the baseline and every written output compare or publish
-    # this path, and none of them may depend on where the checkout lives.
-    scanned = target if target.is_dir() else target.parent
-    all_findings = anchor(all_findings, scanned=scanned, root=root)
 
-    # ----- scan scope, enforced once -----
-    own_artifacts = _own_artifacts(paths, cfg, root)
-    all_findings = _drop_excluded(all_findings, target, cfg, own_artifacts, root)
+def _score_everything(
+    all_findings: list[Finding],
+    args: argparse.Namespace,
+    cfg: config_mod.Config,
+    target: Path,
+    root: Path,
+    own_artifacts: object,
+    executions: list,
+    imported_executions: list,
+    baseline_state: object,
+) -> _Scored:
+    """Split the axes, score, gate, and build the verdict.
 
-    # ----- one weakness, one finding -----
-    # Before overrides and suppressions, so an operator writing either one
-    # sees the same finding the report will show. Bandit's B308 and B703 are
-    # the same check under two ids and shared fifty lines in Django; a report
-    # that lists a line twice is wrong about the code, and a work order built
-    # from it would ask for the same fix twice.
-    all_findings = merge_corroborating(all_findings)
-
-    # ----- overrides from config -----
-    all_findings = _apply_overrides(all_findings, cfg)
-
-    # ----- suppressions -----
-    suppression_path = _under_root(root, cfg.suppressions_file)
-    sup_rules, sup_errors = suppressions.load(suppression_path)
-    if sup_errors:
-        # Fail closed. A suppression file that exists is an explicit
-        # instruction; ignoring it silently changes which findings are
-        # reported, and "my suppressions are working" then looks exactly
-        # like "my suppressions were skipped". This bit in practice: a
-        # missing PyYAML made an entire .scignore.yaml a no-op while the
-        # run still exited 0 and reported the suppressed finding as live.
-        #
-        # Only reachable when the file is present, so repositories that
-        # do not use suppressions are unaffected.
-        for err in sup_errors:
-            sys.stderr.write(f"ERROR: {err}\n")
-        sys.stderr.write(
-            f"ERROR: {suppression_path} exists but could not be applied; refusing to "
-            "report results that silently ignore it.\n"
-        )
-        return 1
-    all_findings = suppressions.apply(all_findings, sup_rules, root)
-    # Snapshot the scanner findings before the synthetic ones are appended.
-    # `unused_findings` asks whether each rule still has a subject, and a
-    # wildcard rule with `paths` would happily match the expired-suppression
-    # finding about `.scignore.yaml` itself — reporting itself as used
-    # because it matched a finding about suppressions.
-    scanner_findings = list(all_findings)
-    all_findings.extend(
-        anchor(
-            suppressions.expired_findings(sup_rules, suppression_path),
-            scanned=scanned,
-            root=root,
-        )
-    )
-    all_findings.extend(
-        anchor(
-            suppressions.unused_findings(sup_rules, scanner_findings, suppression_path, root),
-            scanned=scanned,
-            root=root,
-        )
-    )
-
-    # ----- severity threshold filter -----
-    threshold = Severity.from_string(args.severity_threshold)
-    all_findings = [f for f in all_findings if f.severity.rank >= threshold.rank]
-
-    # ----- baseline -----
-    baseline_path = _under_root(root, args.baseline or cfg.outputs["baseline_path"])
-    baseline = baseline_mod.load(baseline_path)
-    baseline_state = baseline_mod.state(baseline_path)
-    all_findings = baseline_mod.mark_new(all_findings, baseline, root)
-
-    # ----- scoring -----
+    A pure move out of `_do_audit`: the same calls in the same order, with
+    the comments that record *why* each split exists kept where the code is.
+    Ordering is load-bearing throughout — classification happens before
+    suppression upstream, and the axis split happens before scoring here,
+    because a finding routed to the test tree must not be scored as shipped
+    code.
+    """
     _axes = _split_axes(all_findings, args, cfg, target, root, own_artifacts)
     all_findings = _axes.all_findings
     primary_findings, test_findings, docs_findings = _axes.primary, _axes.test, _axes.docs
@@ -710,6 +652,99 @@ def _do_audit(args: argparse.Namespace) -> int:
             reasons=(*verdict.reasons, changed_note),
         )
 
+    return _Scored(
+        all_findings=all_findings,
+        axes=axes,
+        coverage=coverage,
+        declarations=declarations,
+        gate=gate,
+        score=score,
+        undeclared_score=undeclared_score,
+        verdict=verdict,
+    )
+
+
+def _do_audit(args: argparse.Namespace) -> int:
+    cfg, target, root = _prepare_audit(args)
+    # Before any consumer reads them: the audited tree does not grade itself.
+    cfg = _refuse_target_policy(cfg, target)
+    _require_configured_gates(args, cfg)
+    if (failed := _install_standards_overlay(cfg, root)) is not None:
+        return failed
+    # Before anything is resolved or written, and before any scanner runs.
+    _assert_config_writes_are_contained(cfg, root, target)
+    # Resolved before the scan so the run can recognise its own artifacts.
+    paths = _resolve_outputs(args, cfg, root)
+
+    # ----- scanners -----
+    scan = _run_scanners(args, cfg, target)
+    all_findings = scan.findings
+    ran, unavailable, executions = scan.ran, scan.unavailable, scan.executions
+
+    # ----- SARIF imports -----
+    # An imported SARIF is coverage: a scanner someone else ran on our behalf.
+    imported, imported_executions = _ingest_sarif_imports(args.sarif_import)
+    all_findings.extend(imported)
+    executions.extend(imported_executions)
+
+    # ----- one path convention, before anything reads a path -----
+    # Repository-relative from here on, whichever tool reported the finding.
+    # Suppressions, the baseline and every written output compare or publish
+    # this path, and none of them may depend on where the checkout lives.
+    scanned = target if target.is_dir() else target.parent
+    all_findings = anchor(all_findings, scanned=scanned, root=root)
+
+    # ----- scan scope, enforced once -----
+    own_artifacts = _own_artifacts(paths, cfg, root)
+    all_findings = _drop_excluded(all_findings, target, cfg, own_artifacts, root)
+
+    # ----- one weakness, one finding -----
+    # Before overrides and suppressions, so an operator writing either one
+    # sees the same finding the report will show. Bandit's B308 and B703 are
+    # the same check under two ids and shared fifty lines in Django; a report
+    # that lists a line twice is wrong about the code, and a work order built
+    # from it would ask for the same fix twice.
+    all_findings = merge_corroborating(all_findings)
+
+    # ----- overrides from config -----
+    all_findings = _apply_overrides(all_findings, cfg)
+
+    # ----- suppressions -----
+    suppressed = _apply_suppressions(all_findings, cfg, root, scanned)
+    if suppressed is None:
+        return 1
+    all_findings = suppressed
+
+    # ----- severity threshold filter -----
+    threshold = Severity.from_string(args.severity_threshold)
+    all_findings = [f for f in all_findings if f.severity.rank >= threshold.rank]
+
+    # ----- baseline -----
+    baseline_path = _under_root(root, args.baseline or cfg.outputs["baseline_path"])
+    baseline = baseline_mod.load(baseline_path)
+    baseline_state = baseline_mod.state(baseline_path)
+    all_findings = baseline_mod.mark_new(all_findings, baseline, root)
+
+    # ----- scoring -----
+    _scored = _score_everything(
+        all_findings,
+        args,
+        cfg,
+        target,
+        root,
+        own_artifacts,
+        executions,
+        imported_executions,
+        baseline_state,
+    )
+    all_findings = _scored.all_findings
+    axes = _scored.axes
+    coverage = _scored.coverage
+    declarations = _scored.declarations
+    gate = _scored.gate
+    score = _scored.score
+    undeclared_score = _scored.undeclared_score
+    verdict = _scored.verdict
     # ----- write outputs -----
     # The pillar artifact is what maintainability-agent ingests (D3). Built
     # here rather than inside a renderer because it needs the practice level,
@@ -732,26 +767,8 @@ def _do_audit(args: argparse.Namespace) -> int:
         baseline_mod.write(baseline_path, all_findings, baseline, root)
 
     # ----- trend -----
-    # Appended before the verification branch returns, so a verify run is
-    # recorded too: repair is the movement most worth seeing in a trend.
-    history_path = _under_root(root, cfg.outputs.get("history_path") or "")
-    if cfg.outputs.get("history_path"):
-        history_mod.append(
-            history_path,
-            history_mod.entry_from(
-                version=__version__,
-                score=score,
-                gate=gate,
-                coverage=coverage,
-                finding_count=len([f for f in all_findings if not f.suppressed]),
-                scanners=tuple(ran),
-            ),
-        )
-
-    trend_line = (
-        history_mod.trend(history_mod.read(history_path))
-        if cfg.outputs.get("history_path")
-        else None
+    trend_line = _record_trend(
+        cfg, root, all_findings, score=score, gate=gate, coverage=coverage, ran=ran
     )
 
     # ----- did the work order actually improve anything? -----
@@ -1036,7 +1053,25 @@ def _drop_excluded(
             continue
         if path.resolve() in own_artifacts:
             continue
-        if is_excluded(path, root, cfg.exclude_patterns):
+        # A dependency advisory outlives the exclusion of the file it is filed
+        # against, for the reason `_classify` already gives one layer up: the
+        # finding is about the pinned package, and the manifest or lockfile is
+        # only the one file there is to point at. A pattern matching that path
+        # was never a statement about the package.
+        #
+        # `**/*.lock` is the ordinary case, and it is in this repository's own
+        # config — a lockfile is generated, enormous, and full of hashes that
+        # read like secrets. The effect was that trivy's 19 advisories against
+        # `uv.lock`, one CRITICAL, never reached the report, and the
+        # `dependencies` category graded 5.0: a perfect score for a category
+        # whose only evidence source was excluded.
+        #
+        # Everything else in that file stays excluded — a secret or a code
+        # finding inside it is about the file, which is what the operator
+        # asked to be rid of. D34's scope note, and the question §8 asked.
+        if finding.category is not Category.DEPENDENCIES and is_excluded(
+            path, root, cfg.exclude_patterns
+        ):
             continue
         kept.append(finding)
     return kept
@@ -1177,7 +1212,26 @@ def _install_standards_overlay(cfg: config_mod.Config, root: Path) -> int | None
 #: `SEVERITY_WEIGHT`, so re-labelling removes a finding from the score while
 #: leaving it in the report. `category_overrides` moves it between the
 #: per-category rates, and the worst category drives the overall.
-_GRADING_KEYS = ("severity_overrides", "category_overrides")
+#: `loc_for_scoring` is the denominator. Every category but `secrets` is a
+#: density — weighted findings per thousand scanned lines — so a tree that
+#: declares its own line count declares its own grade, and declaring ten
+#: million lines took the same one-finding fixture from 0.00/F to 4.999/A+
+#: with no flag and no warning. It was missed the first time because this
+#: tuple was written as a list of the two keys the attack had been
+#: demonstrated through, rather than derived from what the attack *is*.
+_GRADING_KEYS = ("severity_overrides", "category_overrides", "loc_for_scoring")
+
+
+def _unset_value(key: str) -> object:
+    """What this config field holds when no config set it.
+
+    Read from `Config`'s own dataclass fields, so "ignore this key" means
+    exactly "behave as though the file had not mentioned it" — including for
+    a key whose empty state is `None` rather than `{}`, which is the kind of
+    difference a hand-written clearing expression gets wrong.
+    """
+    spec = next(f for f in fields(config_mod.Config) if f.name == key)
+    return spec.default_factory() if spec.default_factory is not MISSING else spec.default
 
 
 def _refuse_target_policy(cfg: config_mod.Config, target: Path) -> config_mod.Config:
@@ -1214,7 +1268,93 @@ def _refuse_target_policy(cfg: config_mod.Config, target: Path) -> config_mod.Co
             f"changes the grade, so it was ignored. Pass --trust-target-config, or "
             f"keep the configuration outside the tree, to apply it.\n"
         )
-    return replace(cfg, severity_overrides={}, category_overrides={})
+    # Cleared to each field's own default, derived from `_GRADING_KEYS` rather
+    # than restated. The two lists used to be written out separately — the
+    # warning loop read the tuple and the `replace` named two keys by hand —
+    # so adding a third key told the operator it had been ignored and then
+    # applied it anyway. A warning that says the opposite of what happened is
+    # worse than no warning, and `test_every_grading_key_is_actually_cleared`
+    # is what holds the two together now.
+    return replace(cfg, **{key: _unset_value(key) for key in ignored})
+
+
+def _record_trend(
+    cfg: config_mod.Config,
+    root: Path,
+    findings: list[Finding],
+    *,
+    score: object,
+    gate: object,
+    coverage: object,
+    ran: list[str],
+) -> str | None:
+    """Append this run to the history, and return the trend line to print.
+
+    Called before the verification branch returns, so a `--verify-against`
+    run is recorded too: repair is the movement most worth seeing in a
+    trend.
+
+    None when no `history_path` is configured — a repository that keeps no
+    history gets no trend line rather than an empty one, because "no
+    movement" and "nothing recorded" are different statements.
+    """
+    configured = cfg.outputs.get("history_path")
+    if not configured:
+        return None
+    history_path = _under_root(root, configured)
+    history_mod.append(
+        history_path,
+        history_mod.entry_from(
+            version=__version__,
+            score=score,
+            gate=gate,
+            coverage=coverage,
+            finding_count=len([f for f in findings if not f.suppressed]),
+            scanners=tuple(ran),
+        ),
+    )
+    return history_mod.trend(history_mod.read(history_path))
+
+
+def _apply_suppressions(
+    findings: list[Finding], cfg: config_mod.Config, root: Path, scanned: Path
+) -> list[Finding] | None:
+    """Findings with suppressions applied, or None when the file is unusable.
+
+    None means the caller exits 1. **Fail closed**: a suppression file that
+    exists is an explicit instruction, and ignoring it silently changes which
+    findings are reported — "my suppressions are working" then looks exactly
+    like "my suppressions were skipped". That bit in practice, when a missing
+    PyYAML made an entire `.scignore.yaml` a no-op while the run still exited
+    0 and reported the suppressed finding as live.
+
+    Only reachable when the file is present, so repositories that do not use
+    suppressions are unaffected.
+    """
+    suppression_path = _under_root(root, cfg.suppressions_file)
+    rules, errors = suppressions.load(suppression_path)
+    if errors:
+        for err in errors:
+            sys.stderr.write(f"ERROR: {err}\n")
+        sys.stderr.write(
+            f"ERROR: {suppression_path} exists but could not be applied; refusing to "
+            "report results that silently ignore it.\n"
+        )
+        return None
+
+    applied = suppressions.apply(findings, rules, root)
+    # The scanner findings, snapshotted before the synthetic ones are
+    # appended. `unused_findings` asks whether each rule still has a subject,
+    # and a wildcard rule with `paths` would happily match the
+    # expired-suppression finding about `.scignore.yaml` itself — reporting
+    # itself as used because it matched a finding about suppressions.
+    scanner_findings = list(applied)
+    for synthetic in (
+        suppressions.expired_findings(rules, suppression_path),
+        suppressions.unused_findings(rules, scanner_findings, suppression_path, root),
+    ):
+        applied.extend(anchor(synthetic, scanned=scanned, root=root))
+    return applied
 
 
 def _apply_overrides(findings: list[Finding], cfg: config_mod.Config) -> list[Finding]:
@@ -1408,11 +1548,20 @@ def _declaration_delta(score, undeclared_score, declarations) -> str | None:
     named = ", ".join(
         f"{name} ({count})" for name, count in sorted(declarations.accounted.items()) if count
     )
-    line = (
-        f"declared: {declarations.total_accounted} finding(s) accounted for by "
-        f"{named}; without declarations "
-        f"{undeclared_score.overall:.2f} ({undeclared_score.letter})"
-    )
+    line = f"declared: {declarations.total_accounted} finding(s) accounted for by {named}"
+    if undeclared_score.overall is None:
+        # No grade either way, so there is no cost to state. Reachable since
+        # D33: nothing counted as scanned, every finding suppressed so no
+        # category has a count — and `summarize_declarations` counts matched
+        # findings without skipping suppressed ones, so the accounting is
+        # non-empty while the grade is absent. `:.2f` on that raised, in
+        # shipped code, on the summary path.
+        #
+        # The accounting is still printed. It is true, it is the disclosure
+        # this mechanism exists for, and dropping the line would hide it to
+        # avoid admitting there is no number.
+        return f"{line}; no grade either way, so no without-declarations comparison"
+    line += f"; without declarations {undeclared_score.overall:.2f} ({undeclared_score.letter})"
     if declarations.unexercised:
         # A declaration that matched nothing describes something this project
         # does not do. Named rather than dropped, so a config cannot be padded

@@ -137,7 +137,9 @@ def test_a_present_but_unloadable_suppression_file_fails_the_run(tmp_path, capsy
 
     # A git repo, because suppressions resolve against the repository root
     # rather than the scan target.
-    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "init", "-q", "."], cwd=tmp_path, check=True, capture_output=True, timeout=120
+    )
     (tmp_path / "a.py").write_text("def f():\n    return 1\n", encoding="utf-8")
     (tmp_path / ".scignore.yaml").write_text("not: valid: yaml: [\n", encoding="utf-8")
 
@@ -151,7 +153,9 @@ def test_no_suppression_file_is_not_an_error(tmp_path):
     """Repositories that use no suppressions are unaffected by the above."""
     from secure_code_audit.cli import main
 
-    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "init", "-q", "."], cwd=tmp_path, check=True, capture_output=True, timeout=120
+    )
     (tmp_path / "a.py").write_text("def f():\n    return 1\n", encoding="utf-8")
 
     assert main([str(tmp_path), "--json-output", str(tmp_path / "out.json")]) == 0

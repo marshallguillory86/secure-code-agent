@@ -48,6 +48,7 @@ def test_the_readme_b101_entry_suppresses_asserts_in_the_test_tree(tmp_path):
         check=False,
         capture_output=True,
         text=True,
+        timeout=120,
     )
     assert out.exists(), result.stdout[-800:] + result.stderr[-800:]
     asserts = {

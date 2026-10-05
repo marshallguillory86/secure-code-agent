@@ -59,6 +59,7 @@ def _run(target: Path, out: Path, *extra: str, scanners: str = "bandit") -> dict
         capture_output=True,
         text=True,
         cwd=str(REPO),
+        timeout=120,
     )
     assert out.exists(), "the audit produced no report"
     return json.loads(out.read_text(encoding="utf-8"))
@@ -100,6 +101,7 @@ def test_the_finding_that_tripped_the_gate_is_in_the_report(tmp_path):
         ["openssl", "genrsa", "-out", str(tmp_path / "tests" / "fixture.key"), "2048"],
         check=True,
         capture_output=True,
+        timeout=120,
     )
     (tmp_path / "cfg.json").write_text(
         json.dumps({"version": 1, "gates": {"fail_on_category": ["secrets"]}}),
@@ -128,6 +130,7 @@ def test_the_escalated_secret_is_still_not_scored(tmp_path):
         ["openssl", "genrsa", "-out", str(tmp_path / "tests" / "fixture.key"), "2048"],
         check=True,
         capture_output=True,
+        timeout=120,
     )
     (tmp_path / "cfg.json").write_text(
         json.dumps({"version": 1, "gates": {"fail_on_category": ["secrets"]}}),

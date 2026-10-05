@@ -13,6 +13,7 @@ from secure_code_audit.scoring import (
     finding_score,
     letter_grade,
     score,
+    summarize_axis,
 )
 
 
@@ -282,3 +283,52 @@ def test_a_suppressed_repeat_does_not_inflate_the_count():
     assert category_subtotal(with_suppressed, Category.CODE_VULNERABILITIES) == pytest.approx(
         category_subtotal(live, Category.CODE_VULNERABILITIES)
     )
+
+
+def test_a_score_report_carries_every_severity():
+    """Three call sites index this dict, and nothing checked it was dense.
+
+    `renderers._severity_table`, `renderers.pr_comment` and
+    `scoring._gate_max_unsuppressed` all do `per_severity_count[sev]`, each
+    with a comment saying `score()` fills every Severity. That invariant was
+    asserted in three comments and enforced nowhere, so making `score()`
+    build sparsely — the obvious "optimisation" — would raise `KeyError`
+    inside the PR comment, which is the most widely read artifact this tool
+    produces.
+
+    A report built from one LOW finding is the case that would break: four
+    of the five severities have no finding at all.
+
+    A falsifier, not a red test. The density already held — there is one
+    producer and it uses `dict.fromkeys` — and this exists so that changing
+    it fails here instead of in an operator's PR.
+    """
+    report = score([_f(Severity.LOW, Category.CODE_VULNERABILITIES)], loc_scanned=1_000)
+
+    assert set(report.per_severity_count) == set(Severity), (
+        "a ScoreReport must carry every Severity; three call sites index it"
+    )
+    assert report.per_severity_count[Severity.CRITICAL] == 0
+    assert report.per_severity_count[Severity.LOW] == 1
+    assert set(report.per_category_count) == set(Category), (
+        "`as_table` indexes per_category_count for every Category"
+    )
+
+
+def test_an_axis_report_is_deliberately_sparse():
+    """The companion invariant, and the reason the two cannot be unified.
+
+    `AxisReport.per_severity_count` carries only the severities present,
+    because `worst_severity` takes `max()` over its *keys*. Make it dense and
+    that property returns CRITICAL for every axis that has any finding at
+    all — a test tree with one LOW finding would report its worst as
+    CRITICAL.
+
+    So the sparse `.get(..., 0)` in `summarize_axis` is correct and the dense
+    indexing in `score` is correct, and a reader seeing both needs to know
+    they are different contracts rather than an inconsistency.
+    """
+    axis = summarize_axis("test tree", [_f(Severity.LOW, Category.CODE_VULNERABILITIES)], loc=10)
+
+    assert set(axis.per_severity_count) == {Severity.LOW}
+    assert axis.worst_severity is Severity.LOW

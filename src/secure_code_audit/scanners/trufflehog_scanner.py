@@ -33,6 +33,12 @@ class TruffleHogScanner(Scanner):
         "brew install trufflehog, or a pinned release from github.com/trufflesecurity/trufflehog"
     )
 
+    honours_exclusions = False
+    exclusion_note = (
+        "trufflehog is not installed in this environment, so no exclusion flag has been "
+        "verified against a real binary; guessing one would make the tool error out"
+    )
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)

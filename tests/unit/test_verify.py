@@ -278,3 +278,62 @@ def test_the_headline_does_not_call_a_deferred_tree_clean():
     headline = result.headline()
     assert "nothing required" in headline
     assert "clean before and after" not in headline
+
+
+def test_a_finding_introduced_and_suppressed_in_one_change_is_not_invisible():
+    """PRODUCT BUG — the laundering case passed verification clean.
+
+    `suppressed_now` only catches suppression of findings that existed
+    *before*: it requires `f.fingerprint in old`. And `_actionable` excludes
+    suppressed findings, so a finding that is new **and** suppressed in the
+    same change is in neither `new` nor `suppressed_now`, and therefore in
+    neither `introduced` nor `suppressed`.
+
+    Measured before this test was written, on a patch that fixes B602 and
+    adds a suppressed B608:
+
+        fixed       ['B602']
+        introduced  []
+        suppressed  []
+        notes       0
+        passed      True
+
+    So `--verify-against` reported a clean pass for a change that
+    introduced a weakness and silenced it in the same move. That is the one
+    thing the verifier exists to catch — `_HARD_CONSTRAINTS` item 6 forbids
+    silencing warnings, and forbidding is not detecting — and it is
+    cheaper for an agent than fixing anything.
+
+    It belongs in `introduced`: it did not exist before this work. That also
+    makes `regressed` true, so the run cannot pass.
+    """
+    before = [_f("old-one")]
+    after = [_f("brand-new", suppressed=True)]
+
+    v = compare(before, after)
+
+    assert [f.fingerprint for f in v.fixed] == ["old-one"]
+    assert [f.fingerprint for f in v.introduced] == ["brand-new"], (
+        "a finding that arrived already suppressed is invisible to verification"
+    )
+    assert v.regressed, "introducing and silencing a finding must count as a regression"
+    assert not v.passed, "a patch that introduces and silences a finding must not pass"
+    assert any("suppress" in n.lower() for n in v.notes), v.notes
+
+
+def test_a_pre_existing_suppression_is_still_reported_as_suppressed_not_introduced():
+    """The falsifier, and the distinction the fix must preserve.
+
+    Silencing a finding that existed before is `suppressed` — "disappeared
+    without the code being repaired". Arriving already silenced is
+    `introduced`. Collapsing the two would lose the difference between
+    accepting an old finding and smuggling in a new one.
+    """
+    before = [_f("known")]
+    after = [_f("known", suppressed=True)]
+
+    v = compare(before, after)
+
+    assert [f.fingerprint for f in v.suppressed] == ["known"]
+    assert v.introduced == ()
+    assert v.regressed
