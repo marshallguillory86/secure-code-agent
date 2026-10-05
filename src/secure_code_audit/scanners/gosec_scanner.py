@@ -46,6 +46,13 @@ class GosecScanner(Scanner):
     binary = "gosec"
     install_hint = "go install github.com/securego/gosec/v2/cmd/gosec@latest"
 
+    honours_exclusions = False
+    exclusion_note = (
+        "gosec is not installed in this environment, so no exclusion flag has been "
+        "verified against a real binary; guessing one would make the tool error out, "
+        "which is worse than the slow scan it would save"
+    )
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)

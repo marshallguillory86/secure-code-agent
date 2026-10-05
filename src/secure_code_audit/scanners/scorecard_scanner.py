@@ -49,6 +49,12 @@ class ScorecardScanner(Scanner):
     # first time the floor made it required.
     default_timeout_seconds = 1800
 
+    honours_exclusions = False
+    exclusion_note = (
+        "scorecard scores a remote repository through its API rather than reading a "
+        "local tree, so a path exclusion has nothing to apply to"
+    )
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)

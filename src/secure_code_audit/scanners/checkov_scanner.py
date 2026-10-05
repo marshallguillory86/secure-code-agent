@@ -18,6 +18,7 @@ from secure_code_audit.config import Config
 from secure_code_audit.findings import Category
 from secure_code_audit.sarif import ingest as sarif_ingest
 from secure_code_audit.scanner_status import ScanResult
+from secure_code_audit.scanners._exclusions import as_regex, directory_excludes
 from secure_code_audit.scanners.base import Scanner
 
 
@@ -35,6 +36,23 @@ class CheckovScanner(Scanner):
     #: only because checkov was not installed on this machine.
     default_category = Category.CONFIG_IAC
     install_hint = "pip install 'secure-code-agent[python-scanners]'"
+
+    honours_exclusions = True
+
+    def exclusion_args(self, config: Config) -> list[str]:
+        """`--skip-path`, repeated — and it takes a **regex**, not a glob.
+
+        `as_regex` escapes every literal for that reason: `calibration/.corpus`
+        handed over unescaped would also skip `calibration/Xcorpus`, because a
+        regex `.` matches any character and a dot in a directory name is
+        ordinary. Over-excluding would silently stop scanning real code, which
+        is worse than the slow scan being fixed.
+        """
+        return [
+            arg
+            for d in directory_excludes(config.exclude_patterns)
+            for arg in ("--skip-path", as_regex(d))
+        ]
 
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
@@ -55,6 +73,7 @@ class CheckovScanner(Scanner):
                 str(tmpdir_path),
                 "--quiet",
                 "--soft-fail",
+                *self.exclusion_args(config),
             ]
             args.extend(sc_cfg.extra_args)
 

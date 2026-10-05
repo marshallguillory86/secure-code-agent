@@ -1,6 +1,6 @@
 # Bounded remediation prompts
 
-> Status: **v0.12.11 — 2026-09-11.** The bounded work order handed to an agent.
+> Status: **v0.12.12 — 2026-10-04.** The bounded work order handed to an agent.
 
 This is the differentiator. Every other scanner stops at "here's a list of findings." `secure-code-agent` generates an LLM-ready prompt scoped to the actual findings, with explicit guardrails against the failure modes that make AI security fixes worse than the bugs they patch.
 
@@ -54,7 +54,7 @@ This is a constrained task, not a refactor.
    in the patch description).
 9. Add a focused test that exercises the specific security boundary
    you fixed. The test must FAIL on the pre-fix code and PASS on the
-   post-fix code. No "TODO: add test later".
+   post-fix code. Do not defer the test to a later change.
 10. Keep the patch small. If you find yourself rewriting a function
     rather than patching it, stop and report the structural issue
     to the operator instead.

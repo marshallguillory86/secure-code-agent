@@ -173,6 +173,28 @@ class Finding:
             depend on where the checkout lives.
           - code_snippet is normalized (whitespace collapsed, max 512 chars)
             so a reformat-only edit doesn't break the fingerprint.
+
+        **The 16-character truncation stays, and this is the reasoning.** A
+        `silent-truncation` risk rule matches the slice, and the honest answer
+        is that it is neither silent nor free to change.
+
+        It is a published contract, not an implementation detail.
+        `suppressions._VALID_FINGERPRINT` validates an operator's
+        `fingerprint:` entry as exactly 16 hex characters, the loader's error
+        message says so, and `README.md` and `docs/design.md` both document it.
+        Widening the slice would invalidate every `fingerprint:` suppression
+        and every committed baseline written by a released version — the
+        narrowest, most deliberate suppression an operator can write, silently
+        stopping matching.
+
+        64 bits is enough for what this identifies. Collisions follow the
+        birthday bound, n^2 / 2^65: at ten thousand findings in one baseline
+        that is about 3e-12, and at a million about 3e-8. The consequence of
+        one would be real — a baseline entry or a pinned suppression covering
+        a different finding, which is a false negative in a security tool —
+        which is why the number is stated here rather than assumed, and why
+        `test_the_fingerprint_matches_what_suppressions_accept` pins the
+        length against the pattern operators are validated with.
         """
         key = canonical_cwe or rule_id
         path = file_path.as_posix()

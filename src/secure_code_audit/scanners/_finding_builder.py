@@ -199,6 +199,38 @@ class FindingConstruction:
             cwe_top25=is_top25(std.canonical_cwe),
         )
 
+    def _dependency_finding(
+        self, rule_id: str, message: str, manifest: Path, severity: Severity
+    ) -> Finding:
+        """A dependency advisory, reported against the manifest that pins it.
+
+        Four sites across `npm_audit`, `osv_scanner` and `pip_audit` built
+        this with the same seven fixed arguments — a 27-line duplicate block
+        that MA named, and the kind where fixing one and missing another is
+        the whole risk. The category especially: `DEPENDENCIES` is what takes
+        these off the code-condition score and onto their own axis (a CVE in
+        a pinned dependency is fixed with a version bump; an injection flaw
+        is fixed with a rewrite), so a site that drifted out of it would be
+        silently scored as shipped code.
+
+        Line 0 and no snippet are deliberate, not placeholders: the defect is
+        the *pinned version* in the manifest, not a line of our source, and a
+        snippet would quote a lockfile entry rather than anything an operator
+        edits. HIGH confidence because the scanner matched a package version
+        against an advisory database — there is no heuristic in it.
+        """
+        return self._make_finding(
+            rule_id=rule_id,
+            message=message,
+            file_path=manifest,
+            line_start=0,
+            line_end=None,
+            code_snippet=None,
+            severity=severity,
+            confidence=Confidence.HIGH,
+            category=Category.DEPENDENCIES,
+        )
+
     def _unavailable_finding(self, target: Path) -> Finding:
         """Informational finding emitted when no safe command can be resolved."""
         return Finding(

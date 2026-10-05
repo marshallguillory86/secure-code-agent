@@ -48,6 +48,13 @@ class GitleaksScanner(Scanner):
     default_category = Category.SECRETS
     install_hint = "brew install gitleaks, or a pinned release from github.com/gitleaks/gitleaks"
 
+    honours_exclusions = False
+    exclusion_note = (
+        "gitleaks expresses path allowlists only in its own .gitleaks.toml config file; "
+        "it has no command-line path exclusion, so the finding-level filter is what "
+        "removes excluded paths here"
+    )
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)

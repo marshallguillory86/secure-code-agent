@@ -302,6 +302,7 @@ def _git(tree: Path, *args: str) -> None:
         check=True,
         capture_output=True,
         env={**os.environ, "GIT_IDENTITY_OVERRIDE": "1"},
+        timeout=120,
     )
 
 
@@ -357,6 +358,7 @@ def _run_cli(target: str, cwd: Path, scanners: str, out: Path) -> dict:
         check=False,
         capture_output=True,
         text=True,
+        timeout=120,
     )
     assert out.exists(), result.stdout[-800:] + result.stderr[-800:]
     return json.loads(out.read_text(encoding="utf-8"))

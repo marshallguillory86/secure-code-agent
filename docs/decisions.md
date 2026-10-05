@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.11 — 2026-10-03.** The decision register. D1–D32.
+> Status: **v0.12.12 — 2026-10-04.** The decision register. D1–D34.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -44,7 +44,9 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D29 | An untrusted config does not choose a scanner's command | 2026-10-02 | Accepted |
 | D30 | An adapter judges its own tool's exit codes, and `_exec` judges none | 2026-10-02 | Accepted |
 | D31 | An overriding CWE decides the OWASP category derived from it | 2026-10-02 | Accepted |
-| D32 | The audited tree does not grade itself | 2026-10-02 | Accepted |
+| D32 | The audited tree does not grade itself | 2026-10-02 | Accepted (amended 2026-10-04) |
+| D33 | A run that scanned nothing is ungraded, not perfect | 2026-10-04 | Accepted |
+| D34 | An adapter declares whether it honours `exclude_patterns` | 2026-10-04 | Accepted |
 
 ---
 
@@ -2021,3 +2023,284 @@ question 3 asks for may add mapping entries and may **not** restate
 `severity`, `confidence` or `category`. Those three are the scoring inputs,
 and an overlay that set them would reopen this exact hole through a second
 door.
+
+**Amended 2026-10-04: the denominator is a grading key too.** This decision
+named two keys, and the implementation listed those two. `loc_for_scoring`
+was not among them, and every category except `secrets` is a *density* —
+weighted findings per thousand scanned lines — so the tree declaring its own
+line count declares its own grade. Measured on the same one-finding fixture:
+
+| run | overall |
+| --- | ---: |
+| honest | **0.00 (F)** |
+| plus an in-tree `loc_for_scoring: {value: 10000000}` | **4.999 (A+)** |
+
+No flag, no warning. The decision above was right and its implementation was
+an enumeration of the two routes the attack had been *demonstrated* through,
+which is how the third was missed. `loc_for_scoring` is now refused on the
+same terms, with the same two escape hatches.
+
+Two further routes were measured and are **not** holes, which is worth
+recording so the next reader does not re-close them:
+
+- `scanners.<name>.enabled: false` from inside the tree yields `overall:
+  null` — ungraded, not perfect. Disabling the evidence does not buy a
+  grade, because measurability is derived from what actually ran.
+- `paths.test_patterns`, `docs_patterns` and `exclude_patterns` set to match
+  everything now yield `overall: null` as well, via
+  [D33](#d33--a-run-that-scanned-nothing-is-ungraded-not-perfect). Before
+  D33 all three returned **5.00 (A+)**.
+
+**And the warning and the clearing are now one list.** `_refuse_target_policy`
+warned for each key in `_GRADING_KEYS` and then cleared the keys in a
+separately written expression. A key added to the tuple would have told the
+operator it was ignored and then applied it — a warning stating the opposite
+of what happened, which is worse than no warning. The clearing is derived
+from the tuple, each key restored to its own dataclass default, and
+`test_every_grading_key_is_actually_cleared_not_merely_warned_about` holds
+the two together.
+
+---
+
+## D33 — A run that scanned nothing is ungraded, not perfect
+
+**Status:** Accepted · 2026-10-04 · closes the second door of
+[architecture.md §5](architecture.md#5-problem-4--the-scores-null-state-is-perfect--closed-2026-09-09)
+
+**Context.** Pointed at an empty directory, this tool reported `overall:
+5.00`, letter **A+**, exit 0, and nothing on stderr.
+
+It needs no attacker. A path typo, a failed checkout, a clone that produced
+an empty directory, or one `exclude_patterns` entry matching more than its
+author meant all end the same way. Measured, on a tree holding a single
+shell-injection finding:
+
+| run | overall | `loc_scanned` |
+| --- | ---: | ---: |
+| honest | **0.00 (F)** | 3 |
+| `paths.exclude_patterns: ["**"]` | **5.00 (A+)** | 0 |
+| `paths.test_patterns: ["**"]` | **5.00 (A+)** | 0 |
+| `paths.docs_patterns: ["**"]` | **5.00 (A+)** | 0 |
+| an empty directory | **5.00 (A+)** | 0 |
+
+`normalize` divides the weighted subtotal by `max(loc_scanned, 1) / 1000`.
+The `max(..., 1)` avoids a division by zero, and what it does in exchange is
+answer *"no denominator"* with *"a denominator of one line"* — so zero
+findings over zero lines is a density of zero, and a density of zero is a
+perfect grade. Absence read as a value, in the one part of this codebase
+where the doctrine against it is written down.
+
+**§5 was closed through one door.** Its *Closed* section covers
+measurability: `per_category` grades `None` where no scanner in the run could
+read a category, and `overall` is `None` when nothing was measurable. That
+is why disabling every scanner already behaved correctly. §5 also listed, as
+a *"smaller consequence"*, that "`paths.exclude_patterns` is simultaneously
+the scan scope and that denominator" — the mechanism was noted and not
+closed. Two doors into one state; one of them was shut.
+
+**Decision.** A category with no findings **and** no scanned lines grades
+`None`, exactly as a category no scanner covers does. `overall` and `letter`
+follow, as they already do. The condition is a conjunction, and both halves
+are load-bearing:
+
+- **A tree that was scanned and is clean still grades 5.00/A+.** Anything
+  else would punish the honest case this product exists to reward, and would
+  be hiding the defect rather than fixing it.
+- **A finding on a tree that counted no lines is still graded.** LOC counts
+  only the configured source extensions, so a scanner can legitimately
+  report on a file contributing no lines — a credential in a `.env`, a
+  misconfiguration in a bare dotfile. A finding is evidence that something
+  was examined, which is the opposite of what the ungraded state asserts.
+  `score` already reasons this way for the `measurable` set.
+
+**Why not refuse to run.** An empty or fully-excluded tree is not
+necessarily an error: `--changed-only` legitimately produces one on a commit
+that touched no source, and a monorepo audit of a path with no code is a
+normal step in a matrix. The run reports what it found, which is nothing,
+and says it is ungraded. What it may not do is call that a pass.
+
+**And no configured gate is satisfied by such a run.** This is the more
+dangerous half, because the grade is read by a person and the gate is read by
+the build. Measured on an empty directory with a real severity gate supplied
+from outside the tree, `--fail-on-gate` passed:
+
+```text
+secure-code-agent · no score — nothing measurable was scanned · gate PASS
+exit 0
+```
+
+The gate was configured, it was enforced, and it was satisfied by there being
+nothing to find — because every gate asks *"are there offending findings"* and
+zero findings is zero offenders. `_gate_min_score` already refused this for
+its own gate and nothing generalised it. A run that measured nothing now
+trips `nothing_measured` whenever any gate is configured, which is a property
+of the run rather than of a gate, so it sits beside the coverage check.
+
+Conditioned on a gate being configured: with no policy there is nothing to
+fail, the run is a report, and `--fail-on-gate` is already refused outright
+in that case.
+
+**`--changed-only` is not an exception.** It scopes the *report* and still
+scans the whole tree — "scanners read trees rather than diffs" — so a
+commit touching no source keeps a real `loc_scanned` and a real grade. There
+is no legitimate run with zero scanned lines and a configured gate.
+
+**Consequences.** The `min_score` gate trips on such a run, with
+*"nothing measurable was scanned"* — a branch that existed, was written for
+exactly this, and could not be reached from this direction. An operator with
+a `min_score` floor and a broken path was previously shown **PASS**. A
+trend history will also show a gap rather than a spike of perfect scores for
+any run that scanned nothing: the row records `score: null`, verified against
+a first-run history, where the summary correctly reads *"no scored history
+yet"* rather than inventing a point.
+
+---
+
+## D34 — An adapter declares whether it honours `exclude_patterns`
+
+**Status:** Accepted · 2026-10-04 · makes good on the claim quoted in
+[D24](#d24--a-project-may-declare-what-it-is-and-be-reported-rather-than-scored)
+
+**Context.** This register already says what `exclude_patterns` does:
+*"`exclude_patterns` stops the scan and leaves no trace in the report."*
+Only the second half was ever implemented. Patterns filtered findings and
+LOC *after* the scanners ran, and most adapters were handed the bare target
+root.
+
+Four adapters did honour them, in two different ways, and nothing recorded
+which: `bandit` passed the tool its own `--exclude`, while `hadolint`,
+`npm_audit`, `pip_audit` and `builtin_rules` filter the inputs they discover
+so an excluded path never reaches the tool. The other nine did not.
+
+**What it cost, on this repository.** `calibration/.corpus/` holds 342 MB of
+cloned third-party repositories — `webgoat`, `gson`, `commons-lang`, ten
+`pom.xml` files between them. It is gitignored, untracked, and the first
+entry in `paths.exclude_patterns`. Trivy was still given the root, walked
+into it, and resolved those Java projects' dependencies against Maven
+Central until it was rate-limited:
+
+```text
+FATAL  remote Maven repository returned 429 Too Many Requests
+       Retry-After: 1313.
+```
+
+That is why `trivy` — a **required** scanner — failed, why all sixty
+committed rows in `.secure-code/history.jsonl` read
+`coverage_complete: false`, and why 26 real dependency findings in `uv.lock`
+were never reported, trivy being the only scanner in the floor that reads
+it. It is also why the local suite took forty-five minutes: backoff retries
+against Maven, invocation after invocation.
+
+Measured, same tree, same command, one flag apart:
+
+| trivy invocation | result |
+| --- | --- |
+| the repository root, as the adapter gave it | fails after minutes of backoff |
+| `--skip-dirs calibration/.corpus` | **exit 0 in 51s**, 147 KB of SARIF |
+
+And through the product, after the fix: the first `coverage: COMPLETE` and
+`gate PASS` self-audit in this repository's history, in 48 seconds, on the
+sixty-sixth scored run.
+
+**Decision.** An adapter states its position and the statement is checked.
+`honours_exclusions` is True and the adapter either emits exclusion flags or
+filters its own inputs; or it is False and `exclusion_note` says *why*,
+which `test_every_adapter_declares_its_exclusion_support.py` requires. A new
+adapter inherits False and an empty note, so the lint fails until somebody
+decides.
+
+The reason is mandatory because "this tool cannot express it" and "nobody
+got round to it" are identical in code and completely different facts for an
+operator staring at a slow, noisy scan.
+
+**The invariant that makes it safe.** Finding-level filtering stays
+authoritative. Passing exclusions to a tool is an optimisation — work and
+network egress — and is never the only thing excluding a path. A tool that
+ignores its flag, or a pattern the translation declines to pass on, changes
+nothing in the report.
+
+That asymmetry sets the translation's scope. Under-excluding is the status
+quo and costs time; **over-excluding silently stops scanning real code**,
+which is the class of silence this project exists to find in other people's
+pipelines. So only patterns that unambiguously name a directory subtree
+travel — the trailing-slash form of D21, which every tool expresses natively.
+Bare names and file globs stay with the post-filter rather than being
+guessed at, and a pattern that normalises to nothing is dropped rather than
+handed over as "skip your own target".
+
+**Per tool, verified against `--help` rather than assumed:** trivy
+`--skip-dirs`, semgrep `--exclude`, bandit `--exclude`, checkov
+`--skip-path` — which takes a *regex*, so every literal is escaped;
+`calibration/.corpus` unescaped would also skip `calibration/Xcorpus`.
+
+**Declined, with reasons recorded rather than left blank.** `gitleaks` and
+`rubocop` express path exclusions only in their own config files;
+`njsscan` advertises none; `osv-scanner` offers only
+`--experimental-exclude`, and an experimental flag can change between
+releases; `scorecard` scores a remote repository through an API and has no
+local tree to scope. `gosec` and `trufflehog` are not installed here, so no
+flag could be verified against a real binary — and guessing one would make
+the tool error out, which is worse than the slow scan it would save.
+
+**Why not use the exclude matcher directly.** `git_tools.matches_pattern` is
+the authority on what a pattern means, and no tool accepts a Python
+callable. Translation is unavoidable; keeping it conservative, and keeping
+the matcher authoritative over the findings, is what stops a translation bug
+from becoming a coverage gap.
+
+**Semgrep, specifically.** `_restrict_to_changed` argues the opposite for
+`--changed-only` — there the scan stays whole and only the report is scoped,
+so Semgrep's cross-file dataflow is not narrowed. That reasoning is about a
+*reporting* filter. `exclude_patterns` is a scan-scope control, and a
+vendored clone tree is not a dataflow source for the code under audit.
+
+**Scope note: a path exclusion does not delete a dependency advisory.**
+`_classify` settled the same argument one layer up and said why — *"a
+dependency advisory is about the dependency, not about the file that
+happened to declare it. Classified by category before path, because the path
+routing gets it wrong: `requirements.txt` matches the documentation pattern
+`**/*.txt`, so every CVE in a pip manifest was filed under documentation."*
+Nothing applied it to exclusion.
+
+A dependency finding is reported against the manifest or lockfile that pins
+the version, because that is the only file there is to point at. So any
+pattern matching that path deleted the advisory. `**/*.lock` is in this
+repository's own config and is an ordinary thing to write — a lockfile is
+generated, enormous, and full of hashes that read like secrets — and the
+effect was that nineteen advisories against `uv.lock`, ten of them high,
+never reached the report while the `dependencies` category graded **5.0**: a
+perfect score for a category whose only evidence source was excluded.
+
+So `DEPENDENCIES` findings survive a path exclusion and everything else in
+the same file does not. A secret or a code finding inside an excluded
+lockfile stays excluded, which is what the operator asked for; only the
+advisory about the *package* survives, because the path was never what it
+was about.
+
+**What it surfaced here, and what was *not* done about it.** The nineteen
+are all against `uv.lock`, which this repository deliberately gitignores:
+pyproject is the one source of dependency truth, and *"committing a lock
+nothing enforces would create a second one, free to drift unnoticed"*. CI
+installs with `pip install -e`, so no lockfile exists there and this
+exemption changes nothing about this project's own CI audit. The advisories
+describe a developer's resolved environment, and they will now be reported
+in one.
+
+They were briefly suppressed, and that was wrong twice over: nineteen
+permanent entries in a committed file, pointing at a path no commit
+contains — which this repository's own
+`test_no_suppression_path_matches_nothing` lint caught immediately, being
+exactly the "suppression that silently stopped covering anything" it exists
+to prevent. The suppressions are gone; the chain is recorded here instead.
+
+Every one is held by an upstream pin, read from the installed metadata
+rather than inferred: `njsscan==1.0.1` requires `semgrep==1.172.0`, which
+requires `mcp==1.23.3` and `pyjwt[crypto]~=2.13.0` — a compatible-release
+pin forbidding the 2.14.0 that carries the fix. `checkov 3.3.22` pins
+`asteval` and `ecdsa`, and `ecdsa` has no fixed version published at all.
+None of it reaches a published install path: this package's only runtime
+dependency is `PyYAML`, and none of its exact pins is affected.
+
+**So the exemption matters most for the projects that do commit a
+lockfile**, which is nearly all of them. There, excluding it had been
+deleting the entire dependency axis while the category reported 5.0.

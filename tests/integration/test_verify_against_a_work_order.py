@@ -52,6 +52,7 @@ def _git(tree: Path, *args: str) -> None:
         check=True,
         capture_output=True,
         env={**os.environ, "GIT_IDENTITY_OVERRIDE": "1"},
+        timeout=120,
     )
 
 

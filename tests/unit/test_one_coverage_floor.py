@@ -250,5 +250,6 @@ def test_the_coverage_artifact_is_not_committed():
         check=True,
         capture_output=True,
         text=True,
+        timeout=120,
     ).stdout.split()
     assert tracked == [], f"a coverage artifact is tracked in git: {tracked}"

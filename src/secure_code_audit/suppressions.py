@@ -334,6 +334,57 @@ def apply(
     return out
 
 
+def _suppression_finding(
+    rid: str,
+    snippet: str,
+    path: Path,
+    *,
+    severity: Severity,
+    message: str,
+    short_desc: str,
+    fix_hint: str,
+) -> Finding:
+    """The synthetic finding both suppression reporters emit.
+
+    `expired_findings` and `unused_findings` built this twice, 62 duplicated
+    lines apart in one file — and the second was written by copying the
+    first, which is how the pair came to exist. Everything they shared is
+    here; everything they differ on is an argument.
+
+    What they share is the part worth having in one place: the scanner name
+    these findings are attributed to, the `PO.4.1` SSDF practice, the
+    POLICY_DOCS category, HIGH confidence, line 0 against the suppressions
+    file itself, and a fingerprint derived from the rule id and the snippet.
+    A change to any of those — the category this axis is scored under, say —
+    had to be made twice and was one edit away from applying to one
+    reporter only.
+    """
+    return Finding(
+        rule_id=rid,
+        scanner="suppressions",
+        fingerprint=Finding.make_fingerprint(
+            canonical_cwe=None,
+            rule_id=rid,
+            file_path=path,
+            code_snippet=snippet,
+        ),
+        canonical_cwe=None,
+        owasp_top10=None,
+        asvs_section=None,
+        nist_ssdf="PO.4.1",
+        category=Category.POLICY_DOCS,
+        severity=severity,
+        confidence=Confidence.HIGH,
+        file_path=path,
+        line_start=0,
+        line_end=None,
+        code_snippet=snippet,
+        message=message,
+        short_desc=short_desc,
+        fix_hint=fix_hint,
+    )
+
+
 def unused_findings(
     findings_rules: list[SuppressionRule],
     findings: list[Finding],
@@ -363,26 +414,11 @@ def unused_findings(
         rid = f"suppressions.unused.{r.rule_id}"
         snippet = f"rule_id: {r.rule_id}; expires {r.expires.isoformat()}; reason: {r.reason}"
         out.append(
-            Finding(
-                rule_id=rid,
-                scanner="suppressions",
-                fingerprint=Finding.make_fingerprint(
-                    canonical_cwe=None,
-                    rule_id=rid,
-                    file_path=path,
-                    code_snippet=snippet,
-                ),
-                canonical_cwe=None,
-                owasp_top10=None,
-                asvs_section=None,
-                nist_ssdf="PO.4.1",
-                category=Category.POLICY_DOCS,
+            _suppression_finding(
+                rid,
+                snippet,
+                path,
                 severity=Severity.INFORMATIONAL,
-                confidence=Confidence.HIGH,
-                file_path=path,
-                line_start=0,
-                line_end=None,
-                code_snippet=snippet,
                 message=(
                     f"Suppression for rule `{r.rule_id}` matched no finding in this "
                     f'run: "{r.reason}". Either the finding was fixed and this entry '
@@ -410,33 +446,21 @@ def expired_findings(rules: list[SuppressionRule], path: Path) -> list[Finding]:
         rid = f"suppressions.expired.{r.rule_id}"
         snippet = f"rule_id: {r.rule_id}; expired {r.expires.isoformat()}; reason: {r.reason}"
         out.append(
-            Finding(
-                rule_id=rid,
-                scanner="suppressions",
-                fingerprint=Finding.make_fingerprint(
-                    canonical_cwe=None,
-                    rule_id=rid,
-                    file_path=path,
-                    code_snippet=snippet,
-                ),
-                canonical_cwe=None,
-                owasp_top10=None,
-                asvs_section=None,
-                nist_ssdf="PO.4.1",
-                category=Category.POLICY_DOCS,
+            _suppression_finding(
+                rid,
+                snippet,
+                path,
                 severity=Severity.CRITICAL,
-                confidence=Confidence.HIGH,
-                file_path=path,
-                line_start=0,
-                line_end=None,
-                code_snippet=snippet,
                 message=(
                     f"Suppression for rule `{r.rule_id}` expired on "
                     f'{r.expires.isoformat()}: "{r.reason}". Either fix the '
                     "underlying issue or extend `expires` with a fresh reason."
                 ),
                 short_desc="Expired suppression entry.",
-                fix_hint="Address the original finding, or extend the suppression with operator approval.",
+                fix_hint=(
+                    "Address the original finding, or extend the suppression with "
+                    "operator approval."
+                ),
             )
         )
     return out

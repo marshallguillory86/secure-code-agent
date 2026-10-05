@@ -31,7 +31,7 @@ from pathlib import Path
 
 import pytest
 
-from secure_code_audit import instructions
+from secure_code_audit import instructions, remediation
 from secure_code_audit.cli import _parser
 
 REPO = Path(__file__).resolve().parent.parent.parent
@@ -181,3 +181,76 @@ def test_the_shipped_skill_recommends_the_flag():
 
     assert "--changed-only" in skill
     assert "no grade" in flat, "the skill names the flag without saying it issues no grade"
+
+
+#: The debt markers this project's own risk ruleset looks for. Spelled as
+#: fragments and joined, because a test file naming them is itself scanned.
+_DEBT_MARKERS = tuple(f"{a}{b}" for a, b in (("TO", "DO"), ("FIX", "ME"), ("HA", "CK")))
+
+
+def _shipped_prose() -> dict[str, str]:
+    """Guidance text, plus the work order the product generates.
+
+    The work order's own constants are included because that text *is*
+    shipped prose: an agent reads it, and an operator sees it in
+    `secure-code-remediation-prompt.md`. They are named explicitly rather
+    than discovered, so adding a third block of prose to `remediation.py`
+    without adding it here is a gap — which is what `test_the_prose_sweep_reads_something`
+    is for.
+    """
+    documents = dict(_guidance_documents())
+    documents["remediation.py::_HARD_CONSTRAINTS"] = remediation._HARD_CONSTRAINTS
+    documents["remediation.py::_PATCH_PROTOCOL"] = remediation._PATCH_PROTOCOL
+    return documents
+
+
+def test_the_prose_sweep_reads_something():
+    """A corpus that collected nothing would make the check below vacuous."""
+    documents = _shipped_prose()
+
+    assert len(documents) >= 3, sorted(documents)
+    assert any("constraint" in text.lower() for text in documents.values()), (
+        "the work order's constraint list is not in the corpus"
+    )
+
+
+def test_the_debt_marker_detector_catches_a_reintroduced_one():
+    """The falsifier.
+
+    The check above asserts an empty list against the real corpus, and a
+    detector whose markers were misspelled would pass it for ever. This
+    feeds it the exact sentence that was removed and requires a hit.
+    """
+    reintroduced = f'9. Add a test. No "{_DEBT_MARKERS[0]}: add test later".'
+
+    assert any(marker in reintroduced for marker in _DEBT_MARKERS)
+    assert not any(
+        marker in "9. Add a test. Do not defer the test to a later change."
+        for marker in _DEBT_MARKERS
+    ), "the detector fires on the wording that replaced it"
+
+
+def test_no_shipped_guidance_carries_a_debt_marker():
+    """Guidance that forbids deferred work must not be written with the token.
+
+    The work order's constraint 9 read `No "<marker>: add test later"`, and
+    the suppression guidance's example of a bad reason *was* that marker.
+    Both are instructions against deferring work, written with the literal
+    they warn about — so this project's own `debt-marker` risk rule matched
+    its own advice, four times over.
+
+    They were reworded, and this is what stops them coming back. The risk
+    rule that found them lives in maintainability-agent, which does not run
+    in CI here, so without this check a reintroduced marker would only
+    surface at the next manual audit.
+    """
+    offenders: list[str] = []
+    for name, text in _shipped_prose().items():
+        for number, line in enumerate(text.split("\n"), 1):
+            if any(marker in line for marker in _DEBT_MARKERS):
+                offenders.append(f"{name}:{number}: {line.strip()[:80]}")
+
+    assert offenders == [], (
+        "shipped guidance carries a debt marker; say it without the literal, "
+        f"as constraint 9 now does: {offenders}"
+    )

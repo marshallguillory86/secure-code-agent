@@ -28,6 +28,7 @@ from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.sarif import ingest as sarif_ingest
 from secure_code_audit.scanner_status import ScanResult
+from secure_code_audit.scanners._exclusions import directory_excludes
 from secure_code_audit.scanners.base import Scanner
 
 
@@ -36,6 +37,25 @@ class TrivyScanner(Scanner):
     binary = "trivy"
     default_category = Category.CONFIG_IAC
     install_hint = "brew install trivy, or follow trivy.dev/latest/getting-started/installation"
+
+    honours_exclusions = True
+
+    def exclusion_args(self, config: Config) -> list[str]:
+        """`--skip-dirs`, which is why this adapter stopped failing.
+
+        Trivy was handed the repository root and walked every excluded
+        directory in it. On this project that meant `calibration/.corpus/` —
+        342 MB of cloned third-party repositories, ten `pom.xml` files among
+        them — whose dependencies trivy then resolved against Maven Central
+        until it was rate-limited with a 429. A required scanner, failing for
+        sixty consecutive runs, hiding 26 real dependency findings in
+        `uv.lock` that only trivy reads.
+
+        Measured: the same scan is **exit 0 in 51 seconds** with the excluded
+        directory skipped, against failing after minutes of backoff without.
+        """
+        skip = directory_excludes(config.exclude_patterns)
+        return ["--skip-dirs", ",".join(skip)] if skip else []
 
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
@@ -57,6 +77,7 @@ class TrivyScanner(Scanner):
                 # Skip license findings — we focus on security only.
                 "--scanners",
                 "vuln,secret,misconfig",
+                *self.exclusion_args(config),
                 str(target),
             ]
             args.extend(sc_cfg.extra_args)
@@ -67,7 +88,30 @@ class TrivyScanner(Scanner):
             if r.returncode not in (0, 1):
                 return self.failed(target, f"trivy failed: {r.stderr[:300]}")
             if not sarif_path.exists() or sarif_path.stat().st_size == 0:
-                return self.failed(target, "trivy emitted no SARIF output")
+                # Say what trivy said. This was "trivy emitted no SARIF
+                # output" and nothing else, while `r.stderr` held the cause
+                # and the remedy — the two paths above both carry it, and the
+                # one path with no diagnosis of its own was the one that threw
+                # the text away.
+                #
+                # Found by this repository's own audit, where every one of
+                # sixty committed trend rows reads `coverage_complete: false`
+                # on a required scanner. What trivy was actually saying:
+                # a 429 from Maven Central with a `Retry-After`, and
+                # "populate the local Maven cache before scanning". The
+                # operator was told a required scanner failed and given
+                # nowhere to go, which is the absence-of-evidence failure this
+                # tool exists to prevent, committed by the tool itself.
+                #
+                # The exit code is reported rather than judged: trivy returns
+                # 1 both for a fatal error and, with `--exit-code`, for
+                # findings, so output decides success here (D30) and the code
+                # only helps a reader place the message.
+                detail = (r.stderr or "").strip()
+                reason = f"trivy emitted no SARIF output (exit {r.returncode})"
+                if detail:
+                    reason += f": {detail[:300]}"
+                return self.failed(target, reason)
 
             ingested = sarif_ingest(sarif_path, default_scanner="trivy")
             # Trivy tags its rules with a category prefix (CVE-, AVD-, etc.);

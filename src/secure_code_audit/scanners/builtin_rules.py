@@ -145,6 +145,9 @@ class BuiltinRulesScanner(Scanner):
 
         return f"builtin/{__version__}"
 
+    honours_exclusions = True
+    exclusion_note = "walks the tree itself and skips excluded paths via git_tools.is_excluded"
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         findings: list[Finding] = []
         for path in self._candidate_files(target, config):

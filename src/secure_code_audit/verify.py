@@ -335,7 +335,19 @@ def compare(
     still_open = [f for fp, f in old.items() if fp in new]
     unresolved = [f for f in still_open if _asked_about(f)]
     deferred = [f for f in still_open if not _asked_about(f)]
-    introduced = [f for fp, f in new.items() if fp not in old]
+    # Suppressed in `after` and absent from `before`: introduced and silenced
+    # in one move. `suppressed_now` cannot see these — it requires
+    # `fingerprint in old` — and `_actionable` excludes suppressed findings,
+    # so they were in neither `new` nor `suppressed_now`, and therefore in
+    # neither bucket. A patch that fixed one finding and added a suppressed
+    # one verified clean, with `passed` true and no note.
+    #
+    # They belong in `introduced` rather than `suppressed`: `suppressed`
+    # means "disappeared without the code being repaired", which is a
+    # statement about something that used to exist. These did not. Counting
+    # them here also makes `regressed` true, so the run cannot pass.
+    born_silenced = {f.fingerprint: f for f in after if f.suppressed and f.fingerprint not in old}
+    introduced = [f for fp, f in new.items() if fp not in old] + list(born_silenced.values())
     suppressed = [old[fp] for fp in suppressed_now]
 
     notes: list[str] = []
@@ -352,6 +364,13 @@ def compare(
             f"{len(introduced)} finding(s) did not exist before this work, the "
             f"worst at {worst.severity.value}. A patch that resolves one weakness "
             f"and opens another has not improved the code."
+        )
+    if born_silenced:
+        notes.append(
+            f"{len(born_silenced)} of those arrived already suppressed — new "
+            f"findings that a suppression entry or an inline marker covers from "
+            f"the moment they appeared. Introducing a weakness and silencing it "
+            f"in one change is the one outcome this check exists to refuse."
         )
     if not fixed and unresolved:
         notes.append(

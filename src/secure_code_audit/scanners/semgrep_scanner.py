@@ -17,6 +17,7 @@ from pathlib import Path
 from secure_code_audit.config import Config, ScannerConfig
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanner_status import ScanResult
+from secure_code_audit.scanners._exclusions import directory_excludes
 from secure_code_audit.scanners.base import Scanner
 
 #: Ruleset shipped inside the wheel, used when `online` is false. Deliberately
@@ -28,6 +29,34 @@ def offline_ruleset_path() -> Path | None:
     """Filesystem path to the packaged offline ruleset, or None if absent."""
     candidate = Path(str(files("secure_code_audit").joinpath(OFFLINE_RULESET)))
     return candidate if candidate.is_file() else None
+
+
+#: SARIF level to this project's severity. A table rather than a branch
+#: chain: the mapping is data, and anything unlisted is MEDIUM, which is what
+#: SARIF's own default level ("warning") means.
+_SARIF_SEVERITY: dict[str, Severity] = {
+    "error": Severity.HIGH,
+    "warning": Severity.MEDIUM,
+    "note": Severity.LOW,
+}
+
+
+def _physical_location(result: dict) -> tuple[str, int, int, str | None] | None:
+    """`(file_uri, line_start, line_end, snippet)` from the first location.
+
+    None when the result names no location at all. Only the first is read:
+    SARIF allows several, and a finding is reported at one place — the others
+    would each need their own finding to be actionable.
+    """
+    locations = result.get("locations") or []
+    if not locations:
+        return None
+    physical = locations[0].get("physicalLocation") or {}
+    file_uri = (physical.get("artifactLocation") or {}).get("uri") or ""
+    region = physical.get("region") or {}
+    line_start = int(region.get("startLine") or 0)
+    line_end = int(region.get("endLine") or line_start)
+    return file_uri, line_start, line_end, (region.get("snippet") or {}).get("text")
 
 
 def _cwe_from_rule(rule: dict) -> str | None:
@@ -86,6 +115,23 @@ class SemgrepScanner(Scanner):
         profile = ruleset_mod.describe(path) if path else None
         return f"offline profile {profile.cite()}" if profile else "offline profile unavailable"
 
+    honours_exclusions = True
+
+    def exclusion_args(self, config: Config) -> list[str]:
+        """`--exclude`, repeated, which semgrep matches against path components.
+
+        Worth stating because `_restrict_to_changed` argues the opposite for
+        `--changed-only`: there the *scan* stays whole and only the report is
+        scoped, precisely so Semgrep's cross-file dataflow is not narrowed.
+        That reasoning is about a reporting filter. `exclude_patterns` is a
+        scan-scope control — the register says it "stops the scan" — and a
+        vendored clone tree is not a dataflow source for the code under
+        audit.
+        """
+        return [
+            arg for d in directory_excludes(config.exclude_patterns) for arg in ("--exclude", d)
+        ]
+
     def scan(self, target: Path, config: Config) -> ScanResult:
         if not self.is_available():
             return self.unavailable(target)
@@ -126,6 +172,7 @@ class SemgrepScanner(Scanner):
                 "--no-rewrite-rule-ids",
                 "--output",
                 str(sarif_path),
+                *self.exclusion_args(config),
                 str(target),
             ]
             args.extend(sc_cfg.extra_args)
@@ -145,59 +192,48 @@ class SemgrepScanner(Scanner):
             sarif_path.unlink(missing_ok=True)
 
     # -- minimal SARIF parser; a fuller one lives in sarif.py for ingest --
+    def _finding_from_result(self, result: dict, rules: dict, target: Path) -> Finding | None:
+        """One SARIF result as a Finding, or None when it names no location.
+
+        A result with no `locations` cannot be anchored to a line, and a
+        finding without a location is not actionable in a work order — so it
+        is dropped here rather than reported against line 0 of the target.
+        """
+        location = _physical_location(result)
+        if location is None:
+            return None
+        file_uri, line_start, line_end, snippet = location
+
+        rule_id = result.get("ruleId") or "unknown"
+        rule = rules.get(rule_id, {})
+        level = (
+            result.get("level") or rule.get("defaultConfiguration", {}).get("level") or "warning"
+        )
+        message = (
+            (result.get("message") or {}).get("text")
+            or rule.get("shortDescription", {}).get("text")
+            or rule_id
+        )
+
+        return self._make_finding(
+            rule_id=rule_id,
+            message=message,
+            file_path=Path(file_uri) if file_uri else target,
+            line_start=line_start,
+            line_end=line_end if line_end != line_start else None,
+            code_snippet=snippet,
+            severity=_SARIF_SEVERITY.get(level, Severity.MEDIUM),
+            confidence=Confidence.MEDIUM,
+            cwe_override=_cwe_from_rule(rule),
+        )
+
     def _parse_sarif(self, payload: dict, target: Path) -> list[Finding]:
         findings: list[Finding] = []
         for run in payload.get("runs", []):
-            rules = {
-                r.get("id"): r
-                for r in (run.get("tool", {}).get("driver", {}).get("rules", []) or [])
-            }
+            driver = (run.get("tool") or {}).get("driver") or {}
+            rules = {r.get("id"): r for r in (driver.get("rules") or [])}
             for result in run.get("results", []):
-                rule_id = result.get("ruleId") or "unknown"
-                rule = rules.get(rule_id, {})
-                level = (
-                    result.get("level")
-                    or rule.get("defaultConfiguration", {}).get("level")
-                    or "warning"
-                )
-                msg = (
-                    (result.get("message") or {}).get("text")
-                    or rule.get("shortDescription", {}).get("text")
-                    or rule_id
-                )
-
-                locs = result.get("locations") or []
-                if not locs:
-                    continue
-                loc = locs[0]
-                phys = loc.get("physicalLocation") or {}
-                file_uri = (phys.get("artifactLocation") or {}).get("uri") or ""
-                region = phys.get("region") or {}
-                line_start = int(region.get("startLine") or 0)
-                line_end = int(region.get("endLine") or line_start)
-                snippet = (region.get("snippet") or {}).get("text")
-
-                # SARIF severity: "error" → HIGH, "warning" → MEDIUM, "note" → LOW.
-                if level == "error":
-                    severity = Severity.HIGH
-                elif level == "note":
-                    severity = Severity.LOW
-                else:
-                    severity = Severity.MEDIUM
-
-                cwe = _cwe_from_rule(rule)
-
-                findings.append(
-                    self._make_finding(
-                        rule_id=rule_id,
-                        message=msg,
-                        file_path=Path(file_uri) if file_uri else target,
-                        line_start=line_start,
-                        line_end=line_end if line_end != line_start else None,
-                        code_snippet=snippet,
-                        severity=severity,
-                        confidence=Confidence.MEDIUM,
-                        cwe_override=cwe,
-                    )
-                )
+                finding = self._finding_from_result(result, rules, target)
+                if finding is not None:
+                    findings.append(finding)
         return findings
