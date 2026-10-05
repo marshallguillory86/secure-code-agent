@@ -91,6 +91,12 @@ class CoverageReport:
     #: than a process we watched. Reported everywhere so COMPLETE is never
     #: read as "we verified all of this ourselves".
     unverified: tuple[str, ...] = ()
+    #: Languages present in the tree that nothing in this run reads for code
+    #: vulnerabilities. Separate from `failures` on purpose: a required
+    #: scanner that did not run broke a promise the operator made and fails
+    #: the gate, while an unread language is a limit of the floor and
+    #: withholds the verified grade instead.
+    unread_languages: tuple[str, ...] = ()
 
 
 def execution_from_result(
@@ -150,10 +156,115 @@ def worst_by_name(
     return by_name
 
 
+#: Which scanners in this floor actually read a language for *code* defects.
+#:
+#: **Verified by running them, not adopted from anywhere.** An earlier version
+#: of this lifted `calibration/calibrate.py`'s `LANGUAGE_SCANNERS` wholesale
+#: and was wrong, because that map answers a different question: the study
+#: fixes its scanner set and uses "did the *dedicated* language scanner run"
+#: as a proxy for coverage depth. Read as "what reads this language at all" it
+#: asserts things that are false — that nothing reads Go without `gosec`
+#: (semgrep's offline profile carries five Go rules, and they fire), and that
+#: nothing reads Python without `bandit` (`builtin_rules` is Python-only and
+#: found the findings in the very fixture that caught this).
+#:
+#: So this lists every scanner that genuinely reads the language, and a
+#: language is flagged only when **nothing** read it. That is a weaker claim
+#: than the study's and it is the one that is true.
+#:
+#: The depth question the study is really asking — "five generic rules is a
+#: floor, not coverage" — is deliberately *not* answered here. `COMPLETE` and
+#: `PARTIAL` cannot express it, and inventing a third state is a product
+#: decision rather than a bug fix.
+LANGUAGE_SCANNERS: dict[str, tuple[str, ...]] = {
+    # `builtin_rules` is Python-only; semgrep's offline profile adds two more.
+    "python": ("bandit", "semgrep", "builtin_rules"),
+    "javascript": ("njsscan", "semgrep"),
+    "typescript": ("njsscan", "semgrep"),
+    "ruby": ("rubocop", "semgrep"),
+    # No dedicated Go scanner in the floor, but the offline profile's five Go
+    # rules do read it: command injection, weak hash, weak cipher, TLS
+    # verification disabled, weak random. Verified firing on the shipped Go
+    # fixture.
+    "go": ("gosec", "semgrep"),
+    # Likewise Java: five offline rules. D12 is about PMD and SpotBugs not
+    # providing a *dedicated* scanner, which is a statement about depth.
+    "java": ("semgrep",),
+    # Nothing in the floor reads shell for code defects — no entry to name.
+    "shell": (),
+}
+
+
+#: File extension -> the language `LANGUAGE_SCANNERS` keys on.
+#:
+#: Only extensions whose language this floor claims to scan for *code*
+#: defects. `.yaml`, `.json`, `Dockerfile` and `.md` are deliberately absent:
+#: they are covered on other axes by checkov and trivy, and mapping them to a
+#: language would make PARTIAL the permanent state of every repository.
+_EXTENSION_LANGUAGE: dict[str, str] = {
+    ".py": "python",
+    ".js": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".jsx": "javascript",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".rb": "ruby",
+    ".go": "go",
+    ".java": "java",
+    ".sh": "shell",
+    ".bash": "shell",
+    ".zsh": "shell",
+}
+
+
+def languages_for(extensions: Iterable[str]) -> tuple[str, ...]:
+    """The code-vulnerability languages these extensions represent, sorted.
+
+    Deduplicated: `.js` and `.mjs` are both JavaScript and the result names it
+    once. An extension with no entry is dropped rather than guessed at.
+    """
+    return tuple(
+        sorted({_EXTENSION_LANGUAGE[ext] for ext in extensions if ext in _EXTENSION_LANGUAGE})
+    )
+
+
+def _unread_languages(languages: Iterable[str], covered_by: set[str]) -> tuple[str, ...]:
+    """Languages present in the tree that no scanner in this run reads.
+
+    `gin` — 7,146 lines of Go — reported `coverage: complete` and
+    `code_vulnerabilities: 5.0` while bandit, njsscan and rubocop found
+    nothing in Go source and `gosec` was not in the run. That is P7's own
+    falsification condition, and COMPLETE was a fact about the scanner list
+    rather than about the tree.
+    """
+    out: list[str] = []
+    for language in dict.fromkeys(languages):
+        readers = LANGUAGE_SCANNERS.get(language)
+        if readers is None:
+            # Not a code-vulnerability language in this floor's terms.
+            continue
+        if any(name in covered_by for name in readers):
+            continue
+        if readers:
+            out.append(f"{language}: no scanner that reads it ran ({', '.join(readers)})")
+        else:
+            # Nothing exists to suggest, so do not invent a name.
+            out.append(f"{language}: no scanner in this floor reads it")
+    return tuple(out)
+
+
 def evaluate_coverage(
     executions: Iterable[ScannerExecution],
     required: Iterable[str],
+    languages: Iterable[str] = (),
 ) -> CoverageReport:
+    """What examined this tree, and whether that was enough to cover it.
+
+    `languages` names the programming languages actually present in the
+    scanned tree. Omitting it keeps the previous behaviour exactly, so every
+    existing call site and every older report keeps its meaning.
+    """
     executions = tuple(executions)
     required = tuple(dict.fromkeys(required))
     by_name = worst_by_name(executions)
@@ -188,8 +299,20 @@ def evaluate_coverage(
         if execution.outcome is ScannerOutcome.UNVERIFIED
     )
 
+    covered_by = {
+        execution.name for execution in by_name.values() if execution.outcome in COVERING_OUTCOMES
+    }
+    unread = _unread_languages(languages, covered_by)
+
     if failures:
         status = CoverageStatus.FAILED
+    elif unread:
+        # PARTIAL, not FAILED. PARTIAL withholds the *verified* grade and
+        # leaves `require_scanners` alone, which is how a partially covered
+        # repository already behaves. FAILED would refuse to audit anything
+        # containing a shell script. An operator who wants the stricter
+        # reading of P7 has `require_scanners` for it.
+        status = CoverageStatus.PARTIAL
     elif any(
         execution.outcome not in (*COVERING_OUTCOMES, ScannerOutcome.NOT_APPLICABLE)
         for execution in executions
@@ -204,4 +327,5 @@ def evaluate_coverage(
         unverified=unverified,
         executions=executions,
         failures=tuple(failures),
+        unread_languages=unread,
     )

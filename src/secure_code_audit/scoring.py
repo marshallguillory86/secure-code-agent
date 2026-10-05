@@ -723,8 +723,8 @@ def score(
     # one state, and only one of them was closed.
     nothing_scanned = loc_scanned <= 0
     for cat in Category:
-        count = sum(1 for f in findings if f.category == cat and not f.suppressed)
-        per_category_count[cat] = count
+        reported = [f for f in findings if f.category == cat and not f.suppressed]
+        per_category_count[cat] = len(reported)
         # A finding *is* evidence the category was measurable, whatever the
         # scanner inventory says — otherwise a tool reporting outside its
         # declared domain would have its findings graded as unmeasured. The
@@ -732,7 +732,28 @@ def score(
         # on a tree that counted no lines (a credential in a `.env`, a
         # misconfiguration in a bare dotfile — LOC counts only configured
         # source extensions) is still evidence, and is still graded.
-        if count == 0 and (nothing_scanned or cat not in measured):
+        #
+        # But only a finding that could *move* the score is evidence that a
+        # score may be produced. A weightless one cannot: `INFORMATIONAL` is
+        # 0.0 in `SEVERITY_WEIGHT`, so it contributes nothing to the subtotal
+        # and the category grades a perfect 5.0 on the strength of its own
+        # presence.
+        #
+        # That is how the published 0.12.12 wheel reported 5.00/A+ on an empty
+        # tree. A clean install ships no scanners, every adapter emitted its
+        # `{name}.tool_unavailable` notice — POLICY_DOCS, INFORMATIONAL — and
+        # that notice graded its own category, which then became the overall:
+        # `{...all null..., "policy_docs": 5.0}`. D33 was right about scanner
+        # findings and wrong about control findings: a notice saying "this tool
+        # could not run" is evidence of the opposite of examination.
+        #
+        # Deliberately expressed as weight rather than as a list of control
+        # rule ids. `scoring` must not know about the scanner layer (see this
+        # module's own boundary note), the suffixes are four strings that would
+        # drift, and the real property is simply "could this have changed the
+        # number".
+        evidence = sum(1 for f in reported if SEVERITY_WEIGHT[f.severity] > 0.0)
+        if evidence == 0 and (nothing_scanned or cat not in measured):
             per_category[cat] = None
             continue
         subtotal = category_subtotal(findings, cat)

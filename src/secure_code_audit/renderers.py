@@ -137,6 +137,10 @@ def _coverage_to_dict(coverage: CoverageReport | None) -> dict | None:
         "required": list(coverage.required),
         "unverified": list(coverage.unverified),
         "failures": list(coverage.failures),
+        # Languages the scored tree contains that nothing in the run reads.
+        # Carried here because MA's security pillar and any other machine
+        # consumer needs to know the grade's breadth, not just its value.
+        "unread_languages": list(coverage.unread_languages),
         "scanners": [
             {
                 "name": execution.name,
@@ -305,6 +309,13 @@ def _summary_section(
     out = ["## Summary", ""]
     if coverage is not None:
         out.append(f"- **Scanner coverage:** {coverage.status.value.upper()}")
+        # The language *and* the remedy, in the summary rather than only in
+        # the scanners section. "scanner coverage is partial" tells a reader
+        # that something is missing, not what — the same half-answer that
+        # said `did not complete: failed` while trivy's 429 and its fix sat
+        # one field away in the same record.
+        for entry in coverage.unread_languages:
+            out.append(f"- **Language not covered:** {entry}")
     # No verdict means nobody decided this run could claim a grade, so it
     # cannot. Falling back to a locally-invented condition here is what put a
     # second decision rule in the codebase in the first place.
@@ -421,6 +432,8 @@ def _scanners_section(
         out.append(f"- Coverage: **{coverage.status.value.upper()}**")
         if coverage.required:
             out.append(f"- Required: {', '.join(coverage.required)}")
+        for entry in coverage.unread_languages:
+            out.append(f"- Not read by any scanner that ran: {entry}")
         if coverage.unverified:
             out.append(
                 f"- Unverified (imported artifact, execution not observed): "

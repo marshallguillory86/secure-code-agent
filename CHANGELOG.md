@@ -4,6 +4,70 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.13.0 — 2026-10-05
+
+**Two ways a grade was issued without the evidence to support it.**
+
+### Coverage knows which languages it actually read
+
+- `COMPLETE` meant "every configured scanner ran" — a fact about the scanner
+  list, not about the tree. It now also means something was read: coverage
+  degrades to `PARTIAL` and names any language in the **scored** tree that
+  nothing in the run reads, with the remedy, in the summary and in the JSON.
+  That catches C, Rust, PHP and shell, which no scanner in this floor reads.
+- Scoped to the primary tree, exactly as the scoring denominator is: a Go
+  fixture under `tests/` does not oblige a Python project to install `gosec`.
+- `PARTIAL`, not `FAILED`. `PARTIAL` withholds the *verified* grade and leaves
+  `require_scanners` alone; `FAILED` would refuse to audit any repository
+  containing a shell script. The stricter reading of P7 is what
+  `require_scanners` is for.
+- **A correction worth recording.** The first attempt lifted
+  `LANGUAGE_SCANNERS` from `calibration/calibrate.py` and asserted something
+  false — that nothing reads Go without `gosec`. Semgrep's offline profile
+  carries five Go rules and they fire (verified on the shipped fixture), and
+  `builtin_rules` is Python-only and finds plenty without `bandit`. The study
+  uses that map as a proxy for coverage *depth* inside a fixed scanner set;
+  read as "what reads this at all" it is wrong. It broke a real test
+  (`test_a_grade_is_issued_only_when_a_declared_scanner_set_actually_ran`),
+  the test was right, and the map now lists every verified reader.
+- **Still open, and a product decision rather than a defect:** whether five
+  generic rules counts as *covering* a language. `COMPLETE`/`PARTIAL` cannot
+  express depth, and a third state is a statement about what the tool
+  promises. Recorded in D35.
+
+**A tool-unavailable notice bought a perfect score.**
+
+### Security — a control finding is not evidence that anything was examined (D33, amended)
+
+- Found by UAT on the published 0.12.12 wheel, not by any test in this
+  repository. A clean `pip install secure-code-agent` ships no scanners, so on
+  an empty tree every adapter emits its own `{name}.tool_unavailable` control
+  finding — `POLICY_DOCS`, `INFORMATIONAL`. D33 counted any finding as evidence
+  the category had been examined, so that notice graded its own category, and
+  because `INFORMATIONAL` carries weight 0.0 the subtotal was zero and the
+  grade a perfect **5.0**. Being the only graded category it became the
+  overall:
+
+  ```text
+  per_category: { ...all null..., "policy_docs": 5.0 }
+  overall: 5.0   letter: A+   loc_scanned: 0
+  ```
+
+- D33's reasoning was right about scanner findings and wrong about a scanner's
+  notice about itself: *"this tool could not run"* is evidence of the opposite
+  of examination.
+- **Only a finding that could move the score now counts as evidence that a
+  score may be produced.** Stated as severity weight rather than as a list of
+  control rule ids — `scoring` must not know about the scanner layer, the four
+  suffixes would drift, and the real property is "could this have changed the
+  number".
+- The notice is still reported. `per_category_count` counts it, because that is
+  how a reader finds out a scanner failed; it simply no longer grades anything.
+- A development checkout has the floor installed, so the branch was
+  unreachable locally. Verified fixed by rebuilding the wheel and installing it
+  into a clean scanner-free virtualenv: `overall: null`, every category null,
+  the notice still counted.
+
 ## 0.12.12 — 2026-10-04
 
 **A run that scanned nothing reported a perfect score.**

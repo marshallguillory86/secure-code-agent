@@ -1,6 +1,6 @@
 # Work orders — the first-class output
 
-> Status: **v0.12.12 — 2026-10-04.** Triage tiers and outcome verification.
+> Status: **v0.13.0 — 2026-10-05.** Triage tiers and outcome verification.
 
 The score is second class. It is worth something as a *trend* and very
 little as a number, and the thing that actually improves a repository is a

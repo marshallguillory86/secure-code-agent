@@ -44,13 +44,20 @@ from secure_code_audit.findings import (
     anchor,
     merge_corroborating,
 )
-from secure_code_audit.git_tools import find_repo_root, is_excluded, is_test_path, loc_under
+from secure_code_audit.git_tools import (
+    extensions_under,
+    find_repo_root,
+    is_excluded,
+    is_test_path,
+    loc_under,
+)
 from secure_code_audit.scanner_status import (
     COVERING_OUTCOMES,
     ScannerExecution,
     ScannerOutcome,
     evaluate_coverage,
     execution_from_result,
+    languages_for,
 )
 from secure_code_audit.scanners import floor
 from secure_code_audit.scoring import (
@@ -622,7 +629,27 @@ def _score_everything(
         ),
         *(execution.name for execution in imported_executions),
     ]
-    coverage = evaluate_coverage(executions, required)
+    # The languages the *scored* tree actually contains, so COMPLETE can mean
+    # "this tree was covered" rather than "every configured scanner ran".
+    # `gin` — 7,146 lines of Go — reported COMPLETE and `code_vulnerabilities:
+    # 5.0` while bandit, njsscan and rubocop found nothing in Go source and
+    # gosec was not in the run. P7's own falsification condition.
+    #
+    # Scoped exactly as the scoring denominator is, which is why it is
+    # `extensions_under` and not `_repository_inventory`: the broad inventory
+    # answers "is there any Go here at all" for applicability, and a Go fixture
+    # under `tests/` must not oblige a Python project to install gosec.
+    primary_languages = languages_for(
+        extensions_under(
+            target,
+            cfg.include_extensions,
+            cfg.exclude_patterns,
+            cfg.test_patterns,
+            own_artifacts,
+            cfg.docs_patterns,
+        )
+    )
+    coverage = evaluate_coverage(executions, required, primary_languages)
     # Gates see the dependency advisories; the score does not.
     # The gate needs to know *why* the baseline is empty to describe a first
     # run truthfully. Passed in the config dict rather than as a parameter so

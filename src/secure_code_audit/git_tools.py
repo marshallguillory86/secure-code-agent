@@ -229,6 +229,47 @@ def loc_under(
     return primary, test, docs
 
 
+def extensions_under(
+    root: Path,
+    include_exts: Iterable[str],
+    excludes: Iterable[str],
+    test_patterns: Iterable[str] = (),
+    skip: Iterable[Path] = (),
+    docs_patterns: Iterable[str] = (),
+) -> tuple[str, ...]:
+    """The file extensions of the **primary** tree, sorted.
+
+    The input to coverage's question "was this tree covered". Scoped exactly
+    as `loc_under`'s primary count is, and for the same reason: a claim about
+    coverage has to describe the tree the score describes.
+
+    Primary only. A Go fixture under `tests/` does not oblige a Python
+    project to install `gosec` — the test tree is reported and not scored, so
+    a language appearing only there cannot make the score unsupported.
+    """
+    test_patterns = tuple(test_patterns)
+    docs_patterns = tuple(docs_patterns)
+    skip = {path.resolve() for path in skip}
+    found: set[str] = set()
+    # `rglob` on a file yields nothing, the same case `loc_under` documents.
+    candidates = root.rglob("*") if root.is_dir() else [root]
+    for path in candidates:
+        if not path.is_file():
+            continue
+        if path.resolve() in skip:
+            continue
+        if is_excluded(path, root, excludes):
+            continue
+        if not in_scope(path, include_exts):
+            continue
+        if test_patterns and is_test_path(path, root, test_patterns):
+            continue
+        if docs_patterns and is_test_path(path, root, docs_patterns):
+            continue
+        found.add(path.suffix)
+    return tuple(sorted(found))
+
+
 def _git() -> str | None:
     """Resolve `git` to an absolute path, once.
 
