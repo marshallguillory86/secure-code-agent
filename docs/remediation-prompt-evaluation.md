@@ -1,6 +1,6 @@
 # Evaluating the remediation prompt — study design
 
-> Status: **v0.12.12 — 2026-10-04.** A design, not a result. Nothing here has
+> Status: **v0.12.13 — 2026-10-05.** A design, not a result. Nothing here has
 > been measured yet; this document exists so that when it is, the method was
 > fixed in advance.
 > Related: [`product-intent.md`](product-intent.md) §4 criterion 3 and §8

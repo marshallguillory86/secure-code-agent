@@ -47,7 +47,7 @@
 </div>
 </aside>
 <main><div class="meta">Decisions and architecture</div><h1>Decision register</h1><blockquote>
-<p>Status: <strong>v0.12.12 — 2026-10-04.</strong> The decision register. D1–D34.</p>
+<p>Status: <strong>v0.12.13 — 2026-10-05.</strong> The decision register. D1–D34.</p>
 </blockquote>
 <p>Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on <code>maintainability-agent</code>'s register, which exists
@@ -2264,6 +2264,33 @@ in that case.</p>
 scans the whole tree — "scanners read trees rather than diffs" — so a
 commit touching no source keeps a real <code>loc_scanned</code> and a real grade. There
 is no legitimate run with zero scanned lines and a configured gate.</p>
+<p><strong>Amended 2026-10-05: a control finding is not evidence.</strong> This decision
+said <em>"a finding is evidence that something was examined"</em>, and that is true
+of a scanner's findings and false of a scanner's notice about itself.</p>
+<p>Found by UAT on the published 0.12.12 wheel rather than by any test here. A
+clean <code>pip install secure-code-agent</code> ships no scanners, so on an empty tree
+every adapter emits its own <code>{name}.tool_unavailable</code> control finding —
+<code>POLICY_DOCS</code>, <code>INFORMATIONAL</code>. That counted as evidence, graded the
+category, and because <code>INFORMATIONAL</code> is 0.0 in <code>SEVERITY_WEIGHT</code> the
+subtotal was zero and the grade a perfect 5.0. Being the only graded
+category it became the overall:</p>
+<pre><code class="language-text">per_category: { ...all null..., &quot;policy_docs&quot;: 5.0 }
+overall: 5.0   letter: A+   loc_scanned: 0
+</code></pre>
+<p>A notice saying <em>"this tool could not run"</em> is evidence of the opposite of
+examination, and it was buying an A+.</p>
+<p><strong>Only a finding that could move the score is evidence that a score may be
+produced.</strong> Expressed as weight rather than as a list of control rule ids:
+<code>scoring</code> must not know about the scanner layer, the four suffixes would
+drift, and the real property is simply "could this have changed the number".
+The notice is still <em>reported</em> — <code>per_category_count</code> counts it, because that
+is how a reader finds it — it just no longer grades anything.</p>
+<p><strong>Why the local suite could not catch it.</strong> A development checkout has the
+scanner floor installed, so no unavailable notice is ever emitted and the
+branch was never reachable. It took installing the published artifact into a
+clean virtualenv. That is now the argument for UAT on the artifact rather
+than on the branch, and the reproduction is recorded in
+<code>test_nothing_scanned_is_not_a_perfect_score.py</code>.</p>
 <p><strong>Consequences.</strong> The <code>min_score</code> gate trips on such a run, with
 <em>"nothing measurable was scanned"</em> — a branch that existed, was written for
 exactly this, and could not be reached from this direction. An operator with

@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.12 — 2026-10-04.** The decision register. D1–D34.
+> Status: **v0.12.13 — 2026-10-05.** The decision register. D1–D34.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -2144,6 +2144,40 @@ in that case.
 scans the whole tree — "scanners read trees rather than diffs" — so a
 commit touching no source keeps a real `loc_scanned` and a real grade. There
 is no legitimate run with zero scanned lines and a configured gate.
+
+**Amended 2026-10-05: a control finding is not evidence.** This decision
+said *"a finding is evidence that something was examined"*, and that is true
+of a scanner's findings and false of a scanner's notice about itself.
+
+Found by UAT on the published 0.12.12 wheel rather than by any test here. A
+clean `pip install secure-code-agent` ships no scanners, so on an empty tree
+every adapter emits its own `{name}.tool_unavailable` control finding —
+`POLICY_DOCS`, `INFORMATIONAL`. That counted as evidence, graded the
+category, and because `INFORMATIONAL` is 0.0 in `SEVERITY_WEIGHT` the
+subtotal was zero and the grade a perfect 5.0. Being the only graded
+category it became the overall:
+
+```text
+per_category: { ...all null..., "policy_docs": 5.0 }
+overall: 5.0   letter: A+   loc_scanned: 0
+```
+
+A notice saying *"this tool could not run"* is evidence of the opposite of
+examination, and it was buying an A+.
+
+**Only a finding that could move the score is evidence that a score may be
+produced.** Expressed as weight rather than as a list of control rule ids:
+`scoring` must not know about the scanner layer, the four suffixes would
+drift, and the real property is simply "could this have changed the number".
+The notice is still *reported* — `per_category_count` counts it, because that
+is how a reader finds it — it just no longer grades anything.
+
+**Why the local suite could not catch it.** A development checkout has the
+scanner floor installed, so no unavailable notice is ever emitted and the
+branch was never reachable. It took installing the published artifact into a
+clean virtualenv. That is now the argument for UAT on the artifact rather
+than on the branch, and the reproduction is recorded in
+`test_nothing_scanned_is_not_a_perfect_score.py`.
 
 **Consequences.** The `min_score` gate trips on such a run, with
 *"nothing measurable was scanned"* — a branch that existed, was written for

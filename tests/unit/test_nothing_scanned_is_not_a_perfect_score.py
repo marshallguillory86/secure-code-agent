@@ -195,6 +195,91 @@ def test_the_reasons_and_tripped_lists_stay_in_step():
     assert len(result.reasons) == len(result.tripped), (result.tripped, result.reasons)
 
 
+def test_a_tool_unavailable_notice_is_not_evidence_that_anything_was_examined():
+    """PRODUCT BUG, found by UAT on the published 0.12.12 wheel.
+
+    A clean `pip install secure-code-agent` ships no scanners. Run it on an
+    empty tree and every adapter emits its own `{name}.tool_unavailable`
+    control finding — `POLICY_DOCS`, `INFORMATIONAL`. That is a *finding*, so
+    the conjunction added for D33 treated it as evidence that the category had
+    been examined, graded it, and because `INFORMATIONAL` carries weight 0.0
+    the subtotal was zero and the grade a perfect 5.0. Being the only graded
+    category, it became the overall:
+
+        per_category: { ...all null..., "policy_docs": 5.0 }
+        overall: 5.0   letter: A+   loc_scanned: 0
+
+    D33's reasoning was right about scanner findings and wrong about control
+    findings. A credential in a `.env` is evidence that something was looked
+    at. A notice saying *"this tool could not run"* is evidence of the
+    opposite, and it was buying a perfect score.
+
+    The rule that fixes it needs no knowledge of control findings at all: a
+    finding whose severity weight is 0.0 cannot move the score, so it cannot
+    be what justifies producing one. Only a finding that could actually move
+    the number counts as evidence that the category was measured.
+
+    This passed every local test because a development checkout has the
+    scanner floor installed, so no unavailable notice is ever emitted. Only
+    installing the published artifact into a clean virtualenv exposed it.
+    """
+    notice = _f(Severity.INFORMATIONAL, Category.POLICY_DOCS)
+
+    report = score([notice], loc_scanned=0)
+
+    assert report.per_category[Category.POLICY_DOCS] is None, (
+        "a tool-unavailable notice graded its own category 5.0; the only "
+        "'evidence' was the tool saying it could not look"
+    )
+    assert report.overall is None, f"overall {report.overall} on a run that scanned nothing"
+    assert report.letter is None
+
+
+def test_the_notice_is_still_reported_even_though_it_is_not_evidence():
+    """It must not be deleted — an operator needs to see the scanner failed.
+
+    The falsifier for the fix above: "not evidence" must mean "does not grade
+    the category", not "disappears from the report". `per_category_count`
+    still counts it, because the count is what the reader uses to find it.
+    """
+    notice = _f(Severity.INFORMATIONAL, Category.POLICY_DOCS)
+
+    report = score([notice], loc_scanned=0)
+
+    assert report.per_category_count[Category.POLICY_DOCS] == 1
+    assert report.per_severity_count[Severity.INFORMATIONAL] == 1
+
+
+def test_a_weightless_finding_does_not_grade_a_category_on_a_scanned_tree_either():
+    """The same rule, where the denominator is real.
+
+    A scanner that ran and reported only informational notes *did* look, so
+    the category is measurable through `measured` and still grades — this
+    pins that the fix changes the zero-LOC case and nothing else.
+    """
+    notice = _f(Severity.INFORMATIONAL, Category.POLICY_DOCS)
+
+    report = score([notice], loc_scanned=5_000)
+
+    assert report.per_category[Category.POLICY_DOCS] == 5.0
+    assert report.overall == 5.0
+
+
+def test_a_real_finding_over_no_counted_lines_is_still_graded():
+    """D33's second half, re-pinned against the narrower evidence rule.
+
+    The `.env` credential case: LOC counts only configured source
+    extensions, so a real finding can arrive on a tree that counted no
+    lines. It carries weight, so it is still evidence, and still grades.
+    """
+    real = _f(Severity.CRITICAL, Category.SECRETS)
+
+    report = score([real], loc_scanned=0)
+
+    assert report.per_category[Category.SECRETS] is not None
+    assert report.overall is not None and report.overall < 5.0
+
+
 def test_a_suppressed_only_run_over_no_code_is_ungraded():
     """Suppression removes a finding from the score, not evidence from the run.
 

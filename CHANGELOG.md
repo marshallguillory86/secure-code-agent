@@ -4,6 +4,41 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.12.13 — 2026-10-05
+
+**A tool-unavailable notice bought a perfect score.**
+
+### Security — a control finding is not evidence that anything was examined (D33, amended)
+
+- Found by UAT on the published 0.12.12 wheel, not by any test in this
+  repository. A clean `pip install secure-code-agent` ships no scanners, so on
+  an empty tree every adapter emits its own `{name}.tool_unavailable` control
+  finding — `POLICY_DOCS`, `INFORMATIONAL`. D33 counted any finding as evidence
+  the category had been examined, so that notice graded its own category, and
+  because `INFORMATIONAL` carries weight 0.0 the subtotal was zero and the
+  grade a perfect **5.0**. Being the only graded category it became the
+  overall:
+
+  ```text
+  per_category: { ...all null..., "policy_docs": 5.0 }
+  overall: 5.0   letter: A+   loc_scanned: 0
+  ```
+
+- D33's reasoning was right about scanner findings and wrong about a scanner's
+  notice about itself: *"this tool could not run"* is evidence of the opposite
+  of examination.
+- **Only a finding that could move the score now counts as evidence that a
+  score may be produced.** Stated as severity weight rather than as a list of
+  control rule ids — `scoring` must not know about the scanner layer, the four
+  suffixes would drift, and the real property is "could this have changed the
+  number".
+- The notice is still reported. `per_category_count` counts it, because that is
+  how a reader finds out a scanner failed; it simply no longer grades anything.
+- A development checkout has the floor installed, so the branch was
+  unreachable locally. Verified fixed by rebuilding the wheel and installing it
+  into a clean scanner-free virtualenv: `overall: null`, every category null,
+  the notice still counted.
+
 ## 0.12.12 — 2026-10-04
 
 **A run that scanned nothing reported a perfect score.**
