@@ -5,7 +5,8 @@
 <div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
 <div class="layout"><aside><p class="label">On this page</p><div class="toc">
 <ul>
-<li><a href="#01213-2026-10-05">0.12.13 — 2026-10-05</a><ul>
+<li><a href="#0130-2026-10-05">0.13.0 — 2026-10-05</a><ul>
+<li><a href="#coverage-knows-which-languages-it-actually-read">Coverage knows which languages it actually read</a></li>
 <li><a href="#security-a-control-finding-is-not-evidence-that-anything-was-examined-d33-amended">Security — a control finding is not evidence that anything was examined (D33, amended)</a></li>
 </ul>
 </li>
@@ -176,7 +177,35 @@
 <main><div class="meta">History</div><h1>Changelog</h1><p>All notable changes to <code>secure-code-agent</code> are documented here. Format follows
 <a href="https://keepachangelog.com/">Keep a Changelog</a>. Semver pre-1.0 — config
 schema may evolve.</p>
-<h2 id="01213-2026-10-05">0.12.13 — 2026-10-05</h2>
+<h2 id="0130-2026-10-05">0.13.0 — 2026-10-05</h2>
+<p><strong>Two ways a grade was issued without the evidence to support it.</strong></p>
+<h3 id="coverage-knows-which-languages-it-actually-read">Coverage knows which languages it actually read</h3>
+<ul>
+<li><code>COMPLETE</code> meant "every configured scanner ran" — a fact about the scanner
+  list, not about the tree. It now also means something was read: coverage
+  degrades to <code>PARTIAL</code> and names any language in the <strong>scored</strong> tree that
+  nothing in the run reads, with the remedy, in the summary and in the JSON.
+  That catches C, Rust, PHP and shell, which no scanner in this floor reads.</li>
+<li>Scoped to the primary tree, exactly as the scoring denominator is: a Go
+  fixture under <code>tests/</code> does not oblige a Python project to install <code>gosec</code>.</li>
+<li><code>PARTIAL</code>, not <code>FAILED</code>. <code>PARTIAL</code> withholds the <em>verified</em> grade and leaves
+  <code>require_scanners</code> alone; <code>FAILED</code> would refuse to audit any repository
+  containing a shell script. The stricter reading of P7 is what
+  <code>require_scanners</code> is for.</li>
+<li><strong>A correction worth recording.</strong> The first attempt lifted
+  <code>LANGUAGE_SCANNERS</code> from <code>calibration/calibrate.py</code> and asserted something
+  false — that nothing reads Go without <code>gosec</code>. Semgrep's offline profile
+  carries five Go rules and they fire (verified on the shipped fixture), and
+  <code>builtin_rules</code> is Python-only and finds plenty without <code>bandit</code>. The study
+  uses that map as a proxy for coverage <em>depth</em> inside a fixed scanner set;
+  read as "what reads this at all" it is wrong. It broke a real test
+  (<code>test_a_grade_is_issued_only_when_a_declared_scanner_set_actually_ran</code>),
+  the test was right, and the map now lists every verified reader.</li>
+<li><strong>Still open, and a product decision rather than a defect:</strong> whether five
+  generic rules counts as <em>covering</em> a language. <code>COMPLETE</code>/<code>PARTIAL</code> cannot
+  express depth, and a third state is a statement about what the tool
+  promises. Recorded in D35.</li>
+</ul>
 <p><strong>A tool-unavailable notice bought a perfect score.</strong></p>
 <h3 id="security-a-control-finding-is-not-evidence-that-anything-was-examined-d33-amended">Security — a control finding is not evidence that anything was examined (D33, amended)</h3>
 <ul>

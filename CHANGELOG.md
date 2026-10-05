@@ -4,7 +4,36 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
-## 0.12.13 — 2026-10-05
+## 0.13.0 — 2026-10-05
+
+**Two ways a grade was issued without the evidence to support it.**
+
+### Coverage knows which languages it actually read
+
+- `COMPLETE` meant "every configured scanner ran" — a fact about the scanner
+  list, not about the tree. It now also means something was read: coverage
+  degrades to `PARTIAL` and names any language in the **scored** tree that
+  nothing in the run reads, with the remedy, in the summary and in the JSON.
+  That catches C, Rust, PHP and shell, which no scanner in this floor reads.
+- Scoped to the primary tree, exactly as the scoring denominator is: a Go
+  fixture under `tests/` does not oblige a Python project to install `gosec`.
+- `PARTIAL`, not `FAILED`. `PARTIAL` withholds the *verified* grade and leaves
+  `require_scanners` alone; `FAILED` would refuse to audit any repository
+  containing a shell script. The stricter reading of P7 is what
+  `require_scanners` is for.
+- **A correction worth recording.** The first attempt lifted
+  `LANGUAGE_SCANNERS` from `calibration/calibrate.py` and asserted something
+  false — that nothing reads Go without `gosec`. Semgrep's offline profile
+  carries five Go rules and they fire (verified on the shipped fixture), and
+  `builtin_rules` is Python-only and finds plenty without `bandit`. The study
+  uses that map as a proxy for coverage *depth* inside a fixed scanner set;
+  read as "what reads this at all" it is wrong. It broke a real test
+  (`test_a_grade_is_issued_only_when_a_declared_scanner_set_actually_ran`),
+  the test was right, and the map now lists every verified reader.
+- **Still open, and a product decision rather than a defect:** whether five
+  generic rules counts as *covering* a language. `COMPLETE`/`PARTIAL` cannot
+  express depth, and a third state is a statement about what the tool
+  promises. Recorded in D35.
 
 **A tool-unavailable notice bought a perfect score.**
 

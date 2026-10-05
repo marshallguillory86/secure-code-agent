@@ -1,6 +1,6 @@
 # Scoring model
 
-> Status: **v0.12.13 — 2026-10-05.** The scoring model, currently model 2.
+> Status: **v0.13.0 — 2026-10-05.** The scoring model, currently model 2.
 
 > Letter-grade A+ → F, mapped from a 0.0 → 5.0 axis. Mirrors `maintainability-agent` so operators have one mental model for both gates.
 

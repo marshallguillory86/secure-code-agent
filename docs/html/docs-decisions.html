@@ -43,11 +43,12 @@
 <li><a href="#d32-the-audited-tree-does-not-grade-itself">D32 — The audited tree does not grade itself</a></li>
 <li><a href="#d33-a-run-that-scanned-nothing-is-ungraded-not-perfect">D33 — A run that scanned nothing is ungraded, not perfect</a></li>
 <li><a href="#d34-an-adapter-declares-whether-it-honours-exclude_patterns">D34 — An adapter declares whether it honours exclude_patterns</a></li>
+<li><a href="#d35-coverage-names-a-language-nothing-read-depth-is-still-open">D35 — Coverage names a language nothing read; depth is still open</a></li>
 </ul>
 </div>
 </aside>
 <main><div class="meta">Decisions and architecture</div><h1>Decision register</h1><blockquote>
-<p>Status: <strong>v0.12.13 — 2026-10-05.</strong> The decision register. D1–D34.</p>
+<p>Status: <strong>v0.13.0 — 2026-10-05.</strong> The decision register. D1–D35.</p>
 </blockquote>
 <p>Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on <code>maintainability-agent</code>'s register, which exists
@@ -269,6 +270,12 @@ architecture belongs in <a href="docs-architecture.html"><code>architecture.md</
 <td>An adapter declares whether it honours <code>exclude_patterns</code></td>
 <td>2026-10-04</td>
 <td>Accepted</td>
+</tr>
+<tr>
+<td>D35</td>
+<td>Coverage names a language nothing read; depth is still open</td>
+<td>2026-10-05</td>
+<td>Accepted, with an open question</td>
 </tr>
 </tbody>
 </table></div>
@@ -2437,5 +2444,47 @@ dependency is <code>PyYAML</code>, and none of its exact pins is affected.</p>
 <p><strong>So the exemption matters most for the projects that do commit a
 lockfile</strong>, which is nearly all of them. There, excluding it had been
 deleting the entire dependency axis while the category reported 5.0.</p>
+<hr />
+<h2 id="d35-coverage-names-a-language-nothing-read-depth-is-still-open">D35 — Coverage names a language nothing read; depth is still open</h2>
+<p><strong>Status:</strong> Accepted, with an open question · 2026-10-05</p>
+<p><strong>Context.</strong> <code>coverage: COMPLETE</code> meant "every configured scanner ran". That
+is a fact about the scanner list, not about the tree. Audited
+<code>calibration/.corpus/gin</code> — 7,146 lines of Go:</p>
+<pre><code class="language-text">coverage:             complete
+code_vulnerabilities: 5.0
+overall:              5.00 (A+)
+</code></pre>
+<p><strong>The first diagnosis of this was wrong, and the error is instructive.</strong> It
+said no scanner in the run read Go. Semgrep's offline profile carries five Go
+rules — command injection, weak hash, weak cipher, TLS verification disabled,
+weak random — and they fire on the shipped Go fixture. Go was read, by five
+rules and no dedicated scanner.</p>
+<p>The error came from lifting <code>LANGUAGE_SCANNERS</code> out of
+<code>calibration/calibrate.py</code> without asking what it means there. Inside a study
+with a fixed scanner set, <code>python: ("bandit",)</code> is a proxy for coverage
+<em>depth</em>. Read as "what reads Python at all" it is false — <code>builtin_rules</code> is
+Python-only and finds plenty. It broke
+<code>test_a_grade_is_issued_only_when_a_declared_scanner_set_actually_ran</code>, which
+declares <code>builtin_rules</code> and nothing else. The test was right.</p>
+<p><strong>Decision.</strong> Coverage knows which languages the <strong>scored</strong> tree contains and
+names any that <strong>nothing</strong> in the run read, with the remedy, in the summary
+and in the JSON. The map lists every verified reader. Scoped to the primary
+tree exactly as the scoring denominator is, so a Go fixture under <code>tests/</code>
+does not oblige a Python project to install <code>gosec</code>.</p>
+<p><code>PARTIAL</code>, not <code>FAILED</code>: <code>PARTIAL</code> withholds the verified grade and leaves
+<code>require_scanners</code> alone, while <code>FAILED</code> would refuse to audit any repository
+containing a shell script. An operator wanting the stricter reading of P7 has
+<code>require_scanners</code>.</p>
+<p><strong>Open question, deliberately unanswered.</strong> Whether five generic rules counts
+as <em>covering</em> a language. <code>COMPLETE</code> and <code>PARTIAL</code> cannot express depth, so
+answering it needs a third state or a threshold — a statement about what this
+tool promises rather than a bug fix. Until it is settled, a thinly-covered
+language reports <code>COMPLETE</code> and a reader must look at the scanner list to see
+how thinly. That is the honest description of the current behaviour, and it is
+the question an audit should start from.</p>
+<p><strong>What it does catch.</strong> C, Rust, PHP and shell — nothing in the floor reads
+any of them. On this repository the only shell file is
+<code>examples/local-ci.sh</code>, which matches <code>docs_patterns</code> and therefore sits on
+the documentation axis, correctly creating no obligation for the scored tree.</p>
 <footer>Rendered from <code>docs/decisions.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
 </main></div></body></html>

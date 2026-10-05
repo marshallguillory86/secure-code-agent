@@ -1,6 +1,6 @@
 # secure-code-agent — Product Intent
 
-> Status: **v0.12.13 — 2026-10-05.** The single source of truth for
+> Status: **v0.13.0 — 2026-10-05.** The single source of truth for
 > *why this exists, who it serves, and what it refuses to become.*
 > Companion docs: [`design.md`](design.md) for how it is built,
 > [`architecture.md`](architecture.md) for where the build diverges from the

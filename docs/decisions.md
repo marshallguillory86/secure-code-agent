@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.12.13 — 2026-10-05.** The decision register. D1–D34.
+> Status: **v0.13.0 — 2026-10-05.** The decision register. D1–D35.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -47,6 +47,7 @@ architecture belongs in [`architecture.md`](architecture.md); intent belongs in
 | D32 | The audited tree does not grade itself | 2026-10-02 | Accepted (amended 2026-10-04) |
 | D33 | A run that scanned nothing is ungraded, not perfect | 2026-10-04 | Accepted |
 | D34 | An adapter declares whether it honours `exclude_patterns` | 2026-10-04 | Accepted |
+| D35 | Coverage names a language nothing read; depth is still open | 2026-10-05 | Accepted, with an open question |
 
 ---
 
@@ -2338,3 +2339,58 @@ dependency is `PyYAML`, and none of its exact pins is affected.
 **So the exemption matters most for the projects that do commit a
 lockfile**, which is nearly all of them. There, excluding it had been
 deleting the entire dependency axis while the category reported 5.0.
+
+
+---
+
+## D35 — Coverage names a language nothing read; depth is still open
+
+**Status:** Accepted, with an open question · 2026-10-05
+
+**Context.** `coverage: COMPLETE` meant "every configured scanner ran". That
+is a fact about the scanner list, not about the tree. Audited
+`calibration/.corpus/gin` — 7,146 lines of Go:
+
+```text
+coverage:             complete
+code_vulnerabilities: 5.0
+overall:              5.00 (A+)
+```
+
+**The first diagnosis of this was wrong, and the error is instructive.** It
+said no scanner in the run read Go. Semgrep's offline profile carries five Go
+rules — command injection, weak hash, weak cipher, TLS verification disabled,
+weak random — and they fire on the shipped Go fixture. Go was read, by five
+rules and no dedicated scanner.
+
+The error came from lifting `LANGUAGE_SCANNERS` out of
+`calibration/calibrate.py` without asking what it means there. Inside a study
+with a fixed scanner set, `python: ("bandit",)` is a proxy for coverage
+*depth*. Read as "what reads Python at all" it is false — `builtin_rules` is
+Python-only and finds plenty. It broke
+`test_a_grade_is_issued_only_when_a_declared_scanner_set_actually_ran`, which
+declares `builtin_rules` and nothing else. The test was right.
+
+**Decision.** Coverage knows which languages the **scored** tree contains and
+names any that **nothing** in the run read, with the remedy, in the summary
+and in the JSON. The map lists every verified reader. Scoped to the primary
+tree exactly as the scoring denominator is, so a Go fixture under `tests/`
+does not oblige a Python project to install `gosec`.
+
+`PARTIAL`, not `FAILED`: `PARTIAL` withholds the verified grade and leaves
+`require_scanners` alone, while `FAILED` would refuse to audit any repository
+containing a shell script. An operator wanting the stricter reading of P7 has
+`require_scanners`.
+
+**Open question, deliberately unanswered.** Whether five generic rules counts
+as *covering* a language. `COMPLETE` and `PARTIAL` cannot express depth, so
+answering it needs a third state or a threshold — a statement about what this
+tool promises rather than a bug fix. Until it is settled, a thinly-covered
+language reports `COMPLETE` and a reader must look at the scanner list to see
+how thinly. That is the honest description of the current behaviour, and it is
+the question an audit should start from.
+
+**What it does catch.** C, Rust, PHP and shell — nothing in the floor reads
+any of them. On this repository the only shell file is
+`examples/local-ci.sh`, which matches `docs_patterns` and therefore sits on
+the documentation axis, correctly creating no obligation for the scored tree.
