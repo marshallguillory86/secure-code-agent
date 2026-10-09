@@ -1,4 +1,4 @@
-<!-- WORKSPACE-PREAMBLE v6 — managed by [private]. Do not edit below
+<!-- WORKSPACE-PREAMBLE v7 — managed by [private]. Do not edit below
      this line by hand; edit [private]/claude/repo-preamble.md and run
      ./install.sh. Repo-specific rules go AFTER the end marker. -->
 
@@ -120,9 +120,9 @@ repo's pipeline is a *decision*, not an oversight, and it is not to be
 | both | locally first, CI as the backstop | run local, keep CI narrow |
 | neither | nothing yet | ask before adding either |
 
-Today `[private]` and `[private]` are the local-gate repos.
-`maintainability-agent`, `[private]`, `secure-code-agent` and
-`[private]` carry real CI.
+Which repos gate locally and which carry real CI is listed in the private
+rulebook (`~/repos/RULES.md`, "Local gates and CI, by repo"): this preamble is
+copied into public repositories, so it names none of his products.
 
 **Rules that follow:**
 
