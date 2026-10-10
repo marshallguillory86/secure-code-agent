@@ -1,6 +1,6 @@
-<!-- WORKSPACE-PREAMBLE v7 — managed by [private]. Do not edit below
-     this line by hand; edit [private]/claude/repo-preamble.md and run
-     ./install.sh. Repo-specific rules go AFTER the end marker. -->
+<!-- WORKSPACE-PREAMBLE v8 — managed centrally. Do not edit below this line
+     by hand; its source and installer are named at the top of
+     ~/repos/RULES.md. Repo-specific rules go AFTER the end marker. -->
 
 # Claude Code — session rules
 
@@ -10,13 +10,13 @@
 | --- | --- |
 | Core instructions, every project | `~/.claude/CLAUDE.md` |
 | The standing rulebook | `~/repos/RULES.md` — read it before acting |
-| Source of both, and the hooks | `~/repos/[private]` (`./install.sh`) |
+| Source of both, and the hooks | the private rules repo named at the top of `~/repos/RULES.md` (its `./install.sh`) |
 | Reference implementation | `~/repos/maintainability-agent` — the most mature repo. Look there first for how a thing is done here. |
 
 The rulebook beats a compaction summary, a wrap-up, or an agent saying "we
 decided". **When Marshall states a new rule, write it into
-`[private]/RULES.md` in the same turn** — not the copy at
-`~/repos/RULES.md`, which `install.sh` overwrites.
+the source RULES.md (named at the top of `~/repos/RULES.md`) in the same
+turn** — not the copy at `~/repos/RULES.md`, which `install.sh` overwrites.
 
 ## Engineering workflow — applies to every repo
 
@@ -44,11 +44,12 @@ before the call, and say what came back. Long calls in the background.
 Details: `~/repos/LOCAL-MODELS.md`.
 
 **A repo uses only the AI subscriptions its organisation pays for.** The
-repo's `.ai-profile` marker names the organisation. [private]
-(`[private]`) pays for Claude and Codex and nothing else. So in an Agile
-Rising repo, Grok and Antigravity are never used, not for audits, prompts or
-images, and nothing from the repo is sent to them. There, audits go to Codex
-and to Claude sub-agents, on a different model from the one that did the work.
+repo's `.ai-profile` marker names the organisation, and `~/repos/RULES.md`
+lists what each organisation pays for. A tool the organisation does not pay
+for is never used in its repos, not for audits, prompts or images, and nothing
+from the repo is sent to it. Where an organisation pays for only Claude and
+Codex, audits go to Codex and to Claude sub-agents, on a different model from
+the one that did the work.
 The full rule and the model assignments are in `~/repos/RULES.md`.
 
 **Do not invent product intent.** If the documents are silent, ask. In

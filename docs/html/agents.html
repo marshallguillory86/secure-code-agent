@@ -12,9 +12,9 @@
 </ul>
 </div>
 </aside>
-<main><div class="meta">Agent instructions</div><h1>Claude Code — session rules</h1><!-- WORKSPACE-PREAMBLE v7 — managed by [private]. Do not edit below
-     this line by hand; edit [private]/claude/repo-preamble.md and run
-     ./install.sh. Repo-specific rules go AFTER the end marker. -->
+<main><div class="meta">Agent instructions</div><h1>Claude Code — session rules</h1><!-- WORKSPACE-PREAMBLE v8 — managed centrally. Do not edit below this line
+     by hand; its source and installer are named at the top of
+     ~/repos/RULES.md. Repo-specific rules go AFTER the end marker. -->
 
 <h2 id="where-the-rules-live">Where the rules live</h2>
 <div class="table-wrap"><table>
@@ -35,7 +35,7 @@
 </tr>
 <tr>
 <td>Source of both, and the hooks</td>
-<td><code>~/repos/[private]</code> (<code>./install.sh</code>)</td>
+<td>the private rules repo named at the top of <code>~/repos/RULES.md</code> (its <code>./install.sh</code>)</td>
 </tr>
 <tr>
 <td>Reference implementation</td>
@@ -45,8 +45,8 @@
 </table></div>
 <p>The rulebook beats a compaction summary, a wrap-up, or an agent saying "we
 decided". <strong>When Marshall states a new rule, write it into
-<code>[private]/RULES.md</code> in the same turn</strong> — not the copy at
-<code>~/repos/RULES.md</code>, which <code>install.sh</code> overwrites.</p>
+the source RULES.md (named at the top of <code>~/repos/RULES.md</code>) in the same
+turn</strong> — not the copy at <code>~/repos/RULES.md</code>, which <code>install.sh</code> overwrites.</p>
 <h2 id="engineering-workflow-applies-to-every-repo">Engineering workflow — applies to every repo</h2>
 <p><strong>Test-driven development.</strong> The failing test is written first, watched
 failing, and only then is the code written to pass it. Per behaviour. Not
@@ -67,11 +67,12 @@ same way you call <code>codex exec</code>. Name the model and the task in the st
 before the call, and say what came back. Long calls in the background.
 Details: <code>~/repos/LOCAL-MODELS.md</code>.</p>
 <p><strong>A repo uses only the AI subscriptions its organisation pays for.</strong> The
-repo's <code>.ai-profile</code> marker names the organisation. [private]
-(<code>[private]</code>) pays for Claude and Codex and nothing else. So in an Agile
-Rising repo, Grok and Antigravity are never used, not for audits, prompts or
-images, and nothing from the repo is sent to them. There, audits go to Codex
-and to Claude sub-agents, on a different model from the one that did the work.
+repo's <code>.ai-profile</code> marker names the organisation, and <code>~/repos/RULES.md</code>
+lists what each organisation pays for. A tool the organisation does not pay
+for is never used in its repos, not for audits, prompts or images, and nothing
+from the repo is sent to it. Where an organisation pays for only Claude and
+Codex, audits go to Codex and to Claude sub-agents, on a different model from
+the one that did the work.
 The full rule and the model assignments are in <code>~/repos/RULES.md</code>.</p>
 <p><strong>Do not invent product intent.</strong> If the documents are silent, ask. In
 <code>maintainability-agent</code> it is <code>docs/product-intent.md</code>.</p>
