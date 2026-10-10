@@ -45,7 +45,7 @@ Mappings are versioned with the package and require an explicit reviewed update.
 [Source](https://github.com/OWASP/ASVS). Application Security Verification Standard — verification-requirement granularity. Three levels:
 
 - **L1** — minimum, all apps
-- **L2** — apps handling sensitive data (the Trovik baseline)
+- **L2** — apps handling sensitive data (the recommended baseline)
 - **L3** — apps requiring the highest trust
 
 Mapped findings carry the applicable ASVS section (for example `V5.3`). The
