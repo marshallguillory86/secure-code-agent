@@ -1,8 +1,8 @@
 """A work order is a prompt, not a backlog.
 
-Marshall, 2026-09-11: *"make sure you never create 15,000 line work order
-prompts. that is retarded. prompts should be paragraph or two sized within
-reason, not a fucking entire program."* The rule predates this file — it is
+Marshall, 2026-09-11: never create 15,000-line work order prompts; a prompt
+is a paragraph or two within reason, not an entire program. The rule
+predates this file — it is
 in `RULES.md` and names `--prompt-output` explicitly — and this repository
 was not honouring it.
 
