@@ -1,5 +1,7 @@
 # secure-code-agent
 
+![secure-code-agent — a deterministic security gate whose findings become a bounded remediation work order for your AI coding agent](https://raw.githubusercontent.com/marshallguillory86/secure-code-agent/main/docs/brand/sca.png)
+
 > **Deterministic security gate + bounded AI remediation prompts for repos with AI coding agents in the loop.**
 > Anchored to NIST SSDF · OWASP ASVS · OWASP Top 10 · MITRE CWE Top 25 · OpenSSF Scorecard · SARIF 2.1.0.
 

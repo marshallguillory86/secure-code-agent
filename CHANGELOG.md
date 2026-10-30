@@ -28,6 +28,10 @@ schema may evolve.
   reads, and for a scanner that is not required and did not complete, which
   until now made coverage `PARTIAL` without a word in the SARIF.
 
+### Docs
+
+- The README opens with the project's cover image (`docs/brand/sca.png`).
+
 ## 0.13.0 — 2026-10-05
 
 **Two ways a grade was issued without the evidence to support it.**
