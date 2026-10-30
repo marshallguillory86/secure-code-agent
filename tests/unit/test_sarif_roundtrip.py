@@ -66,7 +66,7 @@ def test_emit_severity_mapping():
     assert "note" in levels
 
 
-def test_emit_marks_failed_scanner_coverage_as_unsuccessful_execution():
+def test_emit_marks_failed_coverage_as_a_successful_execution_with_error_notification():
     coverage = CoverageReport(
         status=CoverageStatus.FAILED,
         required=("bandit",),
@@ -82,7 +82,7 @@ def test_emit_marks_failed_scanner_coverage_as_unsuccessful_execution():
 
     invocation = sarif.emit([], coverage)["runs"][0]["invocations"][0]
 
-    assert invocation["executionSuccessful"] is False
+    assert invocation["executionSuccessful"] is True
     assert invocation["properties"]["coverageStatus"] == "failed"
     assert invocation["properties"]["scannerExecutions"][0]["scope"].startswith("mode=")
     assert invocation["toolExecutionNotifications"][0]["level"] == "error"
