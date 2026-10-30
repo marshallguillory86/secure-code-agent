@@ -1,0 +1,4 @@
+# The local pipeline run before every push (RULES.md, "The local pipeline is
+# enforced at every push"): what CI's test job runs — lint, formatting, and the
+# whole suite under the coverage floor in pyproject.toml.
+uv run ruff check . && uv run ruff format --check . && uv run pytest -q -p no:cacheprovider
