@@ -8,7 +8,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/marshallguillory86/secure-code-agent/ci.yml?branch=main&label=CI)](https://github.com/marshallguillory86/secure-code-agent/actions/workflows/ci.yml)
 [![Downloads](https://img.shields.io/pypi/dm/secure-code-agent)](https://pypistats.org/packages/secure-code-agent)
 
-**[Example report](https://marshallguillory86.github.io/secure-code-agent/example-report.html)** · **[Documentation](https://marshallguillory86.github.io/secure-code-agent/html/)**
+**[Example report](https://secure-code-agent.techportfolio.monster/example-report.html)** · **[Documentation](https://secure-code-agent.techportfolio.monster/html/)**
 
 ![secure-code-agent — a deterministic security gate whose findings become a bounded remediation work order for your AI coding agent](https://raw.githubusercontent.com/marshallguillory86/secure-code-agent/main/docs/brand/sca.png)
 
@@ -517,7 +517,7 @@ For agents that support invokable skills, this repo ships a portable skill under
 ## GitHub Action
 
 ```yaml
-- uses: marshallguillory86/secure-code-agent@v0.13.1
+- uses: marshallguillory86/secure-code-agent@v0.13.2
   with:
     config: secure-code-agent.json
     fail-on-gate: true

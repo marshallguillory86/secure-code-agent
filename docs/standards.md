@@ -1,6 +1,6 @@
 # Standards anchors
 
-> Status: **v0.13.1 — 2026-10-30.** CWE / OWASP / ASVS / NIST SSDF mapping.
+> Status: **v0.13.2 — 2026-10-30.** CWE / OWASP / ASVS / NIST SSDF mapping.
 
 `secure-code-agent` does not invent a new taxonomy. Known rules map to fields
 from widely-cited public standards. Unmapped or control findings may have null

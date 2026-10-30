@@ -32,7 +32,7 @@ schema may evolve.
 
 - The README opens with the project's cover image (`docs/brand/sca.png`).
 
-## Unreleased
+## 0.13.2 — 2026-10-30
 
 ### Docs
 
@@ -40,6 +40,9 @@ schema may evolve.
   versions, licence, CI on `main`, downloads). Short machine-translated pages in
   Spanish, German, French, Hindi and Simplified Chinese point back to the
   English README as the only complete copy (D36).
+- The project site is published at <https://secure-code-agent.techportfolio.monster/>:
+  a landing page, the tool's own report on this repository as a live example,
+  and the rendered documentation.
 
 ## 0.13.0 — 2026-10-05
 
