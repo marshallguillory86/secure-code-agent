@@ -5,6 +5,10 @@
 <div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
 <div class="layout"><aside><p class="label">On this page</p><div class="toc">
 <ul>
+<li><a href="#0131-2026-10-30">0.13.1 — 2026-10-30</a><ul>
+<li><a href="#fixed-sarif-executionsuccessful-is-the-run-not-the-coverage">Fixed — SARIF executionSuccessful is the run, not the coverage</a></li>
+</ul>
+</li>
 <li><a href="#0130-2026-10-05">0.13.0 — 2026-10-05</a><ul>
 <li><a href="#coverage-knows-which-languages-it-actually-read">Coverage knows which languages it actually read</a></li>
 <li><a href="#security-a-control-finding-is-not-evidence-that-anything-was-examined-d33-amended">Security — a control finding is not evidence that anything was examined (D33, amended)</a></li>
@@ -177,6 +181,28 @@
 <main><div class="meta">History</div><h1>Changelog</h1><p>All notable changes to <code>secure-code-agent</code> are documented here. Format follows
 <a href="https://keepachangelog.com/">Keep a Changelog</a>. Semver pre-1.0 — config
 schema may evolve.</p>
+<h2 id="0131-2026-10-30">0.13.1 — 2026-10-30</h2>
+<p><strong>Coverage was reported to code scanning as a failed run.</strong></p>
+<h3 id="fixed-sarif-executionsuccessful-is-the-run-not-the-coverage">Fixed — SARIF <code>executionSuccessful</code> is the run, not the coverage</h3>
+<ul>
+<li>The emitted invocation set <code>executionSuccessful</code> from scanner coverage
+  (<code>coverage.status is COMPLETE</code>). On <code>maintainability-agent</code> every scanner
+  completed and coverage is <code>PARTIAL</code> only because nothing in the floor reads
+  shell, which 0.13.0 began reporting. GitHub code scanning reads
+  <code>executionSuccessful: false</code> as "the tool exited with errors but provided no
+  error code": every upload since then carried "unsuccessful tool execution,
+  exit code 0", and the repository's Security overview showed a "Code scanning
+  configuration error" banner.</li>
+<li><code>executionSuccessful</code> is now <code>true</code> whenever a document is written, whatever
+  the coverage. Coverage stays on its own axis, in
+  <code>properties.coverageStatus</code>, and is never a failed execution. That includes
+  <code>FAILED</code> coverage: the gate still fails the build, but the tool ran.</li>
+<li>Every coverage gap is a <code>toolExecutionNotification</code> (<code>descriptor.id:
+  scanner-coverage</code>) naming what was not read. <code>error</code> for a required scanner
+  that did not complete, as before. <code>warning</code> for a language nothing in the run
+  reads, and for a scanner that is not required and did not complete, which
+  until now made coverage <code>PARTIAL</code> without a word in the SARIF.</li>
+</ul>
 <h2 id="0130-2026-10-05">0.13.0 — 2026-10-05</h2>
 <p><strong>Two ways a grade was issued without the evidence to support it.</strong></p>
 <h3 id="coverage-knows-which-languages-it-actually-read">Coverage knows which languages it actually read</h3>

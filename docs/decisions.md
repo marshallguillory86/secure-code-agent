@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.13.0 — 2026-10-05.** The decision register. D1–D35.
+> Status: **v0.13.1 — 2026-10-30.** The decision register. D1–D35.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists

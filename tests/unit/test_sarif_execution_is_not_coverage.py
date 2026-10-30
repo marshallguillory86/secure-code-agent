@@ -45,12 +45,11 @@ def test_unread_languages_are_warning_notifications_named_by_their_coverage_entr
 
     assert [notification["level"] for notification in notifications] == ["warning", "warning"]
     assert all(
-        notification["descriptor"]["id"] == "scanner-coverage"
-        for notification in notifications
+        notification["descriptor"]["id"] == "scanner-coverage" for notification in notifications
     )
     assert all(
         entry in notification["message"]["text"]
-        for entry, notification in zip(coverage.unread_languages, notifications)
+        for entry, notification in zip(coverage.unread_languages, notifications, strict=True)
     )
 
 
@@ -104,6 +103,7 @@ def test_complete_coverage_emits_no_coverage_notifications():
     invocation = sarif.emit([], coverage)["runs"][0]["invocations"][0]
 
     assert invocation["executionSuccessful"] is True
-    assert "toolExecutionNotifications" not in invocation or not invocation[
-        "toolExecutionNotifications"
-    ]
+    assert (
+        "toolExecutionNotifications" not in invocation
+        or not invocation["toolExecutionNotifications"]
+    )

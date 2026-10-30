@@ -4,6 +4,30 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.13.1 — 2026-10-30
+
+**Coverage was reported to code scanning as a failed run.**
+
+### Fixed — SARIF `executionSuccessful` is the run, not the coverage
+
+- The emitted invocation set `executionSuccessful` from scanner coverage
+  (`coverage.status is COMPLETE`). On `maintainability-agent` every scanner
+  completed and coverage is `PARTIAL` only because nothing in the floor reads
+  shell, which 0.13.0 began reporting. GitHub code scanning reads
+  `executionSuccessful: false` as "the tool exited with errors but provided no
+  error code": every upload since then carried "unsuccessful tool execution,
+  exit code 0", and the repository's Security overview showed a "Code scanning
+  configuration error" banner.
+- `executionSuccessful` is now `true` whenever a document is written, whatever
+  the coverage. Coverage stays on its own axis, in
+  `properties.coverageStatus`, and is never a failed execution. That includes
+  `FAILED` coverage: the gate still fails the build, but the tool ran.
+- Every coverage gap is a `toolExecutionNotification` (`descriptor.id:
+  scanner-coverage`) naming what was not read. `error` for a required scanner
+  that did not complete, as before. `warning` for a language nothing in the run
+  reads, and for a scanner that is not required and did not complete, which
+  until now made coverage `PARTIAL` without a word in the SARIF.
+
 ## 0.13.0 — 2026-10-05
 
 **Two ways a grade was issued without the evidence to support it.**

@@ -13,8 +13,8 @@ from pathlib import Path
 from secure_code_audit import __version__
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.scanner_status import (
+    COVERING_OUTCOMES,
     CoverageReport,
-    CoverageStatus,
     ScannerExecution,
     ScannerOutcome,
 )
@@ -92,8 +92,20 @@ def emit(
 
 
 def _invocation(coverage: CoverageReport) -> dict:
+    """The run, and what it covered, on two separate axes.
+
+    `executionSuccessful` says whether this tool ran to completion, and a
+    document is only written when it did. It was set from coverage instead,
+    so `maintainability-agent` — every scanner completed, PARTIAL only because
+    nothing in the floor reads shell — uploaded "unsuccessful tool execution,
+    exit code 0" on every run, and GitHub code scanning put a configuration
+    error banner on its Security overview. Coverage stays in
+    `properties.coverageStatus`, and each gap is a notification naming what
+    was not read: `error` for a required scanner that broke the gate,
+    `warning` for a limit of the floor.
+    """
     invocation = {
-        "executionSuccessful": coverage.status is CoverageStatus.COMPLETE,
+        "executionSuccessful": True,
         "properties": {
             "coverageStatus": coverage.status.value,
             "requiredScanners": list(coverage.required),
@@ -108,16 +120,28 @@ def _invocation(coverage: CoverageReport) -> dict:
             ],
         },
     }
-    if coverage.failures:
-        invocation["toolExecutionNotifications"] = [
-            {
-                "level": "error",
-                "message": {"text": failure},
-                "descriptor": {"id": "scanner-coverage"},
-            }
-            for failure in coverage.failures
-        ]
+    notifications = [_coverage_notification("error", failure) for failure in coverage.failures]
+    notifications += [
+        _coverage_notification("warning", f"language not covered: {entry}")
+        for entry in coverage.unread_languages
+    ]
+    notifications += [
+        _coverage_notification(
+            "warning",
+            f"scanner {execution.name!r} did not complete: {execution.outcome.value}"
+            + (f" — {execution.reason}" if execution.reason else ""),
+        )
+        for execution in coverage.executions
+        if execution.name not in coverage.required
+        and execution.outcome not in (*COVERING_OUTCOMES, ScannerOutcome.NOT_APPLICABLE)
+    ]
+    if notifications:
+        invocation["toolExecutionNotifications"] = notifications
     return invocation
+
+
+def _coverage_notification(level: str, text: str) -> dict:
+    return {"level": level, "message": {"text": text}, "descriptor": {"id": "scanner-coverage"}}
 
 
 def _rule(f: Finding) -> dict:
