@@ -4,7 +4,7 @@
 
 writes `docs/example-report.html`: one self-contained page (inline styles, no
 scripts, nothing loaded from elsewhere) that GitHub Pages serves at
-https://marshallguillory86.github.io/secure-code-agent/example-report.html.
+https://secure-code-agent.techportfolio.monster/example-report.html.
 Regenerate it with each release, from a self-audit run at that release, so the
 page states the version it was made by.
 

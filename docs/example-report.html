@@ -59,7 +59,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent</a>
 <nav><a href="html/index.html">Documentation</a></nav></div></div>
 <main class="single"><div class="meta">Example report: secure-code-agent auditing its own repository</div>
-<h1>secure-code-agent report</h1><p>Generated: 2026-10-30T23:20:48Z  ·  agent v0.13.1</p>
+<h1>secure-code-agent report</h1><p>Generated: 2026-10-30T23:35:35Z  ·  agent v0.13.2</p>
 <h2>Summary</h2>
 <ul>
 <li><strong>Scanner coverage:</strong> COMPLETE</li>
@@ -73,7 +73,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><code>fail_on_new</code> — 50 finding(s), and no baseline exists yet — on a first run everything is new because there is nothing to compare against. Work the order, then re-run with --bump-baseline to accept what is left and gate on regressions from there.</li>
 </ul>
 </li>
-<li><strong>LOC scanned:</strong> 15,808</li>
+<li><strong>LOC scanned:</strong> 15,883</li>
 </ul>
 <h2>Categories</h2>
 <div class="table-wrap"><table>
@@ -175,9 +175,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 </table></div>
 <h2>Test tree</h2>
 <ul>
-<li><strong>Lines:</strong> 16,063</li>
-<li><strong>Findings:</strong> 2141 — reported, not scored</li>
-<li><strong>By severity:</strong> high: 29, medium: 6, low: 2106</li>
+<li><strong>Lines:</strong> 16,160</li>
+<li><strong>Findings:</strong> 2171 — reported, not scored</li>
+<li><strong>By severity:</strong> high: 29, medium: 6, low: 2136</li>
 <li>Reported, not scored. A project graded on its test fixtures is graded on the wrong thing. Secrets found here are still gated when the configuration names the category, because nothing static separates a live credential from a test certificate.</li>
 </ul>
 <h2>Documentation</h2>
@@ -220,7 +220,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <tr>
 <td><code>builtin_rules</code></td>
 <td><code>completed</code></td>
-<td>builtin/0.13.1</td>
+<td>builtin/0.13.2</td>
 <td><code>—</code></td>
 <td>—</td>
 </tr>
@@ -24832,11 +24832,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:28</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:30</code></li>
 </ul>
-<pre><code>27 def _report_text() -&gt; str:
-28     assert REPORT.is_file(), f&quot;published report is missing: {REPORT}&quot;
-29     return REPORT.read_text(encoding=&quot;utf-8&quot;)
+<pre><code>29 def _report_text() -&gt; str:
+30     assert REPORT.is_file(), f&quot;published report is missing: {REPORT}&quot;
+31     return REPORT.read_text(encoding=&quot;utf-8&quot;)
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -24844,11 +24844,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:34</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:36</code></li>
 </ul>
-<pre><code>33     &quot;&quot;&quot;GitHub Pages publishes the committed files without Jekyll processing.&quot;&quot;&quot;
-34     assert (ROOT / &quot;docs&quot; / &quot;.nojekyll&quot;).is_file()
-35
+<pre><code>35     &quot;&quot;&quot;GitHub Pages publishes the committed files without Jekyll processing.&quot;&quot;&quot;
+36     assert (ROOT / &quot;docs&quot; / &quot;.nojekyll&quot;).is_file()
+37
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -24856,11 +24856,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:39</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:41</code></li>
 </ul>
-<pre><code>38     &quot;&quot;&quot;The published report contains the package version it documents.&quot;&quot;&quot;
-39     assert __version__ in _report_text()
-40
+<pre><code>40     &quot;&quot;&quot;GitHub Pages publishes the site at the committed custom domain.&quot;&quot;&quot;
+41     assert (ROOT / &quot;docs&quot; / &quot;CNAME&quot;).read_text(encoding=&quot;utf-8&quot;).strip() == DOMAIN
+42
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -24868,11 +24868,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:49</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:46</code></li>
 </ul>
-<pre><code>48         if tag == &quot;script&quot;:
-49             assert &quot;src&quot; not in attrs
-50         if tag == &quot;link&quot; and &quot;stylesheet&quot; in attrs.get(&quot;rel&quot;, &quot;&quot;).lower().split():
+<pre><code>45     &quot;&quot;&quot;The published report contains the package version it documents.&quot;&quot;&quot;
+46     assert __version__ in _report_text()
+47
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -24880,13 +24880,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:54-56</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:56</code></li>
 </ul>
-<pre><code>53             value = attrs.get(attribute, &quot;&quot;)
-54             assert not value.lower().startswith((&quot;http://&quot;, &quot;https://&quot;)), (
-55                 f&quot;{tag} {attribute} points outside the published report: {value}&quot;
-56             )
-57
+<pre><code>55         if tag == &quot;script&quot;:
+56             assert &quot;src&quot; not in attrs
+57         if tag == &quot;link&quot; and &quot;stylesheet&quot; in attrs.get(&quot;rel&quot;, &quot;&quot;).lower().split():
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -24894,23 +24892,13 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:63</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:61-63</code></li>
 </ul>
-<pre><code>62     for path_fragment in (&quot;&#47;Users/&quot;, &quot;&#47;home/&quot;, &quot;&#47;private&#47;tmp&quot;, &quot;C:&#92;\&quot;):
-63         assert path_fragment not in report
+<pre><code>60             value = attrs.get(attribute, &quot;&quot;)
+61             assert not value.lower().startswith((&quot;http://&quot;, &quot;https://&quot;)), (
+62                 f&quot;{tag} {attribute} points outside the published report: {value}&quot;
+63             )
 64
-</code></pre>
-<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
-<ul>
-<li><strong>Severity:</strong> low (high confidence)</li>
-<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
-<li><strong>Scanner:</strong> <code>bandit</code></li>
-<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:69</code></li>
-</ul>
-<pre><code>68     readme = (ROOT / &quot;README.md&quot;).read_text(encoding=&quot;utf-8&quot;)
-69     assert &quot;https://marshallguillory86.github.io/secure-code-agent/example-report.html&quot; in readme
-70     assert &quot;https://marshallguillory86.github.io/secure-code-agent/html/&quot; in readme
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -24920,9 +24908,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
 <li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:70</code></li>
 </ul>
-<pre><code>69     assert &quot;https://marshallguillory86.github.io/secure-code-agent/example-report.html&quot; in readme
-70     assert &quot;https://marshallguillory86.github.io/secure-code-agent/html/&quot; in readme
-71     assert &quot;outcomes360&quot; not in readme.lower()
+<pre><code>69     for path_fragment in (&quot;&#47;Users/&quot;, &quot;&#47;home/&quot;, &quot;&#47;private&#47;tmp&quot;, &quot;C:&#92;\&quot;):
+70         assert path_fragment not in report
+71
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -24930,11 +24918,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:71</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:76</code></li>
 </ul>
-<pre><code>70     assert &quot;https://marshallguillory86.github.io/secure-code-agent/html/&quot; in readme
-71     assert &quot;outcomes360&quot; not in readme.lower()
-72
+<pre><code>75     readme = (ROOT / &quot;README.md&quot;).read_text(encoding=&quot;utf-8&quot;)
+76     assert f&quot;{PAGES}example-report.html&quot; in readme
+77     assert f&quot;{PAGES}html/&quot; in readme
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -24944,8 +24932,385 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
 <li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:77</code></li>
 </ul>
-<pre><code>76     contributing = (ROOT / &quot;CONTRIBUTING.md&quot;).read_text(encoding=&quot;utf-8&quot;)
-77     assert &quot;example-report.html&quot; in contributing
+<pre><code>76     assert f&quot;{PAGES}example-report.html&quot; in readme
+77     assert f&quot;{PAGES}html/&quot; in readme
+78     assert &quot;marshallguillory86.github.io/secure-code-agent&quot; not in readme
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:78</code></li>
+</ul>
+<pre><code>77     assert f&quot;{PAGES}html/&quot; in readme
+78     assert &quot;marshallguillory86.github.io/secure-code-agent&quot; not in readme
+79     assert &quot;outcomes360&quot; not in readme.lower()
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:79</code></li>
+</ul>
+<pre><code>78     assert &quot;marshallguillory86.github.io/secure-code-agent&quot; not in readme
+79     assert &quot;outcomes360&quot; not in readme.lower()
+80
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_example_report_is_published.py:85</code></li>
+</ul>
+<pre><code>84     contributing = (ROOT / &quot;CONTRIBUTING.md&quot;).read_text(encoding=&quot;utf-8&quot;)
+85     assert &quot;example-report.html&quot; in contributing
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:38</code></li>
+</ul>
+<pre><code>37 def test_landing_page_exists_and_declares_english() -&gt; None:
+38     assert LANDING_PAGE.is_file()
+39     _, parser = parse_landing_page()
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:42</code></li>
+</ul>
+<pre><code>41     html_tags = tags(parser, &quot;html&quot;)
+42     assert html_tags
+43     assert html_tags[0].get(&quot;lang&quot;) == &quot;en&quot;
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:43</code></li>
+</ul>
+<pre><code>42     assert html_tags
+43     assert html_tags[0].get(&quot;lang&quot;) == &quot;en&quot;
+44
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:50</code></li>
+</ul>
+<pre><code>49 
+50     assert images
+51     image = images[0]
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:53</code></li>
+</ul>
+<pre><code>52     image_path = (DOCS / image[&quot;src&quot;]).resolve()
+53     assert image_path.is_file()
+54     assert image_path.is_relative_to((DOCS / &quot;brand&quot;).resolve())
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:54</code></li>
+</ul>
+<pre><code>53     assert image_path.is_file()
+54     assert image_path.is_relative_to((DOCS / &quot;brand&quot;).resolve())
+55     assert image[&quot;alt&quot;]
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:55</code></li>
+</ul>
+<pre><code>54     assert image_path.is_relative_to((DOCS / &quot;brand&quot;).resolve())
+55     assert image[&quot;alt&quot;]
+56     assert len(image[&quot;alt&quot;]) &gt;= 20
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:56</code></li>
+</ul>
+<pre><code>55     assert image[&quot;alt&quot;]
+56     assert len(image[&quot;alt&quot;]) &gt;= 20
+57     assert int(image[&quot;width&quot;]) &gt;= 1
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:57</code></li>
+</ul>
+<pre><code>56     assert len(image[&quot;alt&quot;]) &gt;= 20
+57     assert int(image[&quot;width&quot;]) &gt;= 1
+58     assert int(image[&quot;height&quot;]) &gt;= 1
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:58</code></li>
+</ul>
+<pre><code>57     assert int(image[&quot;width&quot;]) &gt;= 1
+58     assert int(image[&quot;height&quot;]) &gt;= 1
+59
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:65</code></li>
+</ul>
+<pre><code>64 
+65     assert &quot;example-report.html&quot; in hrefs
+66     assert &quot;html/&quot; in hrefs
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:66</code></li>
+</ul>
+<pre><code>65     assert &quot;example-report.html&quot; in hrefs
+66     assert &quot;html/&quot; in hrefs
+67     assert &quot;https://github.com/marshallguillory86/secure-code-agent&quot; in hrefs
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:67</code></li>
+</ul>
+<pre><code>66     assert &quot;html/&quot; in hrefs
+67     assert &quot;https://github.com/marshallguillory86/secure-code-agent&quot; in hrefs
+68     assert &quot;https://pypi.org/project/secure-code-agent/&quot; in hrefs
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:68</code></li>
+</ul>
+<pre><code>67     assert &quot;https://github.com/marshallguillory86/secure-code-agent&quot; in hrefs
+68     assert &quot;https://pypi.org/project/secure-code-agent/&quot; in hrefs
+69
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:74</code></li>
+</ul>
+<pre><code>73 
+74     assert &quot;pip install secure-code-agent&quot; in &quot;&quot;.join(parser.text_parts)
+75
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:88</code></li>
+</ul>
+<pre><code>87 
+88     assert properties.get(&quot;og:title&quot;)
+89     assert properties.get(&quot;og:description&quot;)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:89</code></li>
+</ul>
+<pre><code>88     assert properties.get(&quot;og:title&quot;)
+89     assert properties.get(&quot;og:description&quot;)
+90     image_url = properties.get(&quot;og:image&quot;, &quot;&quot;)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:91</code></li>
+</ul>
+<pre><code>90     image_url = properties.get(&quot;og:image&quot;, &quot;&quot;)
+91     assert image_url.startswith(PAGES_URL)
+92     image_path = Path(urlparse(image_url).path.lstrip(&quot;/&quot;))
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:93</code></li>
+</ul>
+<pre><code>92     image_path = Path(urlparse(image_url).path.lstrip(&quot;/&quot;))
+93     assert (DOCS / image_path).is_file()
+94     assert properties.get(&quot;og:url&quot;) == PAGES_URL
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:94</code></li>
+</ul>
+<pre><code>93     assert (DOCS / image_path).is_file()
+94     assert properties.get(&quot;og:url&quot;) == PAGES_URL
+95     assert names.get(&quot;twitter:card&quot;) == &quot;summary_large_image&quot;
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:95</code></li>
+</ul>
+<pre><code>94     assert properties.get(&quot;og:url&quot;) == PAGES_URL
+95     assert names.get(&quot;twitter:card&quot;) == &quot;summary_large_image&quot;
+96
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:101</code></li>
+</ul>
+<pre><code>100 
+101     assert tags(parser, &quot;style&quot;)
+102     assert not tags(parser, &quot;script&quot;) or all(&quot;src&quot; not in attrs for attrs in tags(parser, &quot;script&quot;))
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:102</code></li>
+</ul>
+<pre><code>101     assert tags(parser, &quot;style&quot;)
+102     assert not tags(parser, &quot;script&quot;) or all(&quot;src&quot; not in attrs for attrs in tags(parser, &quot;script&quot;))
+103     assert not tags(parser, &quot;link&quot;) or all(
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:103-105</code></li>
+</ul>
+<pre><code>102     assert not tags(parser, &quot;script&quot;) or all(&quot;src&quot; not in attrs for attrs in tags(parser, &quot;script&quot;))
+103     assert not tags(parser, &quot;link&quot;) or all(
+104         &quot;stylesheet&quot; not in attrs.get(&quot;rel&quot;, &quot;&quot;).lower().split() for attrs in tags(parser, &quot;link&quot;)
+105     )
+106     for tag in (&quot;script&quot;, &quot;link&quot;, &quot;img&quot;):
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:107-111</code></li>
+</ul>
+<pre><code>106     for tag in (&quot;script&quot;, &quot;link&quot;, &quot;img&quot;):
+107         assert all(
+108             not attrs.get(attribute, &quot;&quot;).lower().startswith((&quot;http://&quot;, &quot;https://&quot;))
+109             for attrs in tags(parser, tag)
+110             for attribute in (&quot;src&quot;, &quot;href&quot;)
+111         )
+112     assert &quot;&lt;script src&quot; not in html.lower()
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:112</code></li>
+</ul>
+<pre><code>111         )
+112     assert &quot;&lt;script src&quot; not in html.lower()
+113
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:118</code></li>
+</ul>
+<pre><code>117 
+118     assert &quot;outcomes360&quot; not in html.lower()
+119
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_the_landing_page_is_published.py:125</code></li>
+</ul>
+<pre><code>124 
+125     assert &quot;marshallguillory86.github.io/secure-code-agent&quot; not in html
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>

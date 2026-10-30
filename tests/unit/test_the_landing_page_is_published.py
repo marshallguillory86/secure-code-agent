@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
 LANDING_PAGE = DOCS / "index.html"
-PAGES_URL = "https://marshallguillory86.github.io/secure-code-agent/"
+PAGES_URL = "https://secure-code-agent.techportfolio.monster/"
 
 
 class LandingPageParser(HTMLParser):
@@ -89,8 +89,9 @@ def test_landing_page_has_social_metadata_for_pages() -> None:
     assert properties.get("og:description")
     image_url = properties.get("og:image", "")
     assert image_url.startswith(PAGES_URL)
-    image_path = Path(urlparse(image_url).path.removeprefix("/secure-code-agent/"))
+    image_path = Path(urlparse(image_url).path.lstrip("/"))
     assert (DOCS / image_path).is_file()
+    assert properties.get("og:url") == PAGES_URL
     assert names.get("twitter:card") == "summary_large_image"
 
 
@@ -115,3 +116,10 @@ def test_landing_page_does_not_name_the_other_project() -> None:
     html, _ = parse_landing_page()
 
     assert "outcomes360" not in html.lower()
+
+
+def test_landing_page_does_not_use_the_github_pages_url() -> None:
+    """The landing page does not retain the former GitHub Pages URL."""
+    html, _ = parse_landing_page()
+
+    assert "marshallguillory86.github.io/secure-code-agent" not in html

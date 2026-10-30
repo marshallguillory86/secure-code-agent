@@ -9,6 +9,8 @@ from secure_code_audit import __version__
 
 ROOT = Path(__file__).resolve().parents[2]
 REPORT = ROOT / "docs" / "example-report.html"
+DOMAIN = "secure-code-agent.techportfolio.monster"
+PAGES = f"https://{DOMAIN}/"
 
 
 class _ResourceParser(HTMLParser):
@@ -32,6 +34,11 @@ def _report_text() -> str:
 def test_pages_marker_is_committed() -> None:
     """GitHub Pages publishes the committed files without Jekyll processing."""
     assert (ROOT / "docs" / ".nojekyll").is_file()
+
+
+def test_pages_custom_domain_is_committed() -> None:
+    """GitHub Pages publishes the site at the committed custom domain."""
+    assert (ROOT / "docs" / "CNAME").read_text(encoding="utf-8").strip() == DOMAIN
 
 
 def test_published_example_report_tracks_current_package_version() -> None:
@@ -66,8 +73,9 @@ def test_published_example_report_has_no_absolute_local_paths() -> None:
 def test_readme_links_to_published_reports() -> None:
     """The README points readers to both published report locations."""
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "https://marshallguillory86.github.io/secure-code-agent/example-report.html" in readme
-    assert "https://marshallguillory86.github.io/secure-code-agent/html/" in readme
+    assert f"{PAGES}example-report.html" in readme
+    assert f"{PAGES}html/" in readme
+    assert "marshallguillory86.github.io/secure-code-agent" not in readme
     assert "outcomes360" not in readme.lower()
 
 
