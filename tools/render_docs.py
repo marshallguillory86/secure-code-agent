@@ -56,7 +56,8 @@ GROUPS: list[tuple[str, object]] = [
     (
         "Start here",
         lambda rel: (
-            rel.name in {"README.md", "CONTRIBUTING.md", "SECURITY.md"} and len(rel.parts) == 1
+            (rel.name in {"CONTRIBUTING.md", "SECURITY.md"} or rel.name.startswith("README."))
+            and len(rel.parts) == 1
         ),
     ),
     ("Product and intent", lambda rel: rel.name in {"product-intent.md", "design.md"}),

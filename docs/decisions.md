@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.13.1 — 2026-10-30.** The decision register. D1–D35.
+> Status: **v0.13.1 — 2026-10-30.** The decision register. D1–D36.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -2394,3 +2394,22 @@ the question an audit should start from.
 any of them. On this repository the only shell file is
 `examples/local-ci.sh`, which matches `docs_patterns` and therefore sits on
 the documentation axis, correctly creating no obligation for the scored tree.
+
+## D36 — Translated READMEs are short pages, not full translations
+
+**Status:** Accepted · 2026-10-30
+
+**Context.** The README opens with a language row (Spanish, German, French,
+Hindi, Simplified Chinese) and a badge row, matching `maintainability-agent`.
+The English README is long and changes with most releases.
+
+**Decision.** Each `README.<code>.md` is a short, machine-translated page: what
+the tool is, how to install it, how to run it once, and a link back to the
+English README as the only complete copy. Its first line declares it a machine
+translation, and it carries no version number, so a release never leaves it
+stale. `tests/unit/test_readme_translations.py` holds the language set, each
+page's shape, and every badge's package, owner and workflow.
+
+**Rejected: full translations.** Every README change would need five
+translations that nobody here can review, and a translation that drifts from
+the English is worse than none: it states things the tool no longer does.
