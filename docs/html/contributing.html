@@ -16,6 +16,7 @@
 <li><a href="#tests">Tests</a></li>
 <li><a href="#commit-messages">Commit messages</a></li>
 <li><a href="#pull-requests">Pull requests</a></li>
+<li><a href="#releasing">Releasing</a></li>
 <li><a href="#security-disclosures">Security disclosures</a></li>
 <li><a href="#license">License</a></li>
 </ul>
@@ -143,6 +144,16 @@ replaced by three criteria keyed to <strong>mechanism</strong> rather than licen
 <li>Keep PRs bounded — one concern per PR.</li>
 <li>Cite the standard / source for any new rule mapping.</li>
 <li>Update <code>CHANGELOG.md</code> under <code>## Unreleased</code>.</li>
+</ul>
+<h2 id="releasing">Releasing</h2>
+<p>In the release commit, alongside the version bump:</p>
+<ul>
+<li>Regenerate the published example report. Audit this repository at the new
+  version, then render the Markdown report with
+  <code>python tools/render_example_report.py secure-code-report.md</code>, which writes
+  <code>docs/example-report.html</code>. A test fails when the page does not state the
+  current version.</li>
+<li>Re-render the docs site with <code>python tools/render_docs.py</code>.</li>
 </ul>
 <h2 id="security-disclosures">Security disclosures</h2>
 <p>See <a href="security.html"><code>SECURITY.md</code></a>. Do <strong>not</strong> open public issues for

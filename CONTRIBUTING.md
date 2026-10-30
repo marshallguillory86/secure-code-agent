@@ -137,6 +137,17 @@ Conventional Commits:
 - Cite the standard / source for any new rule mapping.
 - Update `CHANGELOG.md` under `## Unreleased`.
 
+## Releasing
+
+In the release commit, alongside the version bump:
+
+- Regenerate the published example report. Audit this repository at the new
+  version, then render the Markdown report with
+  `python tools/render_example_report.py secure-code-report.md`, which writes
+  `docs/example-report.html`. A test fails when the page does not state the
+  current version.
+- Re-render the docs site with `python tools/render_docs.py`.
+
 ## Security disclosures
 
 See [`SECURITY.md`](SECURITY.md). Do **not** open public issues for

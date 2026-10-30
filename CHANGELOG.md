@@ -32,6 +32,15 @@ schema may evolve.
 
 - The README opens with the project's cover image (`docs/brand/sca.png`).
 
+## Unreleased
+
+### Docs
+
+- The README carries a language row and a badge row (PyPI version, Python
+  versions, licence, CI on `main`, downloads). Short machine-translated pages in
+  Spanish, German, French, Hindi and Simplified Chinese point back to the
+  English README as the only complete copy (D36).
+
 ## 0.13.0 — 2026-10-05
 
 **Two ways a grade was issued without the evidence to support it.**

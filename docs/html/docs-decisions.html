@@ -44,11 +44,12 @@
 <li><a href="#d33-a-run-that-scanned-nothing-is-ungraded-not-perfect">D33 — A run that scanned nothing is ungraded, not perfect</a></li>
 <li><a href="#d34-an-adapter-declares-whether-it-honours-exclude_patterns">D34 — An adapter declares whether it honours exclude_patterns</a></li>
 <li><a href="#d35-coverage-names-a-language-nothing-read-depth-is-still-open">D35 — Coverage names a language nothing read; depth is still open</a></li>
+<li><a href="#d36-translated-readmes-are-short-pages-not-full-translations">D36 — Translated READMEs are short pages, not full translations</a></li>
 </ul>
 </div>
 </aside>
 <main><div class="meta">Decisions and architecture</div><h1>Decision register</h1><blockquote>
-<p>Status: <strong>v0.13.1 — 2026-10-30.</strong> The decision register. D1–D35.</p>
+<p>Status: <strong>v0.13.1 — 2026-10-30.</strong> The decision register. D1–D36.</p>
 </blockquote>
 <p>Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on <code>maintainability-agent</code>'s register, which exists
@@ -2486,5 +2487,19 @@ the question an audit should start from.</p>
 any of them. On this repository the only shell file is
 <code>examples/local-ci.sh</code>, which matches <code>docs_patterns</code> and therefore sits on
 the documentation axis, correctly creating no obligation for the scored tree.</p>
+<h2 id="d36-translated-readmes-are-short-pages-not-full-translations">D36 — Translated READMEs are short pages, not full translations</h2>
+<p><strong>Status:</strong> Accepted · 2026-10-30</p>
+<p><strong>Context.</strong> The README opens with a language row (Spanish, German, French,
+Hindi, Simplified Chinese) and a badge row, matching <code>maintainability-agent</code>.
+The English README is long and changes with most releases.</p>
+<p><strong>Decision.</strong> Each <code>README.&lt;code&gt;.md</code> is a short, machine-translated page: what
+the tool is, how to install it, how to run it once, and a link back to the
+English README as the only complete copy. Its first line declares it a machine
+translation, and it carries no version number, so a release never leaves it
+stale. <code>tests/unit/test_readme_translations.py</code> holds the language set, each
+page's shape, and every badge's package, owner and workflow.</p>
+<p><strong>Rejected: full translations.</strong> Every README change would need five
+translations that nobody here can review, and a translation that drifts from
+the English is worse than none: it states things the tool no longer does.</p>
 <footer>Rendered from <code>docs/decisions.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
 </main></div></body></html>

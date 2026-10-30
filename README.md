@@ -1,5 +1,15 @@
 # secure-code-agent
 
+**English** | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [हिन्दी](README.hi.md) | [简体中文](README.zh-CN.md)
+
+[![PyPI](https://img.shields.io/pypi/v/secure-code-agent)](https://pypi.org/project/secure-code-agent/)
+[![Python](https://img.shields.io/pypi/pyversions/secure-code-agent)](https://pypi.org/project/secure-code-agent/)
+[![License](https://img.shields.io/github/license/marshallguillory86/secure-code-agent)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/marshallguillory86/secure-code-agent/ci.yml?branch=main&label=CI)](https://github.com/marshallguillory86/secure-code-agent/actions/workflows/ci.yml)
+[![Downloads](https://img.shields.io/pypi/dm/secure-code-agent)](https://pypistats.org/packages/secure-code-agent)
+
+**[Example report](https://marshallguillory86.github.io/secure-code-agent/example-report.html)** · **[Documentation](https://marshallguillory86.github.io/secure-code-agent/html/)**
+
 ![secure-code-agent — a deterministic security gate whose findings become a bounded remediation work order for your AI coding agent](https://raw.githubusercontent.com/marshallguillory86/secure-code-agent/main/docs/brand/sca.png)
 
 > **Deterministic security gate + bounded AI remediation prompts for repos with AI coding agents in the loop.**
