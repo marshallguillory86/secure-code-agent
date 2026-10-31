@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.13.3 — 2026-10-30.** The decision register. D1–D37.
+> Status: **v0.13.3 — 2026-10-30.** The decision register. D1–D38.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -2443,3 +2443,42 @@ ran the whole suite again against the installed scanner floor. Every merge to
 because the release cannot publish until the matrix is green; what is given up
 is finding it on the pull request rather than at the tag, for every pull
 request's cost in runner minutes.
+
+## D38 — A release starts from a version bump on main, publishes on approval, then tags
+
+**Status:** Accepted · 2026-10-31
+
+**Context.** A release began with a person pushing a signed `v*` tag from a
+laptop. Nothing checked that the tagged commit had reached `main` through its
+required checks, the `pypi` environment that publishes through PyPI Trusted
+Publishing had no protection rules, and a tag could be moved or deleted after
+the fact.
+
+**Decision.**
+
+- A release is a pull request that bumps `__version__`. On the merge,
+  `cut-release.yml` sees an untagged version and dispatches `release.yaml` on
+  `main`. It runs no tests and cuts no tag.
+- `release.yaml` refuses a commit that is not on `main` and a version that is
+  already tagged, runs the Python version matrix and the full suite (D37), and
+  builds and attests the distributions.
+- `publish-pypi` runs in the `pypi` environment, which requires the
+  maintainer's approval and deploys only from `main` or a `v*` tag.
+- The tag is cut after PyPI accepts the upload, and the GitHub release follows
+  the tag. A declined approval or a failed build therefore leaves no tag
+  naming a version PyPI does not have.
+- A ruleset makes `v*` tags immutable: no update and no deletion, except by an
+  administrator.
+- No long-lived credential: PyPI publishing stays on OpenID Connect, scoped to
+  the publish job.
+
+**Rejected: tagging first.** It was built that way first. A tag cut before
+the approval names a version that may never reach PyPI, and the next release
+of that version is then refused as already tagged.
+
+**Rejected: restricting who may create a `v*` tag.** On a repository owned by
+a user rather than an organization, GitHub does not accept the Actions app as
+a ruleset bypass, so restricting creation would stop the release's own tag
+job. The way around it, a deploy key, is a stored credential this release
+exists to avoid. A stray tag cannot ship anyway: the build refuses a commit
+off `main`, and publishing waits for approval.

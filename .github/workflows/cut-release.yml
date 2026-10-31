@@ -1,0 +1,64 @@
+name: Cut release
+
+# A release starts from a version bump merged to main, not from a tag a person
+# pushes. On every merge this reads `__version__`; when no `v<version>` tag
+# exists yet it starts release.yaml on main. That run builds, waits for the
+# maintainer's approval in the `pypi` environment, publishes, and only then
+# cuts the tag, so a declined approval or a failed build leaves no tag naming
+# a version PyPI does not have. No tests run here: the pull request ran them.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cut-release
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    name: Start the release of a new version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Decide whether this version is released
+        id: decide
+        shell: bash
+        # Writes tag=v<version> and release=true|false. Read from the
+        # remote, so a version already tagged on GitHub is never released again.
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/secure_code_audit/__init__.py)
+          if [ -z "$version" ]; then
+            echo "no __version__ literal in src/secure_code_audit/__init__.py" >&2
+            exit 1
+          fi
+          tag="v${version}"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" > /dev/null; then
+            echo "${tag} already exists; nothing to release"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "${tag} is new; its release starts now"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A dispatch rather than a call: the release runs as its own workflow, in
+      # the environment that holds the publish, and appears on its own in the
+      # Actions list for the maintainer to approve.
+      - name: Start the release
+        if: steps.decide.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yaml --ref main

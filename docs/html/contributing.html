@@ -146,7 +146,23 @@ replaced by three criteria keyed to <strong>mechanism</strong> rather than licen
 <li>Update <code>CHANGELOG.md</code> under <code>## Unreleased</code>.</li>
 </ul>
 <h2 id="releasing">Releasing</h2>
-<p>In the release commit, alongside the version bump:</p>
+<p>A release is a pull request that bumps <code>__version__</code> in
+<code>src/secure_code_audit/__init__.py</code>. Nobody pushes a tag by hand:</p>
+<ol>
+<li>The release pull request passes its checks and merges to <code>main</code>.</li>
+<li><code>cut-release.yml</code> sees a version with no <code>v&lt;version&gt;</code> tag and starts
+   <code>release.yaml</code> on <code>main</code>.</li>
+<li><code>release.yaml</code> refuses a commit that is not on <code>main</code> and a version that is
+   already tagged, runs the Python version matrix and the full suite, and
+   builds and attests the distributions.</li>
+<li>Publishing to PyPI waits for the maintainer's approval in the <code>pypi</code>
+   environment (Actions → the run → <em>Review deployments</em>).</li>
+<li>Only after PyPI accepts the upload is <code>v&lt;version&gt;</code> tagged, and the GitHub
+   release follows the tag. A declined approval or a failed build leaves no
+   tag, so the same version can be released once the cause is fixed.</li>
+</ol>
+<p>Release tags cannot be moved or deleted once cut.</p>
+<p>In the release pull request, alongside the version bump:</p>
 <ul>
 <li>Stamp the new version into every document that states it with
   <code>python tools/stamp_version.py --root .</code>: each <code>docs/</code> status line and the

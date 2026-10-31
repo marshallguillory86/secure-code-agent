@@ -8,6 +8,14 @@ schema may evolve.
 
 ### Project
 
+- **A release starts from a version bump on main (D38).** Merging a pull
+  request that bumps `__version__` starts the release; nobody pushes a tag.
+  The build refuses a commit off `main` and a version already tagged.
+  Publishing to PyPI waits for the maintainer's approval in the `pypi`
+  environment, which deploys only from `main` or a `v*` tag. The tag is cut
+  after PyPI accepts the upload, the GitHub release follows it, and release
+  tags cannot be moved or deleted.
+
 - Community files: `CODE_OF_CONDUCT.md`, `ACCESSIBILITY.md`, a pull-request
   template, bug and incorrect-claim issue templates (with security reports
   routed to a private advisory), and a sponsor link.
