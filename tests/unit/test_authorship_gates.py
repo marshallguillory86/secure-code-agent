@@ -221,11 +221,16 @@ def test_existing_branch_commits_verify_against_allowed_signers() -> None:
         "-c",
         "gpg.ssh.allowedSignersFile=.github/allowed_signers",
         "log",
+        # Without merges: on a pull request CI checks out a merge commit
+        # GitHub builds and nobody signs. The Authorship workflow checks the
+        # branch tip, merges included; this test checks the work.
+        "--no-merges",
         "--format=%G?",
         "origin/main..HEAD",
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip()
+    if not result.stdout.strip():
+        pytest.skip("no commits beyond origin/main to verify")
     assert all(state == "G" for state in result.stdout.split())
 
 

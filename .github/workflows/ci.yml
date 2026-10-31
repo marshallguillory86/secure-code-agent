@@ -33,6 +33,9 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The falsifier proof below checks out the base commit beside this one.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -85,6 +88,14 @@ jobs:
             echo "::error::an offline-ruleset test skipped; the tool it needs is missing"
             exit 1
           fi
+
+      # Test first, checked rather than claimed: each test this pull request
+      # adds must fail against the base's code (tools/prove_falsifiers.py).
+      # It runs only the added tests, against different code, so no test runs
+      # twice on the same code.
+      - name: Each new test fails without its change
+        if: github.event_name == 'pull_request'
+        run: python tools/prove_falsifiers.py --base "origin/${{ github.base_ref }}"
 
       - name: Build wheel through pip
         run: python -m pip wheel . --no-deps --wheel-dir wheelhouse

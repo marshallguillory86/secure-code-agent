@@ -29,6 +29,13 @@ schema may evolve.
   of a five-leg matrix and two more jobs that re-ran the suite. A merge to
   `main` runs only the self-audit and its code-scanning upload. The Python
   version matrix runs on release tags, before the build.
+- **Each new test is proven to fail without its change.**
+  `tools/prove_falsifiers.py`, run in the pull-request job, checks out the
+  base commit beside the change, puts the change's tests in place, and runs
+  every test the change adds against the base's code. A test that passes or is
+  skipped there fails the job. A test that cannot even be imported there
+  counts, reported as a weaker proof. A test describing older behaviour says
+  `Covers existing behaviour:` and is reported exempt.
 
 ## 0.13.3 — 2026-10-30
 
