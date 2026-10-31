@@ -52,6 +52,10 @@ def _configure_repository(repo: Path) -> None:
     _git(repo, "config", "user.email", "152444602+marshallguillory86@users.noreply.github.com")
     _git(repo, "config", "user.name", "marshallguillory86")
     _git(repo, "config", "commit.gpgsign", "false")
+    _git(repo, "config", "tag.gpgsign", "false")
+    # A machine-wide pre-push hook may require every pushed repository to
+    # declare a local pipeline; this throwaway one declares a trivial one.
+    (repo / ".local-pipeline").write_text("true\n", encoding="utf-8")
 
 
 def _create_release_fixture(tmp_path: Path, *, origin_has_tag: bool) -> Path:

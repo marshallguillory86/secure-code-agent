@@ -1,8 +1,13 @@
 name: Release
 
+# Started by cut-release.yml on the tag it cuts from a version bump merged to
+# main (a dispatch, because a tag pushed with the workflow token triggers no
+# push event), or by a v* tag the maintainer pushes. Publishing to PyPI waits
+# for the maintainer's approval in the `pypi` environment.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -45,6 +50,20 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Only a commit that reached main through its required checks is
+      # released. A v* tag on any other commit stops here.
+      - name: The tagged commit is on main
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA is not on main; only a commit on main is released"
+            exit 1
+          fi
+          echo "ok    $GITHUB_SHA is on main"
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -122,8 +141,10 @@ jobs:
       - name: Publish to PyPI with trusted publishing
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 
+  # After PyPI, so no GitHub release appears for a version the maintainer has
+  # not approved.
   publish-github:
-    needs: build
+    needs: [build, publish-pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: write

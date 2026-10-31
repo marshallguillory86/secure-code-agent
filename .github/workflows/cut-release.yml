@@ -1,0 +1,72 @@
+name: Cut release
+
+# A release starts from a version bump merged to main, not from a tag a person
+# pushes. On every merge this reads `__version__`; when no `v<version>` tag
+# exists yet it tags the merge commit and starts release.yaml on that tag,
+# where publishing waits for the maintainer's approval in the `pypi`
+# environment. No tests run here: the pull request ran them.
+#
+# The release is started with `gh workflow run` because a tag pushed with the
+# workflow's own token does not trigger another workflow's `push` event, while
+# a dispatch does.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cut-release
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    name: Tag a new version and start its release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Decide whether this version is released
+        id: decide
+        shell: bash
+        # Writes tag=v<version> and release=true|false. Read from the
+        # remote, so a tag that exists on GitHub is never cut again.
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/secure_code_audit/__init__.py)
+          if [ -z "$version" ]; then
+            echo "no __version__ literal in src/secure_code_audit/__init__.py" >&2
+            exit 1
+          fi
+          tag="v${version}"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" > /dev/null; then
+            echo "${tag} already exists; nothing to release"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "${tag} is new; it will be cut from this commit"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Tag the merge commit
+        if: steps.decide.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.decide.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+
+      - name: Start the release on the new tag
+        if: steps.decide.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.decide.outputs.tag }}
+        run: gh workflow run release.yaml --ref "$TAG"
