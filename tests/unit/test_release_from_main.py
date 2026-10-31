@@ -168,14 +168,31 @@ def test_release_workflow_guards_the_build_to_a_tagged_commit_on_main(tmp_path):
     assert triggers["push"] == {"tags": ["v*"]}
     assert "branches" not in triggers["push"]
 
-    build_steps = workflow["jobs"]["build"]["steps"]
+    decide = workflow["jobs"]["decide"]
+    assert "needs" not in decide
+    assert decide["permissions"] == {"contents": "read"}
+    assert decide["outputs"]["version"] == "${{ steps.version.outputs.version }}"
+    assert workflow["jobs"]["python-versions"]["needs"] == "decide"
+
+    build = workflow["jobs"]["build"]
+    build_needs = build["needs"]
+    build_needs = build_needs if isinstance(build_needs, list) else [build_needs]
+    assert "decide" in build_needs
+    assert "python-versions" in build_needs
+    assert all(
+        step.get("name")
+        not in {"The tagged commit is on main", "The version is new or matches its tag"}
+        for step in build["steps"]
+    )
+
+    decide_steps = decide["steps"]
     checkout_index = next(
         index
-        for index, step in enumerate(build_steps)
+        for index, step in enumerate(decide_steps)
         if step.get("uses", "").startswith("actions/checkout@")
     )
-    assert build_steps[checkout_index]["with"]["fetch-depth"] == 0
-    guard = build_steps[checkout_index + 1]
+    assert decide_steps[checkout_index]["with"]["fetch-depth"] == 0
+    guard = decide_steps[checkout_index + 1]
     assert guard["name"] == "The tagged commit is on main"
 
     repo, commit_b, commit_c = _create_main_history(tmp_path)
@@ -191,10 +208,12 @@ def test_release_workflow_guards_the_build_to_a_tagged_commit_on_main(tmp_path):
 
 def test_the_release_version_step_refuses_a_released_version(tmp_path):
     workflow = _workflow(".github/workflows/release.yaml")
-    build = workflow["jobs"]["build"]
-    version_step = _step(workflow, "build", "The version is new or matches its tag")
+    decide = workflow["jobs"]["decide"]
+    version_step = _step(workflow, "decide", "The version is new or matches its tag")
 
-    assert build["outputs"]["version"] == "${{ steps.version.outputs.version }}"
+    assert "needs" not in decide
+    assert decide["permissions"] == {"contents": "read"}
+    assert decide["outputs"]["version"] == "${{ steps.version.outputs.version }}"
 
     untagged_repo = _create_release_fixture(tmp_path, origin_has_tag=False)
     output = tmp_path / "version-output"
@@ -260,11 +279,27 @@ def test_release_publication_jobs_use_trusted_publishing_and_ordering():
     assert publish_pypi["permissions"] == {"id-token": "write"}
     tag_needs = tag["needs"]
     assert "publish-pypi" in (tag_needs if isinstance(tag_needs, list) else [tag_needs])
+    assert "decide" in (tag_needs if isinstance(tag_needs, list) else [tag_needs])
     assert tag["permissions"] == {"contents": "write"}
     tag_scripts = "\n".join(step.get("run", "") for step in tag["steps"])
+    tag_env = "\n".join(
+        value
+        for step in tag["steps"]
+        for value in step.get("env", {}).values()
+        if isinstance(value, str)
+    )
     assert "git tag" in tag_scripts
     assert "git push" in tag_scripts
     assert "GITHUB_REF_TYPE" in tag_scripts
+    assert "needs.decide.outputs.version" in tag_env
     needs = publish_github["needs"]
     assert "publish-pypi" in (needs if isinstance(needs, list) else [needs])
     assert "tag" in (needs if isinstance(needs, list) else [needs])
+    assert "decide" in (needs if isinstance(needs, list) else [needs])
+    github_env = "\n".join(
+        value
+        for step in publish_github["steps"]
+        for value in step.get("env", {}).values()
+        if isinstance(value, str)
+    )
+    assert "needs.decide.outputs.version" in github_env
