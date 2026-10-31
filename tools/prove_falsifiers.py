@@ -36,20 +36,24 @@ import ast
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404 - runs git and pytest only, argv lists, never a shell
 import sys
 import tempfile
-import xml.etree.ElementTree as ET  # noqa: S405 - parses pytest's own junit output
 from pathlib import Path
 
 COVERS_EXISTING = "Covers existing behaviour:"
 _ADDED_TEST = re.compile(r"^\+\s*(?:async\s+)?def (test_\w+)\b", re.M)
 _TIMEOUT = 600
+#: One line per test from `pytest -v`: the node id, then its outcome.
+_RESULT = re.compile(r"^(\S+::\S+) (PASSED|FAILED|SKIPPED|ERROR|XFAIL|XPASS)\b", re.M)
 
 
 def _git(root: Path, *args: str) -> str:
-    result = subprocess.run(  # noqa: S603 - fixed argv, never a shell
-        ["git", *args],  # noqa: S607
+    git = shutil.which("git")
+    if git is None:
+        raise SystemExit("git is not on PATH")
+    result = subprocess.run(  # nosec B603 - git by absolute path, fixed argv, never a shell
+        [git, *args],
         cwd=root,
         capture_output=True,
         text=True,
@@ -118,35 +122,28 @@ def in_scope(root: Path, base: str) -> list[str]:
     return sorted(node_ids)
 
 
-def _outcomes(report: Path, node_ids: list[str]) -> dict[str, str]:
-    """`failed`, `import`, `passed`, `skipped` or `not run` for each node id."""
-    cases = []
-    if report.is_file():
-        for case in ET.parse(report).getroot().iter("testcase"):  # noqa: S314
-            kinds = {child.tag for child in case}
-            cases.append((case.get("classname", ""), case.get("name", ""), kinds))
+def _outcomes(output: str, node_ids: list[str]) -> dict[str, str]:
+    """`failed`, `import`, `passed`, `skipped` or `not run` for each node id.
 
+    Read from pytest's verbose output, one line per test, so nothing is parsed
+    but text this run printed.
+    """
+    results = _RESULT.findall(output)
     outcomes: dict[str, str] = {}
     for node_id in node_ids:
-        path, name = node_id.split("::")
-        module = path[: -len(".py")].replace("/", ".")
-        mine = [
-            kinds
-            for classname, case_name, kinds in cases
-            if classname == module and (case_name == name or case_name.startswith(f"{name}["))
-        ]
-        if mine:
-            if any(kinds & {"failure", "error"} for kinds in mine):
-                outcomes[node_id] = "failed"
-            elif any("skipped" in kinds for kinds in mine):
-                outcomes[node_id] = "skipped"
-            else:
-                outcomes[node_id] = "passed"
-        elif any(
-            "error" in kinds and case_name in (module, path)
-            for classname, case_name, kinds in cases
-            if not classname or classname == module
-        ):
+        path = node_id.split("::")[0]
+        mine = {
+            status
+            for reported, status in results
+            if reported == node_id or reported.startswith(f"{node_id}[")
+        }
+        if mine & {"FAILED", "ERROR", "XFAIL"}:
+            outcomes[node_id] = "failed"
+        elif "SKIPPED" in mine:
+            outcomes[node_id] = "skipped"
+        elif mine:
+            outcomes[node_id] = "passed"
+        elif re.search(rf"^ERROR (?:collecting )?{re.escape(path)}\b", output, re.M):
             outcomes[node_id] = "import"
         else:
             outcomes[node_id] = "not run"
@@ -173,9 +170,8 @@ def run_at_base(root: Path, base: str, node_ids: list[str]) -> dict[str, str]:
         for node_id in node_ids:
             by_file.setdefault(node_id.split("::")[0], []).append(node_id)
         outcomes: dict[str, str] = {}
-        for index, (_path, selected) in enumerate(sorted(by_file.items())):
-            report = scratch / f"report-{index}.xml"
-            subprocess.run(  # noqa: S603 - fixed argv, never a shell
+        for _path, selected in sorted(by_file.items()):
+            completed = subprocess.run(  # nosec B603 - this interpreter's pytest, fixed argv
                 [
                     sys.executable,
                     "-m",
@@ -186,8 +182,8 @@ def run_at_base(root: Path, base: str, node_ids: list[str]) -> dict[str, str]:
                     "addopts=",
                     "--rootdir",
                     str(tree),
-                    f"--junitxml={report}",
-                    "-q",
+                    "-v",
+                    "-rA",
                     *selected,
                 ],
                 cwd=tree,
@@ -197,7 +193,7 @@ def run_at_base(root: Path, base: str, node_ids: list[str]) -> dict[str, str]:
                 check=False,
                 timeout=_TIMEOUT,
             )
-            outcomes.update(_outcomes(report, selected))
+            outcomes.update(_outcomes(completed.stdout + completed.stderr, selected))
         return outcomes
     finally:
         _git(root, "worktree", "remove", "--force", str(tree))
