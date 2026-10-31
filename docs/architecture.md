@@ -1,6 +1,6 @@
 # secure-code-agent — Architecture Audit
 
-> Status: **v0.13.3 — 2026-10-30.** Assessment of the system as built.
+> Status: **v0.13.4 — 2026-10-31.** Assessment of the system as built.
 > Companion docs: [`design.md`](design.md) states the intended architecture;
 > this document records where the implementation diverges from it and which
 > divergences are generating recurring defects.
@@ -358,8 +358,11 @@ current figures come from the audit.
 - ~~**`secure-code-report.json` is not gitignored** while `secure-code-report.md`
   is, so a CI-shaped local run leaves an untracked file behind.~~ **Closed** —
   both are ignored now.
-- **`environment: name: pypi`** in `release.yml` requires that environment to
-  exist in repository settings before the first tagged release will publish.
+- ~~**`environment: name: pypi`** in `release.yml` requires that environment to
+  exist in repository settings before the first tagged release will publish.~~
+  **Closed** — the `pypi` environment exists, requires the maintainer's
+  approval, and deploys only from `main` or a `v*` tag; `release.yaml`
+  publishes through it and cuts the tag afterwards (D38).
 
 ## 6a. Duplication findings that are not duplication
 

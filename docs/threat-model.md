@@ -1,6 +1,6 @@
 # Threat model
 
-> Status: **v0.13.3 — 2026-10-30.** What this tool trusts, and where the lines are.
+> Status: **v0.13.4 — 2026-10-31.** What this tool trusts, and where the lines are.
 
 `secure-code-agent` runs on developer machines and CI runners. The tool reads source files, exec's scanner binaries, emits report artifacts. Threats below are considered in design; the listed mitigation is what we ship in v0.1.
 

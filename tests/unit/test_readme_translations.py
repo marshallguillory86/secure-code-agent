@@ -16,6 +16,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 README = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -62,3 +63,25 @@ def test_every_badge_names_this_package_owner_and_a_real_workflow() -> None:
             assert "marshallguillory86/secure-code-agent" in image
         for workflow in re.findall(r"workflows/([\w.-]+\.yml)", image + link):
             assert (ROOT / ".github" / "workflows" / workflow).is_file(), workflow
+
+
+def test_a_badge_for_main_reads_a_workflow_that_runs_on_main() -> None:
+    badges = [
+        image
+        for image, _ in _badges(README)
+        if "/github/actions/workflow/status/" in image and "branch=main" in image
+    ]
+    assert badges, "README has no main-branch workflow status badge"
+
+    for image in badges:
+        match = re.search(r"/([^/?#]+\.ya?ml)(?:[?/#]|$)", image)
+        assert match, f"could not find a workflow file name in badge URL: {image}"
+        workflow = match.group(1)
+        document = yaml.safe_load(
+            (ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
+        )
+        triggers = document.get("on", document.get(True, {}))
+        assert isinstance(triggers, dict), f"{workflow} has no workflow triggers"
+        push = triggers.get("push")
+        assert isinstance(push, dict), f"{workflow} does not trigger on push"
+        assert "main" in push.get("branches", []), f"{workflow} does not trigger on push to main"

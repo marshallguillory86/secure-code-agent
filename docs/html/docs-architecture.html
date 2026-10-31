@@ -33,7 +33,7 @@
 </div>
 </aside>
 <main><div class="meta">Decisions and architecture</div><h1>secure-code-agent — Architecture Audit</h1><blockquote>
-<p>Status: <strong>v0.13.3 — 2026-10-30.</strong> Assessment of the system as built.
+<p>Status: <strong>v0.13.4 — 2026-10-31.</strong> Assessment of the system as built.
 Companion docs: <a href="docs-design.html"><code>design.md</code></a> states the intended architecture;
 this document records where the implementation diverges from it and which
 divergences are generating recurring defects.</p>
@@ -391,8 +391,11 @@ current figures come from the audit.</p>
 <li>~~<strong><code>secure-code-report.json</code> is not gitignored</strong> while <code>secure-code-report.md</code>
   is, so a CI-shaped local run leaves an untracked file behind.~~ <strong>Closed</strong> —
   both are ignored now.</li>
-<li><strong><code>environment: name: pypi</code></strong> in <code>release.yml</code> requires that environment to
-  exist in repository settings before the first tagged release will publish.</li>
+<li>~~<strong><code>environment: name: pypi</code></strong> in <code>release.yml</code> requires that environment to
+  exist in repository settings before the first tagged release will publish.~~
+  <strong>Closed</strong> — the <code>pypi</code> environment exists, requires the maintainer's
+  approval, and deploys only from <code>main</code> or a <code>v*</code> tag; <code>release.yaml</code>
+  publishes through it and cuts the tag afterwards (D38).</li>
 </ul>
 <h2 id="6a-duplication-findings-that-are-not-duplication">6a. Duplication findings that are not duplication</h2>
 <p>Three duplicate blocks under <code>src/</code> are recorded here as <strong>dispositioned,
