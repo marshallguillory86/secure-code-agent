@@ -5,12 +5,16 @@
 <div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
 <div class="layout"><aside><p class="label">On this page</p><div class="toc">
 <ul>
-<li><a href="#0131-2026-10-30">0.13.1 — 2026-10-30</a><ul>
-<li><a href="#fixed-sarif-executionsuccessful-is-the-run-not-the-coverage">Fixed — SARIF executionSuccessful is the run, not the coverage</a></li>
-<li><a href="#docs">Docs</a></li>
+<li><a href="#0133-2026-10-30">0.13.3 — 2026-10-30</a><ul>
+<li><a href="#fixed-a-walk-of-the-audited-tree-never-enters-git">Fixed — a walk of the audited tree never enters .git</a></li>
 </ul>
 </li>
 <li><a href="#0132-2026-10-30">0.13.2 — 2026-10-30</a><ul>
+<li><a href="#docs">Docs</a></li>
+</ul>
+</li>
+<li><a href="#0131-2026-10-30">0.13.1 — 2026-10-30</a><ul>
+<li><a href="#fixed-sarif-executionsuccessful-is-the-run-not-the-coverage">Fixed — SARIF executionSuccessful is the run, not the coverage</a></li>
 <li><a href="#docs_1">Docs</a></li>
 </ul>
 </li>
@@ -186,6 +190,34 @@
 <main><div class="meta">History</div><h1>Changelog</h1><p>All notable changes to <code>secure-code-agent</code> are documented here. Format follows
 <a href="https://keepachangelog.com/">Keep a Changelog</a>. Semver pre-1.0 — config
 schema may evolve.</p>
+<h2 id="0133-2026-10-30">0.13.3 — 2026-10-30</h2>
+<p><strong>An audit could end on a directory that was never part of the audit.</strong></p>
+<h3 id="fixed-a-walk-of-the-audited-tree-never-enters-git">Fixed — a walk of the audited tree never enters <code>.git</code></h3>
+<ul>
+<li>Nine walks of the audited tree used <code>Path.rglob</code>, which descends into
+  <code>.git</code>. On Python 3.11 it raises <code>FileNotFoundError</code> when a directory it
+  listed is gone by the time it opens it, and git adds and removes worktrees
+  under <code>.git/worktrees</code> while it works, so an audit running beside git could
+  end on a directory it was never meant to read. Python 3.12 swallows the
+  error but still walked <code>.git</code>.</li>
+<li>Every walk now goes through one walker (<code>secure_code_audit._walk.walk</code>): it
+  never enters <code>.git</code>, never follows a symlinked directory out of the tree,
+  and treats a directory it cannot open as empty. A structural test refuses
+  <code>rglob</code> anywhere else in the package, and a full-audit test records every
+  directory opened and fails if any is inside <code>.git</code>, on every Python version.</li>
+<li>Nothing in the audit needed <code>.git</code>: history scanners read it through <code>git</code>.</li>
+</ul>
+<h2 id="0132-2026-10-30">0.13.2 — 2026-10-30</h2>
+<h3 id="docs">Docs</h3>
+<ul>
+<li>The README carries a language row and a badge row (PyPI version, Python
+  versions, licence, CI on <code>main</code>, downloads). Short machine-translated pages in
+  Spanish, German, French, Hindi and Simplified Chinese point back to the
+  English README as the only complete copy (D36).</li>
+<li>The project site is published at <a href="https://secure-code-agent.techportfolio.monster/">https://secure-code-agent.techportfolio.monster/</a>:
+  a landing page, the tool's own report on this repository as a live example,
+  and the rendered documentation.</li>
+</ul>
 <h2 id="0131-2026-10-30">0.13.1 — 2026-10-30</h2>
 <p><strong>Coverage was reported to code scanning as a failed run.</strong></p>
 <h3 id="fixed-sarif-executionsuccessful-is-the-run-not-the-coverage">Fixed — SARIF <code>executionSuccessful</code> is the run, not the coverage</h3>
@@ -208,20 +240,9 @@ schema may evolve.</p>
   reads, and for a scanner that is not required and did not complete, which
   until now made coverage <code>PARTIAL</code> without a word in the SARIF.</li>
 </ul>
-<h3 id="docs">Docs</h3>
-<ul>
-<li>The README opens with the project's cover image (<code>docs/brand/sca.png</code>).</li>
-</ul>
-<h2 id="0132-2026-10-30">0.13.2 — 2026-10-30</h2>
 <h3 id="docs_1">Docs</h3>
 <ul>
-<li>The README carries a language row and a badge row (PyPI version, Python
-  versions, licence, CI on <code>main</code>, downloads). Short machine-translated pages in
-  Spanish, German, French, Hindi and Simplified Chinese point back to the
-  English README as the only complete copy (D36).</li>
-<li>The project site is published at <a href="https://secure-code-agent.techportfolio.monster/">https://secure-code-agent.techportfolio.monster/</a>:
-  a landing page, the tool's own report on this repository as a live example,
-  and the rendered documentation.</li>
+<li>The README opens with the project's cover image (<code>docs/brand/sca.png</code>).</li>
 </ul>
 <h2 id="0130-2026-10-05">0.13.0 — 2026-10-05</h2>
 <p><strong>Two ways a grade was issued without the evidence to support it.</strong></p>

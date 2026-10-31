@@ -59,7 +59,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent</a>
 <nav><a href="html/index.html">Documentation</a></nav></div></div>
 <main class="single"><div class="meta">Example report: secure-code-agent auditing its own repository</div>
-<h1>secure-code-agent report</h1><p>Generated: 2026-10-30T23:35:35Z  ·  agent v0.13.2</p>
+<h1>secure-code-agent report</h1><p>Generated: 2026-10-31T02:29:46Z  ·  agent v0.13.3</p>
 <h2>Summary</h2>
 <ul>
 <li><strong>Scanner coverage:</strong> COMPLETE</li>
@@ -73,7 +73,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><code>fail_on_new</code> — 50 finding(s), and no baseline exists yet — on a first run everything is new because there is nothing to compare against. Work the order, then re-run with --bump-baseline to accept what is left and gate on regressions from there.</li>
 </ul>
 </li>
-<li><strong>LOC scanned:</strong> 15,883</li>
+<li><strong>LOC scanned:</strong> 15,913</li>
 </ul>
 <h2>Categories</h2>
 <div class="table-wrap"><table>
@@ -175,9 +175,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 </table></div>
 <h2>Test tree</h2>
 <ul>
-<li><strong>Lines:</strong> 16,160</li>
-<li><strong>Findings:</strong> 2171 — reported, not scored</li>
-<li><strong>By severity:</strong> high: 29, medium: 6, low: 2136</li>
+<li><strong>Lines:</strong> 16,256</li>
+<li><strong>Findings:</strong> 2176 — reported, not scored</li>
+<li><strong>By severity:</strong> high: 29, medium: 6, low: 2141</li>
 <li>Reported, not scored. A project graded on its test fixtures is graded on the wrong thing. Secrets found here are still gated when the configuration names the category, because nothing static separates a live credential from a test certificate.</li>
 </ul>
 <h2>Documentation</h2>
@@ -220,7 +220,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <tr>
 <td><code>builtin_rules</code></td>
 <td><code>completed</code></td>
-<td>builtin/0.13.2</td>
+<td>builtin/0.13.3</td>
 <td><code>—</code></td>
 <td>—</td>
 </tr>
@@ -4394,6 +4394,68 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 </ul>
 <pre><code>269     assert audited[&quot;verify&quot;](report=broken) == 2
 270     assert audited[&quot;verify&quot;](report=audited[&quot;tree&quot;] / &quot;absent.json&quot;) == 2
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_a_vanishing_directory_never_crashes_the_audit.py:56</code></li>
+</ul>
+<pre><code>55     found = {path.relative_to(root).as_posix() for path in walk(root) if path.is_file()}
+56     assert found == {&quot;src/app.py&quot;}
+57
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_a_vanishing_directory_never_crashes_the_audit.py:64-67</code></li>
+</ul>
+<pre><code>63 
+64     assert {path.relative_to(root).as_posix() for path in walk(root, &quot;*.py&quot;)} == {
+65         &quot;src/app.py&quot;,
+66         &quot;gone/inner.py&quot;,
+67     }
+68
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_a_vanishing_directory_never_crashes_the_audit.py:111</code></li>
+</ul>
+<pre><code>110 
+111     assert exit_code == 0
+112     git = (root / &quot;.git&quot;).resolve()
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_a_vanishing_directory_never_crashes_the_audit.py:114</code></li>
+</ul>
+<pre><code>113     inside_git = [path for path in opened if path.resolve() == git or git in path.resolve().parents]
+114     assert inside_git == [], f&quot;the audit opened {len(inside_git)} directories inside .git&quot;
+115
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_a_vanishing_directory_never_crashes_the_audit.py:125</code></li>
+</ul>
+<pre><code>124     ]
+125     assert offenders == []
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -28063,12 +28125,12 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><code>B603</code> — <code>calibration/calibrate.py:74</code> — Reviewed subprocess calls use resolved executables or configured argument arrays, sanitized inputs where applicable, and never invoke a shell. calibration/calibrate.py shells out to git and to this tool's own CLI the same way, and is a study tool rather than part of the shipped package. The two scanners/ paths were scanners/base.py before Scanner was split; see the B404 entry above. (expires 2027-08-01)</li>
 <li><code>B404</code> — <code>src/secure_code_audit/baseline.py:16</code> — Reviewed subprocess imports are required for Git metadata and external scanner adapters; every invocation uses an argument array with shell=False. The two scanners/ paths were scanners/base.py until Scanner was split into its four jobs; the subprocess code moved to _execution.py (running the scanner) and _resolution.py (probing --version) unchanged, and base.py no longer imports subprocess at all, so its entry is gone rather than kept as a path that matches nothing. (expires 2027-08-01)</li>
 <li><code>B603</code> — <code>src/secure_code_audit/baseline.py:168</code> — Reviewed subprocess calls use resolved executables or configured argument arrays, sanitized inputs where applicable, and never invoke a shell. calibration/calibrate.py shells out to git and to this tool's own CLI the same way, and is a study tool rather than part of the shipped package. The two scanners/ paths were scanners/base.py before Scanner was split; see the B404 entry above. (expires 2027-08-01)</li>
-<li><code>B404</code> — <code>src/secure_code_audit/git_tools.py:301</code> — Reviewed subprocess imports. git_tools shells out to a resolved git binary to read HEAD and the changed-file set, which is what scope conformance and --changed-only are built on; mcp_server drives this project's own CLI so the chat surface and the terminal cannot give two different answers. Both use argument arrays with shell=False and an absolute executable. (expires 2027-09-11)</li>
-<li><code>B603</code> — <code>src/secure_code_audit/git_tools.py:307</code> — Same two call sites. Every invocation passes a list, never a string, never a shell, and the executable is resolved to an absolute path first -- git via shutil.which, the CLI via sys.executable. No element is attacker-controlled: the arguments are a repository root this run already resolved and a git ref the operator typed. (expires 2027-09-11)</li>
-<li><code>B404</code> — <code>src/secure_code_audit/git_tools.py:330</code> — Reviewed subprocess imports. git_tools shells out to a resolved git binary to read HEAD and the changed-file set, which is what scope conformance and --changed-only are built on; mcp_server drives this project's own CLI so the chat surface and the terminal cannot give two different answers. Both use argument arrays with shell=False and an absolute executable. (expires 2027-09-11)</li>
-<li><code>B603</code> — <code>src/secure_code_audit/git_tools.py:336</code> — Same two call sites. Every invocation passes a list, never a string, never a shell, and the executable is resolved to an absolute path first -- git via shutil.which, the CLI via sys.executable. No element is attacker-controlled: the arguments are a repository root this run already resolved and a git ref the operator typed. (expires 2027-09-11)</li>
-<li><code>B404</code> — <code>src/secure_code_audit/git_tools.py:365</code> — Reviewed subprocess imports. git_tools shells out to a resolved git binary to read HEAD and the changed-file set, which is what scope conformance and --changed-only are built on; mcp_server drives this project's own CLI so the chat surface and the terminal cannot give two different answers. Both use argument arrays with shell=False and an absolute executable. (expires 2027-09-11)</li>
-<li><code>B603</code> — <code>src/secure_code_audit/git_tools.py:373</code> — Same two call sites. Every invocation passes a list, never a string, never a shell, and the executable is resolved to an absolute path first -- git via shutil.which, the CLI via sys.executable. No element is attacker-controlled: the arguments are a repository root this run already resolved and a git ref the operator typed. (expires 2027-09-11)</li>
+<li><code>B404</code> — <code>src/secure_code_audit/git_tools.py:303</code> — Reviewed subprocess imports. git_tools shells out to a resolved git binary to read HEAD and the changed-file set, which is what scope conformance and --changed-only are built on; mcp_server drives this project's own CLI so the chat surface and the terminal cannot give two different answers. Both use argument arrays with shell=False and an absolute executable. (expires 2027-09-11)</li>
+<li><code>B603</code> — <code>src/secure_code_audit/git_tools.py:309</code> — Same two call sites. Every invocation passes a list, never a string, never a shell, and the executable is resolved to an absolute path first -- git via shutil.which, the CLI via sys.executable. No element is attacker-controlled: the arguments are a repository root this run already resolved and a git ref the operator typed. (expires 2027-09-11)</li>
+<li><code>B404</code> — <code>src/secure_code_audit/git_tools.py:332</code> — Reviewed subprocess imports. git_tools shells out to a resolved git binary to read HEAD and the changed-file set, which is what scope conformance and --changed-only are built on; mcp_server drives this project's own CLI so the chat surface and the terminal cannot give two different answers. Both use argument arrays with shell=False and an absolute executable. (expires 2027-09-11)</li>
+<li><code>B603</code> — <code>src/secure_code_audit/git_tools.py:338</code> — Same two call sites. Every invocation passes a list, never a string, never a shell, and the executable is resolved to an absolute path first -- git via shutil.which, the CLI via sys.executable. No element is attacker-controlled: the arguments are a repository root this run already resolved and a git ref the operator typed. (expires 2027-09-11)</li>
+<li><code>B404</code> — <code>src/secure_code_audit/git_tools.py:367</code> — Reviewed subprocess imports. git_tools shells out to a resolved git binary to read HEAD and the changed-file set, which is what scope conformance and --changed-only are built on; mcp_server drives this project's own CLI so the chat surface and the terminal cannot give two different answers. Both use argument arrays with shell=False and an absolute executable. (expires 2027-09-11)</li>
+<li><code>B603</code> — <code>src/secure_code_audit/git_tools.py:375</code> — Same two call sites. Every invocation passes a list, never a string, never a shell, and the executable is resolved to an absolute path first -- git via shutil.which, the CLI via sys.executable. No element is attacker-controlled: the arguments are a repository root this run already resolved and a git ref the operator typed. (expires 2027-09-11)</li>
 <li><code>B404</code> — <code>src/secure_code_audit/mcp_server.py:25</code> — Reviewed subprocess imports. git_tools shells out to a resolved git binary to read HEAD and the changed-file set, which is what scope conformance and --changed-only are built on; mcp_server drives this project's own CLI so the chat surface and the terminal cannot give two different answers. Both use argument arrays with shell=False and an absolute executable. (expires 2027-09-11)</li>
 <li><code>B603</code> — <code>src/secure_code_audit/mcp_server.py:43</code> — Same two call sites. Every invocation passes a list, never a string, never a shell, and the executable is resolved to an absolute path first -- git via shutil.which, the CLI via sys.executable. No element is attacker-controlled: the arguments are a repository root this run already resolved and a git ref the operator typed. (expires 2027-09-11)</li>
 <li><code>B404</code> — <code>src/secure_code_audit/scanners/_execution.py:12</code> — Reviewed subprocess imports are required for Git metadata and external scanner adapters; every invocation uses an argument array with shell=False. The two scanners/ paths were scanners/base.py until Scanner was split into its four jobs; the subprocess code moved to _execution.py (running the scanner) and _resolution.py (probing --version) unchanged, and base.py no longer imports subprocess at all, so its entry is gone rather than kept as a path that matches nothing. (expires 2027-08-01)</li>

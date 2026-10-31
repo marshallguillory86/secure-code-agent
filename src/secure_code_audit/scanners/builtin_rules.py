@@ -16,6 +16,7 @@ import re
 from pathlib import Path
 from typing import NamedTuple
 
+from secure_code_audit._walk import walk
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Confidence, Finding, Severity
 from secure_code_audit.git_tools import in_scope, is_excluded
@@ -187,7 +188,7 @@ class BuiltinRulesScanner(Scanner):
         return False
 
     def _candidate_files(self, target: Path, config: Config):
-        for path in target.rglob("*"):
+        for path in walk(target):
             if not path.is_file():
                 continue
             if is_excluded(path, target, config.exclude_patterns):

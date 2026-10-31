@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from secure_code_audit._walk import walk
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.scanner_status import ScanResult
@@ -79,7 +80,7 @@ class NpmAuditScanner(Scanner):
 
     def _discover_package_dirs(self, root: Path, excludes: tuple[str, ...]) -> list[Path]:
         out: list[Path] = []
-        for path in root.rglob("package-lock.json"):
+        for path in walk(root, "package-lock.json"):
             rel = str(path.relative_to(root).as_posix())
             if any(rel.startswith(e) or f"/{e}" in f"/{rel}" for e in excludes):
                 continue

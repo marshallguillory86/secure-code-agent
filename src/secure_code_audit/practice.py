@@ -43,6 +43,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from secure_code_audit._walk import walk
+
 #: A repository holding configuration but running none of it. MA's
 #: `MAX_WITHOUT_CI`, same value and same reasoning: intent is not enforcement,
 #: and the gap between them is the most useful thing this measurement reports.
@@ -198,7 +200,7 @@ def _ci_files(root: Path) -> list[Path]:
     for location in CI_LOCATIONS:
         candidate = root / location
         if candidate.is_dir():
-            found.extend(p for p in sorted(candidate.rglob("*")) if p.is_file())
+            found.extend(p for p in sorted(walk(candidate)) if p.is_file())
         elif candidate.is_file():
             found.append(candidate)
     return found

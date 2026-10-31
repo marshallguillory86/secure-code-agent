@@ -31,6 +31,7 @@ from secure_code_audit import history as history_mod
 from secure_code_audit import pillar as pillar_mod
 from secure_code_audit import practice as practice_mod
 from secure_code_audit import verify as verify_mod
+from secure_code_audit._walk import walk
 from secure_code_audit.capabilities import (
     AXIS_PREFIX,
     capability_for,
@@ -908,7 +909,7 @@ def _repository_inventory(target: Path, cfg: config_mod.Config) -> tuple[set[str
 
     extensions: set[str] = set()
     filenames: set[str] = set()
-    for path in target.rglob("*"):
+    for path in walk(target):
         if not path.is_file() or is_excluded(path, target, cfg.exclude_patterns):
             continue
         extensions.add(path.suffix)
