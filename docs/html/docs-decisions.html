@@ -46,11 +46,12 @@
 <li><a href="#d35-coverage-names-a-language-nothing-read-depth-is-still-open">D35 — Coverage names a language nothing read; depth is still open</a></li>
 <li><a href="#d36-translated-readmes-are-short-pages-not-full-translations">D36 — Translated READMEs are short pages, not full translations</a></li>
 <li><a href="#d37-a-pull-request-runs-each-test-once-the-python-matrix-runs-on-release-tags">D37 — A pull request runs each test once; the Python matrix runs on release tags</a></li>
+<li><a href="#d38-a-release-starts-from-a-version-bump-on-main-publishes-on-approval-then-tags">D38 — A release starts from a version bump on main, publishes on approval, then tags</a></li>
 </ul>
 </div>
 </aside>
 <main><div class="meta">Decisions and architecture</div><h1>Decision register</h1><blockquote>
-<p>Status: <strong>v0.13.3 — 2026-10-30.</strong> The decision register. D1–D37.</p>
+<p>Status: <strong>v0.13.3 — 2026-10-30.</strong> The decision register. D1–D38.</p>
 </blockquote>
 <p>Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on <code>maintainability-agent</code>'s register, which exists
@@ -2528,5 +2529,39 @@ ran the whole suite again against the installed scanner floor. Every merge to
 because the release cannot publish until the matrix is green; what is given up
 is finding it on the pull request rather than at the tag, for every pull
 request's cost in runner minutes.</p>
+<h2 id="d38-a-release-starts-from-a-version-bump-on-main-publishes-on-approval-then-tags">D38 — A release starts from a version bump on main, publishes on approval, then tags</h2>
+<p><strong>Status:</strong> Accepted · 2026-10-31</p>
+<p><strong>Context.</strong> A release began with a person pushing a signed <code>v*</code> tag from a
+laptop. Nothing checked that the tagged commit had reached <code>main</code> through its
+required checks, the <code>pypi</code> environment that publishes through PyPI Trusted
+Publishing had no protection rules, and a tag could be moved or deleted after
+the fact.</p>
+<p><strong>Decision.</strong></p>
+<ul>
+<li>A release is a pull request that bumps <code>__version__</code>. On the merge,
+  <code>cut-release.yml</code> sees an untagged version and dispatches <code>release.yaml</code> on
+  <code>main</code>. It runs no tests and cuts no tag.</li>
+<li><code>release.yaml</code> refuses a commit that is not on <code>main</code> and a version that is
+  already tagged, runs the Python version matrix and the full suite (D37), and
+  builds and attests the distributions.</li>
+<li><code>publish-pypi</code> runs in the <code>pypi</code> environment, which requires the
+  maintainer's approval and deploys only from <code>main</code> or a <code>v*</code> tag.</li>
+<li>The tag is cut after PyPI accepts the upload, and the GitHub release follows
+  the tag. A declined approval or a failed build therefore leaves no tag
+  naming a version PyPI does not have.</li>
+<li>A ruleset makes <code>v*</code> tags immutable: no update and no deletion, except by an
+  administrator.</li>
+<li>No long-lived credential: PyPI publishing stays on OpenID Connect, scoped to
+  the publish job.</li>
+</ul>
+<p><strong>Rejected: tagging first.</strong> It was built that way first. A tag cut before
+the approval names a version that may never reach PyPI, and the next release
+of that version is then refused as already tagged.</p>
+<p><strong>Rejected: restricting who may create a <code>v*</code> tag.</strong> On a repository owned by
+a user rather than an organization, GitHub does not accept the Actions app as
+a ruleset bypass, so restricting creation would stop the release's own tag
+job. The way around it, a deploy key, is a stored credential this release
+exists to avoid. A stray tag cannot ship anyway: the build refuses a commit
+off <code>main</code>, and publishing waits for approval.</p>
 <footer>Rendered from <code>docs/decisions.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
 </main></div></body></html>

@@ -1,9 +1,10 @@
 name: Release
 
-# Started by cut-release.yml on the tag it cuts from a version bump merged to
-# main (a dispatch, because a tag pushed with the workflow token triggers no
-# push event), or by a v* tag the maintainer pushes. Publishing to PyPI waits
-# for the maintainer's approval in the `pypi` environment.
+# Started on main by cut-release.yml when a version bump merges, or by a v* tag
+# the maintainer pushes. The build refuses a commit off main and a version
+# already tagged; publishing to PyPI waits for the maintainer's approval in the
+# `pypi` environment; the tag is cut only after PyPI accepts the upload, and
+# the GitHub release follows the tag.
 on:
   push:
     tags: ["v*"]
@@ -43,6 +44,8 @@ jobs:
   build:
     needs: python-versions
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     permissions:
       contents: read
       id-token: write
@@ -70,17 +73,32 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Read from the package, which is now the only place the version is
-      # written — pyproject derives it via `[tool.setuptools.dynamic]`. This
-      # step used to read pyproject's own `version =` line, so when that line
-      # and the package disagreed it compared the tag against the half that was
-      # right and shipped the half that was wrong: v0.4.0 went out stamping
-      # 0.3.0 into every artifact it produced.
-      - name: Verify tag matches package version
+      # Read from the package, the only place the version is written:
+      # pyproject derives it. On a tag run the tag must name this version (an
+      # earlier step read pyproject instead, and v0.4.0 shipped stamping
+      # 0.3.0). On a run from main the version must not be tagged yet, so a
+      # version already released is never built and published again.
+      - name: The version is new or matches its tag
+        id: version
+        shell: bash
         run: |
-          PACKAGE_VERSION="$(python -c 'import sys; sys.path.insert(0, "src"); import secure_code_audit; print(secure_code_audit.__version__)')"
-          echo "tag=${GITHUB_REF_NAME} package=v${PACKAGE_VERSION}"
-          test "${GITHUB_REF_NAME}" = "v${PACKAGE_VERSION}"
+          set -euo pipefail
+          version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/secure_code_audit/__init__.py)
+          if [ -z "$version" ]; then
+            echo "::error::no __version__ literal in src/secure_code_audit/__init__.py"
+            exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} does not name the package version v${version}"
+              exit 1
+            fi
+          elif git ls-remote --exit-code --tags origin "refs/tags/v${version}" > /dev/null; then
+            echo "::error::v${version} is already tagged; bump the version to release again"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "ok    releasing v${version}"
 
       # The verification step below runs this repository's own gate, and the
       # config requires `["floor"]`. Installing only `[dev,required-scanners]`
@@ -141,10 +159,35 @@ jobs:
       - name: Publish to PyPI with trusted publishing
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 
-  # After PyPI, so no GitHub release appears for a version the maintainer has
-  # not approved.
-  publish-github:
+  # The tag is cut only after PyPI has accepted the upload, so a declined
+  # approval or a failed build leaves no tag naming a version PyPI does not
+  # have. A run started by a pushed tag already has its tag.
+  tag:
     needs: [build, publish-pypi]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Tag the released commit
+        env:
+          TAG: v${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "this run was started by ${GITHUB_REF_NAME}; nothing to cut"
+            exit 0
+          fi
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+
+  # After the tag, so no GitHub release appears for a version PyPI does not
+  # have.
+  publish-github:
+    needs: [build, publish-pypi, tag]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -159,4 +202,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/* --verify-tag --generate-notes
+          TAG: v${{ needs.build.outputs.version }}
+        run: gh release create "$TAG" dist/* --verify-tag --generate-notes

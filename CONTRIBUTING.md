@@ -139,7 +139,24 @@ Conventional Commits:
 
 ## Releasing
 
-In the release commit, alongside the version bump:
+A release is a pull request that bumps `__version__` in
+`src/secure_code_audit/__init__.py`. Nobody pushes a tag by hand:
+
+1. The release pull request passes its checks and merges to `main`.
+2. `cut-release.yml` sees a version with no `v<version>` tag and starts
+   `release.yaml` on `main`.
+3. `release.yaml` refuses a commit that is not on `main` and a version that is
+   already tagged, runs the Python version matrix and the full suite, and
+   builds and attests the distributions.
+4. Publishing to PyPI waits for the maintainer's approval in the `pypi`
+   environment (Actions → the run → *Review deployments*).
+5. Only after PyPI accepts the upload is `v<version>` tagged, and the GitHub
+   release follows the tag. A declined approval or a failed build leaves no
+   tag, so the same version can be released once the cause is fixed.
+
+Release tags cannot be moved or deleted once cut.
+
+In the release pull request, alongside the version bump:
 
 - Stamp the new version into every document that states it with
   `python tools/stamp_version.py --root .`: each `docs/` status line and the

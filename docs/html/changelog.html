@@ -197,11 +197,22 @@ schema may evolve.</p>
 <h2 id="unreleased">Unreleased</h2>
 <h3 id="project">Project</h3>
 <ul>
-<li>Community files: <code>CODE_OF_CONDUCT.md</code>, <code>ACCESSIBILITY.md</code>, a pull-request
+<li>
+<p><strong>A release starts from a version bump on main (D38).</strong> Merging a pull
+  request that bumps <code>__version__</code> starts the release; nobody pushes a tag.
+  The build refuses a commit off <code>main</code> and a version already tagged.
+  Publishing to PyPI waits for the maintainer's approval in the <code>pypi</code>
+  environment, which deploys only from <code>main</code> or a <code>v*</code> tag. The tag is cut
+  after PyPI accepts the upload, the GitHub release follows it, and release
+  tags cannot be moved or deleted.</p>
+</li>
+<li>
+<p>Community files: <code>CODE_OF_CONDUCT.md</code>, <code>ACCESSIBILITY.md</code>, a pull-request
   template, bug and incorrect-claim issue templates (with security reports
   routed to a private advisory), and a sponsor link.
   <code>tests/unit/test_accessibility_statement_holds.py</code> holds each claim the
-  accessibility statement makes about the outputs.</li>
+  accessibility statement makes about the outputs.</p>
+</li>
 <li><code>tools/stamp_version.py</code> writes the release version into every document
   that states it, and refuses a document that no longer matches rather than
   skipping it.</li>
