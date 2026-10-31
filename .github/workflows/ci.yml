@@ -1,9 +1,13 @@
 name: CI
 
+# A pull request runs one job: the full suite once, on one Python, with the
+# scanner floor installed, then the repository's own required-coverage audit.
+# Each test runs once per pipeline run. The Python version matrix runs on
+# release tags (release.yaml), and a merge to main runs no tests: it runs the
+# self-audit that keeps code scanning current (self-audit.yml).
+
 on:
   pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -15,105 +19,13 @@ concurrency:
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }}
+    name: Tests and scanner coverage
     runs-on: ubuntu-latest
-    # A hung child process cost 45 minutes of billed runner time on
-    # 2026-10-04 before anything killed it, while the same job on every
-    # other interpreter finished in about two and a half minutes. Worse than
-    # the bill: the required `Required scanner coverage` job needs this one,
-    # so it was *skipped* rather than failed, and a required check that never
-    # reports blocks a merge instead of refusing it. These bounds are
-    # generous against the real runtimes and exist to make the next hang
-    # cheap and legible. `test_every_child_process_is_bounded` is the other
-    # half: it stops the suite spawning an unbounded child in the first
-    # place.
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-
-      - name: Install project
-        run: python -m pip install --disable-pip-version-check -e ".[dev]"
-
-      - name: Lint
-        run: python -m ruff check .
-
-      - name: Check formatting
-        run: python -m ruff format --check .
-
-      # No --cov-fail-under here: a command-line value beats pyproject.toml,
-      # and this one said 85 while the declared floor said 92. The floor is
-      # declared once, in pyproject.toml, and this job reads it from there.
-      - name: Test with branch coverage
-        run: >-
-          python -m pytest
-          -o cache_dir=.pytest-cache-ci
-          --cov=secure_code_audit
-          --cov-branch
-          --cov-report=term-missing
-
-      - name: Build wheel through pip
-        run: python -m pip wheel . --no-deps --wheel-dir wheelhouse
-
-  ruleset:
-    name: Offline ruleset
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      # The paired-fixture tests skip without semgrep, and a skip nobody
-      # notices is how a ruleset rots. This job exists so they always run.
-      # `python-scanners` brings semgrep, bandit and njsscan; RuboCop is a gem.
-      - name: Install project with the Semgrep engine
-        run: python -m pip install --disable-pip-version-check -e ".[dev,python-scanners]"
-
-      # The overlap tests are the enforceable half of D11 and D12: a rule that
-      # duplicates a floor tool fails the build instead of surviving to a later
-      # audit. Each needs the tool it checks against actually installed, or it
-      # skips and proves nothing.
-      # --user-install because the runner's system gem directory is not
-      # writable, and the user gem bin has to reach PATH or the test finds no
-      # `rubocop` and skips — which the guard below then fails on.
-      - name: Install RuboCop for the Ruby overlap check
-        run: |
-          gem install --user-install --no-document rubocop -v 1.90.0
-          echo "$(ruby -e 'puts Gem.user_dir')/bin" >> "$GITHUB_PATH"
-
-      - name: Every rule fires, none fires on safe code, and none duplicates a tool
-        run: python -m pytest tests/unit/test_offline_ruleset.py -v --no-header --no-cov
-
-      # A skip here means the check did not run. Fail loudly rather than let a
-      # green tick stand for an assertion nobody made.
-      - name: No overlap check was skipped
-        run: |
-          python -m pytest tests/unit/test_offline_ruleset.py -q --no-header -rs --no-cov 2>&1 | tee out.txt
-          if grep -q "skipped" out.txt; then
-            echo "::error::an offline-ruleset test skipped; the tool it needs is missing"
-            exit 1
-          fi
-
-  security:
-    name: Required scanner coverage
-    needs: test
-    runs-on: ubuntu-latest
+    # A hung child process once cost 45 minutes of billed runner time before
+    # anything killed it, and a required check that never reports blocks a
+    # merge instead of refusing it. This bound is generous against the real
+    # runtime; `test_every_child_process_is_bounded` stops the suite spawning
+    # an unbounded child in the first place.
     timeout-minutes: 30
     permissions:
       contents: read
@@ -129,28 +41,61 @@ jobs:
           cache: pip
 
       # One source for the floor install — see ./.github/actions/install-floor.
-      # The list used to live here and nowhere else, so when the floor grew
-      # the release workflow silently fell behind it and every tagged
-      # release would have failed its own preflight.
+      # The suite runs with the floor present, so an adapter test that reads
+      # the real PATH behaves here as it does wherever the tools exist, and the
+      # offline-ruleset tests (which need semgrep, bandit, njsscan and RuboCop)
+      # run rather than skip.
       - name: Install the scanner floor
         uses: ./.github/actions/install-floor
+        with:
+          extras: "dev,python-scanners"
+
+      # --user-install because the runner's system gem directory is not
+      # writable, and the user gem bin has to reach PATH or the Ruby overlap
+      # test finds no `rubocop` and skips, which the guard below fails on.
+      - name: Install RuboCop for the Ruby overlap check
+        run: |
+          gem install --user-install --no-document rubocop -v 1.90.0
+          echo "$(ruby -e 'puts Gem.user_dir')/bin" >> "$GITHUB_PATH"
+
+      - name: Lint
+        run: python -m ruff check .
+
+      - name: Check formatting
+        run: python -m ruff format --check .
+
+      # No --cov-fail-under here: the floor is declared once, in
+      # pyproject.toml, and this run reads it from there. `-rs` lists every
+      # skip, so the guard below can refuse a skipped offline-ruleset test: a
+      # skip nobody notices is how a ruleset rots.
+      - name: Test with branch coverage
+        run: >-
+          python -m pytest
+          -o cache_dir=.pytest-cache-ci
+          --cov=secure_code_audit
+          --cov-branch
+          --cov-report=term-missing
+          -rs 2>&1 | tee pytest-output.txt;
+          exit "${PIPESTATUS[0]}"
+        shell: bash
+
+      - name: No offline-ruleset test was skipped
+        run: |
+          if grep -E "^SKIPPED .*test_offline_ruleset" pytest-output.txt; then
+            echo "::error::an offline-ruleset test skipped; the tool it needs is missing"
+            exit 1
+          fi
+
+      - name: Build wheel through pip
+        run: python -m pip wheel . --no-deps --wheel-dir wheelhouse
 
       - name: Verify the required scanner toolchain resolves
         run: secure-code-agent --config secure-code-agent.json --preflight
 
-      # The `test` job installs no scanners, so an adapter test that reads the
-      # real PATH behaves differently there than anywhere the tools exist. That
-      # difference was invisible until the release workflow — the only job that
-      # ran the suite with the floor installed — failed on argument positions
-      # in `test_osv_parses_vulnerabilities`. Running the suite here too means
-      # a host-dependent test fails on a pull request rather than at a tag.
-      - name: Run the suite against the installed floor
-        run: python -m pytest -o cache_dir=.pytest-cache-floor -q --no-header --no-cov
-
       # Scorecard is not here on purpose. It is in the declared floor at
       # repository cadence and runs in supply-chain.yml, because its answers
-      # belong to the project rather than the change and take over half an hour
-      # to produce. Its coverage arrives by SARIF import (D3).
+      # belong to the project rather than the change. Its coverage arrives by
+      # SARIF import (D3).
       - name: Run required security coverage
         run: >-
           secure-code-agent
@@ -163,23 +108,15 @@ jobs:
           --prompt-output secure-code-remediation-prompt.md
           --comment-output secure-code-pr-comment.md
 
-      # The audit step exits nonzero when required coverage fails, and that is
-      # exactly the SARIF worth publishing: it carries executionSuccessful
-      # false. Without a status-check function GitHub applies an implicit
-      # success(), which skipped the upload precisely then and left the
-      # Security tab showing an older clean result. The parentheses matter —
-      # && binds tighter than ||, so without them a fork PR would upload.
-      #
-      # The code-scanning file, not secure-code.sarif: code scanning opens an
-      # alert for every uploaded result and ignores SARIF `suppressions`, so the
-      # record raised a review thread for each test-tree `assert` once paths
-      # became placeable on a pull request (D22). The record is still kept below.
+      # Uploaded even when the audit step failed: that SARIF is the one worth
+      # publishing. The code-scanning file, not secure-code.sarif: code
+      # scanning opens an alert for every uploaded result and ignores SARIF
+      # `suppressions` (D22). Not from a fork, which has no write token.
       - name: Upload SARIF to code scanning
         if: >-
           !cancelled() &&
           hashFiles('secure-code.code-scanning.sarif') != '' &&
-          (github.event_name != 'pull_request' ||
-          github.event.pull_request.head.repo.full_name == github.repository)
+          github.event.pull_request.head.repo.full_name == github.repository
         uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4
         with:
           sarif_file: secure-code.code-scanning.sarif

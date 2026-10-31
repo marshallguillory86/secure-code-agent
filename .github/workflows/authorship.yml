@@ -1,0 +1,117 @@
+name: Authorship
+
+# Is every commit from the expected identity, signed, and free of private
+# names? One job, deliberately: branch protection's required-checks list is
+# keyed on the job name, so a step added to this job is enforced the day it
+# merges, where a new job would sit unenforced until protection named it.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  declared-authorship:
+    name: Commit identity and signatures
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The branch tip, not the default `refs/pull/N/merge`: that is a
+          # merge commit GitHub builds for CI, signed by nobody, which the
+          # signature step would fail on GitHub's own artifact.
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Each commit carries the repository's commit identity
+        # An allowlist: author and committer must both be this identity,
+        # because a rebase or an amend rewrites one and not the other. A
+        # wrong address cannot be removed from a protected branch without a
+        # force-push, so it is refused here, before the merge.
+        run: |
+          set -euo pipefail
+          allowed="152444602+marshallguillory86@users.noreply.github.com"
+          range="origin/${{ github.base_ref }}..HEAD"
+          commits=$(git rev-list --no-merges "$range")
+          if [ -z "$commits" ]; then
+            echo "no non-merge commits in $range; this check proved nothing"
+            exit 1
+          fi
+          failed=0
+          for sha in $commits; do
+            for role in author:%ae committer:%ce; do
+              addr=$(git show -s --format="${role#*:}" "$sha")
+              if [ "$addr" = "$allowed" ]; then
+                echo "ok    $sha  ${role%%:*}: $addr"
+              else
+                echo "FAIL  $sha  ${role%%:*}: $addr"
+                failed=1
+              fi
+            done
+          done
+          exit $failed
+
+      - name: Each commit is signed
+        # Verified against .github/allowed_signers, which lives in the repo
+        # and changes only by reviewed pull request. Every commit is checked,
+        # merges included: a merge carries the conflict resolution its author
+        # wrote. B means the commit changed after it was signed.
+        run: |
+          set -euo pipefail
+          git config gpg.ssh.allowedSignersFile .github/allowed_signers
+          range="origin/${{ github.base_ref }}..HEAD"
+          commits=$(git rev-list "$range")
+          if [ -z "$(git rev-list --no-merges "$range")" ]; then
+            echo "no non-merge commits in $range; this check proved nothing"
+            exit 1
+          fi
+          failed=0
+          for sha in $commits; do
+            state=$(git log -1 --format='%G?' "$sha")
+            case "$state" in
+              G) echo "ok    $sha  signed by $(git log -1 --format='%GK' "$sha")" ;;
+              B) echo "FAIL  $sha  BAD signature: the commit was altered after signing"; failed=1 ;;
+              N) echo "FAIL  $sha  unsigned"; failed=1 ;;
+              *) echo "FAIL  $sha  signature state '$state' (key not in .github/allowed_signers?)"; failed=1 ;;
+            esac
+          done
+          exit $failed
+
+      - name: Commit messages name only the commit identity
+        # A message can carry another address, most often in a trailer, and
+        # removing it after it reaches a protected branch takes a history
+        # rewrite.
+        run: |
+          set -euo pipefail
+          allowed="152444602+marshallguillory86@users.noreply.github.com"
+          range="origin/${{ github.base_ref }}..HEAD"
+          commits=$(git rev-list "$range")
+          if [ -z "$(git rev-list --no-merges "$range")" ]; then
+            echo "no non-merge commits in $range; this check proved nothing"
+            exit 1
+          fi
+          failed=0
+          for sha in $commits; do
+            others=$(git show -s --format=%B "$sha" \
+              | grep -o -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' \
+              | grep -v -x -F "$allowed" || true)
+            if [ -n "$others" ]; then
+              echo "FAIL  $sha  message names an address other than the commit identity"
+              failed=1
+            else
+              echo "ok    $sha"
+            fi
+          done
+          exit $failed
+
+      - name: No private repository's name anywhere in the tree
+        # Reads every tracked file and path, and every commit message in the
+        # change. The names live in a secret, never here; without it the
+        # check exits 2 rather than passing.
+        env:
+          PRIVATE_NAMES: ${{ secrets.PRIVATE_NAMES }}
+        run: |
+          python3 tools/check_private_names.py --no-default-file \
+            --messages "origin/${{ github.base_ref }}..HEAD"

@@ -1,6 +1,6 @@
 # Decision register
 
-> Status: **v0.13.3 — 2026-10-30.** The decision register. D1–D36.
+> Status: **v0.13.3 — 2026-10-30.** The decision register. D1–D37.
 
 Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on `maintainability-agent`'s register, which exists
@@ -2413,3 +2413,33 @@ page's shape, and every badge's package, owner and workflow.
 **Rejected: full translations.** Every README change would need five
 translations that nobody here can review, and a translation that drifts from
 the English is worse than none: it states things the tool no longer does.
+
+## D37 — A pull request runs each test once; the Python matrix runs on release tags
+
+**Status:** Accepted · 2026-10-31
+
+**Context.** CI ran the suite three times on every pull request: a five-leg
+Python matrix, an offline-ruleset job, and the required-coverage job, which
+ran the whole suite again against the installed scanner floor. Every merge to
+`main` then ran all of it once more. The tests were the same tests each time.
+
+**Decision.**
+
+- A pull request runs one job, *Tests and scanner coverage*: on Python 3.12,
+  with the scanner floor and RuboCop installed, it runs lint, formatting, the
+  full suite once with coverage, a guard that no offline-ruleset test was
+  skipped, the wheel build, the toolchain preflight and the repository's own
+  required-coverage audit with its code-scanning upload.
+- A merge to `main` runs no tests. `self-audit.yml` runs the audit and uploads
+  its SARIF, so code scanning describes `main`.
+- The Python version matrix (3.10, 3.11, 3.13, 3.14) runs on release tags, in
+  `release.yaml`, before the build. 3.12 is left out of the matrix because the
+  build runs the full suite on it.
+- Branch protection requires *Tests and scanner coverage* and *Commit identity
+  and signatures*.
+
+**Rejected: keeping the matrix on every pull request.** A test that passes on
+3.12 and fails on another supported version is still caught before it ships,
+because the release cannot publish until the matrix is green; what is given up
+is finding it on the pull request rather than at the tag, for every pull
+request's cost in runner minutes.

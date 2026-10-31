@@ -16,6 +16,19 @@ schema may evolve.
 - `tools/stamp_version.py` writes the release version into every document
   that states it, and refuses a document that no longer matches rather than
   skipping it.
+- An **Authorship** check on every pull request, in one job named "Commit
+  identity and signatures":
+  - every commit's author and committer are the repository's commit identity;
+  - every commit is signed by a key in `.github/allowed_signers`;
+  - commit messages name no other address;
+  - no private repository's name appears anywhere in the tree or in the
+    change's messages (`tools/check_private_names.py`, with the names held in
+    a secret).
+- **CI runs each test once (D37).** A pull request runs one job, *Tests and
+  scanner coverage*, on Python 3.12 with the scanner floor installed, in place
+  of a five-leg matrix and two more jobs that re-ran the suite. A merge to
+  `main` runs only the self-audit and its code-scanning upload. The Python
+  version matrix runs on release tags, before the build.
 
 ## 0.13.3 — 2026-10-30
 

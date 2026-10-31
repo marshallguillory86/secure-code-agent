@@ -32,6 +32,7 @@ def _git(
         text=True,
         capture_output=True,
         check=False,
+        timeout=60,
     )
 
 
@@ -55,7 +56,11 @@ def _step_scripts() -> dict[str, str]:
 def _run_gate(
     repo: Path, name: str, *, private_names: str = "example-private-name"
 ) -> subprocess.CompletedProcess[str]:
-    script = _step_scripts()[name].replace("tools/check_private_names.py", str(TOOL))
+    script = (
+        _step_scripts()[name]
+        .replace("${{ github.base_ref }}", "main")
+        .replace("tools/check_private_names.py", str(TOOL))
+    )
     return subprocess.run(
         ["bash", "-c", script],
         cwd=repo,
@@ -63,6 +68,7 @@ def _run_gate(
         text=True,
         capture_output=True,
         check=False,
+        timeout=60,
     )
 
 
@@ -77,6 +83,7 @@ def signed_repo(tmp_path: Path) -> tuple[Path, Callable[..., str]]:
     subprocess.run(
         ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)],
         check=True,
+        timeout=60,
         capture_output=True,
         text=True,
     )
@@ -193,11 +200,17 @@ def test_message_address_other_than_identity_fails(
 
 def test_allowed_signer_matches_local_public_key_when_present() -> None:
     allowed = ROOT / ".github" / "allowed_signers"
-    identity, key = allowed.read_text(encoding="utf-8").split(maxsplit=1)
-    assert identity == COMMIT_IDENTITY
+    entries = [
+        line.split(maxsplit=1)
+        for line in allowed.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    assert entries, "no signer is allowed"
+    assert {identity for identity, _key in entries} == {COMMIT_IDENTITY}
     public_key = Path.home() / ".ssh" / "id_ed25519_signing.pub"
     if public_key.exists():
-        assert key.strip() == public_key.read_text(encoding="utf-8").strip()
+        local = public_key.read_text(encoding="utf-8").split()[:2]
+        assert local in [key.split()[:2] for _identity, key in entries]
 
 
 def test_existing_branch_commits_verify_against_allowed_signers() -> None:
@@ -228,6 +241,7 @@ def test_private_name_in_tmp_tree_fails_without_printing_name(tmp_path: Path) ->
         text=True,
         capture_output=True,
         check=False,
+        timeout=60,
     )
     assert result.returncode == 1
     assert "zebra-quokka" not in result.stdout + result.stderr
@@ -245,6 +259,7 @@ def test_private_name_tool_accepts_clean_tmp_tree(tmp_path: Path) -> None:
         text=True,
         capture_output=True,
         check=False,
+        timeout=60,
     )
     assert result.returncode == 0
     assert "none in tree" in result.stdout
@@ -260,6 +275,7 @@ def test_private_name_tool_returns_two_without_any_names(tmp_path: Path) -> None
         text=True,
         capture_output=True,
         check=False,
+        timeout=60,
     )
     assert result.returncode == 2
     assert "this check proved nothing" in result.stderr

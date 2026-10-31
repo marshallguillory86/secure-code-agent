@@ -205,6 +205,19 @@ schema may evolve.</p>
 <li><code>tools/stamp_version.py</code> writes the release version into every document
   that states it, and refuses a document that no longer matches rather than
   skipping it.</li>
+<li>An <strong>Authorship</strong> check on every pull request, in one job named "Commit
+  identity and signatures":</li>
+<li>every commit's author and committer are the repository's commit identity;</li>
+<li>every commit is signed by a key in <code>.github/allowed_signers</code>;</li>
+<li>commit messages name no other address;</li>
+<li>no private repository's name appears anywhere in the tree or in the
+    change's messages (<code>tools/check_private_names.py</code>, with the names held in
+    a secret).</li>
+<li><strong>CI runs each test once (D37).</strong> A pull request runs one job, <em>Tests and
+  scanner coverage</em>, on Python 3.12 with the scanner floor installed, in place
+  of a five-leg matrix and two more jobs that re-ran the suite. A merge to
+  <code>main</code> runs only the self-audit and its code-scanning upload. The Python
+  version matrix runs on release tags, before the build.</li>
 </ul>
 <h2 id="0133-2026-10-30">0.13.3 — 2026-10-30</h2>
 <p><strong>An audit could end on a directory that was never part of the audit.</strong></p>
