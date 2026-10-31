@@ -84,7 +84,7 @@ def _run_decision(step: dict, repo: Path, output: Path) -> subprocess.CompletedP
     return _run(["bash", "-c", step["run"]], cwd=repo, env=environment, check=False)
 
 
-def test_cut_release_workflow_is_a_main_only_tag_dispatcher():
+def test_cut_release_dispatches_the_release_and_cuts_no_tag():
     workflow_path = ROOT / ".github" / "workflows" / "cut-release.yml"
     assert workflow_path.is_file()
     workflow_text = workflow_path.read_text(encoding="utf-8")
@@ -99,12 +99,13 @@ def test_cut_release_workflow_is_a_main_only_tag_dispatcher():
 
     assert len(workflow["jobs"]) == 1
     job = next(iter(workflow["jobs"].values()))
-    assert job["permissions"] == {"contents": "write", "actions": "write"}
+    assert job["permissions"] == {"contents": "read", "actions": "write"}
     scripts = "\n".join(step.get("run", "") for step in job["steps"])
     assert "__version__" in scripts
-    assert "git tag" in scripts
-    assert "git push" in scripts
-    assert "gh workflow run release.yaml" in scripts
+    assert "gh workflow run release.yaml --ref main" in scripts
+    assert "git tag" not in workflow_text
+    assert "git push" not in workflow_text
+    assert "pytest" not in workflow_text.lower()
 
 
 def test_cut_release_decision_reports_remote_tag_state(tmp_path):
@@ -188,12 +189,82 @@ def test_release_workflow_guards_the_build_to_a_tagged_commit_on_main(tmp_path):
     assert result.returncode != 0
 
 
+def test_the_release_version_step_refuses_a_released_version(tmp_path):
+    workflow = _workflow(".github/workflows/release.yaml")
+    build = workflow["jobs"]["build"]
+    version_step = _step(workflow, "build", "The version is new or matches its tag")
+
+    assert build["outputs"]["version"] == "${{ steps.version.outputs.version }}"
+
+    untagged_repo = _create_release_fixture(tmp_path, origin_has_tag=False)
+    output = tmp_path / "version-output"
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "GITHUB_OUTPUT": str(output),
+            "GITHUB_REF_TYPE": "branch",
+            "GITHUB_REF_NAME": "main",
+        }
+    )
+    result = _run(
+        ["bash", "-c", version_step["run"]],
+        cwd=untagged_repo,
+        env=environment,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "version=9.9.9" in output.read_text(encoding="utf-8")
+
+    tagged_repo = _create_release_fixture(tmp_path, origin_has_tag=True)
+    environment["GITHUB_OUTPUT"] = str(tmp_path / "existing-version-output")
+    result = _run(
+        ["bash", "-c", version_step["run"]],
+        cwd=tagged_repo,
+        env=environment,
+        check=False,
+    )
+    assert result.returncode != 0
+
+    environment.update(
+        {
+            "GITHUB_REF_TYPE": "tag",
+            "GITHUB_REF_NAME": "v9.9.9",
+            "GITHUB_OUTPUT": str(tmp_path / "tag-version-output"),
+        }
+    )
+    result = _run(
+        ["bash", "-c", version_step["run"]],
+        cwd=untagged_repo,
+        env=environment,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    environment["GITHUB_REF_NAME"] = "v1.0.0"
+    result = _run(
+        ["bash", "-c", version_step["run"]],
+        cwd=untagged_repo,
+        env=environment,
+        check=False,
+    )
+    assert result.returncode != 0
+
+
 def test_release_publication_jobs_use_trusted_publishing_and_ordering():
     workflow = _workflow(".github/workflows/release.yaml")
     publish_pypi = workflow["jobs"]["publish-pypi"]
     publish_github = workflow["jobs"]["publish-github"]
+    tag = workflow["jobs"]["tag"]
 
     assert publish_pypi["environment"]["name"] == "pypi"
     assert publish_pypi["permissions"] == {"id-token": "write"}
+    tag_needs = tag["needs"]
+    assert "publish-pypi" in (tag_needs if isinstance(tag_needs, list) else [tag_needs])
+    assert tag["permissions"] == {"contents": "write"}
+    tag_scripts = "\n".join(step.get("run", "") for step in tag["steps"])
+    assert "git tag" in tag_scripts
+    assert "git push" in tag_scripts
+    assert "GITHUB_REF_TYPE" in tag_scripts
     needs = publish_github["needs"]
     assert "publish-pypi" in (needs if isinstance(needs, list) else [needs])
+    assert "tag" in (needs if isinstance(needs, list) else [needs])
