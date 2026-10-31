@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/secure-code-agent)](https://pypi.org/project/secure-code-agent/)
 [![Python](https://img.shields.io/pypi/pyversions/secure-code-agent)](https://pypi.org/project/secure-code-agent/)
 [![License](https://img.shields.io/github/license/marshallguillory86/secure-code-agent)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/marshallguillory86/secure-code-agent/ci.yml?branch=main&label=CI)](https://github.com/marshallguillory86/secure-code-agent/actions/workflows/ci.yml)
+[![Self-audit](https://img.shields.io/github/actions/workflow/status/marshallguillory86/secure-code-agent/self-audit.yml?branch=main&label=self-audit)](https://github.com/marshallguillory86/secure-code-agent/actions/workflows/self-audit.yml)
 [![Downloads](https://img.shields.io/pypi/dm/secure-code-agent)](https://pypistats.org/packages/secure-code-agent)
 
 **[Example report](https://secure-code-agent.techportfolio.monster/example-report.html)** · **[Documentation](https://secure-code-agent.techportfolio.monster/html/)**

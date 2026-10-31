@@ -358,8 +358,11 @@ current figures come from the audit.
 - ~~**`secure-code-report.json` is not gitignored** while `secure-code-report.md`
   is, so a CI-shaped local run leaves an untracked file behind.~~ **Closed** —
   both are ignored now.
-- **`environment: name: pypi`** in `release.yml` requires that environment to
-  exist in repository settings before the first tagged release will publish.
+- ~~**`environment: name: pypi`** in `release.yml` requires that environment to
+  exist in repository settings before the first tagged release will publish.~~
+  **Closed** — the `pypi` environment exists, requires the maintainer's
+  approval, and deploys only from `main` or a `v*` tag; `release.yaml`
+  publishes through it and cuts the tag afterwards (D38).
 
 ## 6a. Duplication findings that are not duplication
 
