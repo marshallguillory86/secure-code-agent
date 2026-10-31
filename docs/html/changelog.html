@@ -204,7 +204,8 @@ schema may evolve.</p>
   Publishing to PyPI waits for the maintainer's approval in the <code>pypi</code>
   environment, which deploys only from <code>main</code> or a <code>v*</code> tag. The tag is cut
   after PyPI accepts the upload, the GitHub release follows it, and release
-  tags cannot be moved or deleted.</p>
+  tags cannot be moved or deleted. The refusals run in a first job, so a run
+  that must not release stops in seconds rather than after the matrix.</p>
 </li>
 <li>
 <p>Community files: <code>CODE_OF_CONDUCT.md</code>, <code>ACCESSIBILITY.md</code>, a pull-request
