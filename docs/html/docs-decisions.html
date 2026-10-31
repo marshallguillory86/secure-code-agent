@@ -45,11 +45,12 @@
 <li><a href="#d34-an-adapter-declares-whether-it-honours-exclude_patterns">D34 — An adapter declares whether it honours exclude_patterns</a></li>
 <li><a href="#d35-coverage-names-a-language-nothing-read-depth-is-still-open">D35 — Coverage names a language nothing read; depth is still open</a></li>
 <li><a href="#d36-translated-readmes-are-short-pages-not-full-translations">D36 — Translated READMEs are short pages, not full translations</a></li>
+<li><a href="#d37-a-pull-request-runs-each-test-once-the-python-matrix-runs-on-release-tags">D37 — A pull request runs each test once; the Python matrix runs on release tags</a></li>
 </ul>
 </div>
 </aside>
 <main><div class="meta">Decisions and architecture</div><h1>Decision register</h1><blockquote>
-<p>Status: <strong>v0.13.3 — 2026-10-30.</strong> The decision register. D1–D36.</p>
+<p>Status: <strong>v0.13.3 — 2026-10-30.</strong> The decision register. D1–D37.</p>
 </blockquote>
 <p>Product decisions that constrain the code, with the reasoning and the rejected
 alternatives. Modelled on <code>maintainability-agent</code>'s register, which exists
@@ -2501,5 +2502,31 @@ page's shape, and every badge's package, owner and workflow.</p>
 <p><strong>Rejected: full translations.</strong> Every README change would need five
 translations that nobody here can review, and a translation that drifts from
 the English is worse than none: it states things the tool no longer does.</p>
+<h2 id="d37-a-pull-request-runs-each-test-once-the-python-matrix-runs-on-release-tags">D37 — A pull request runs each test once; the Python matrix runs on release tags</h2>
+<p><strong>Status:</strong> Accepted · 2026-10-31</p>
+<p><strong>Context.</strong> CI ran the suite three times on every pull request: a five-leg
+Python matrix, an offline-ruleset job, and the required-coverage job, which
+ran the whole suite again against the installed scanner floor. Every merge to
+<code>main</code> then ran all of it once more. The tests were the same tests each time.</p>
+<p><strong>Decision.</strong></p>
+<ul>
+<li>A pull request runs one job, <em>Tests and scanner coverage</em>: on Python 3.12,
+  with the scanner floor and RuboCop installed, it runs lint, formatting, the
+  full suite once with coverage, a guard that no offline-ruleset test was
+  skipped, the wheel build, the toolchain preflight and the repository's own
+  required-coverage audit with its code-scanning upload.</li>
+<li>A merge to <code>main</code> runs no tests. <code>self-audit.yml</code> runs the audit and uploads
+  its SARIF, so code scanning describes <code>main</code>.</li>
+<li>The Python version matrix (3.10, 3.11, 3.13, 3.14) runs on release tags, in
+  <code>release.yaml</code>, before the build. 3.12 is left out of the matrix because the
+  build runs the full suite on it.</li>
+<li>Branch protection requires <em>Tests and scanner coverage</em> and <em>Commit identity
+  and signatures</em>.</li>
+</ul>
+<p><strong>Rejected: keeping the matrix on every pull request.</strong> A test that passes on
+3.12 and fails on another supported version is still caught before it ships,
+because the release cannot publish until the matrix is green; what is given up
+is finding it on the pull request rather than at the tag, for every pull
+request's cost in runner minutes.</p>
 <footer>Rendered from <code>docs/decisions.md</code> in the secure-code-agent repository. The markdown is the source of truth.</footer>
 </main></div></body></html>

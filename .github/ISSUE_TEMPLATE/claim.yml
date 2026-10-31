@@ -1,0 +1,45 @@
+name: Incorrect finding, mapping, or docs
+description: A published finding, standards mapping, or sentence does not match the code or the tree in front of you.
+labels: ["docs"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when the tool ran, but what it *said* is the bug: a severity, a CWE / OWASP / ASVS mapping, a work-order line, a README sentence, or a page that disagrees with `docs/product-intent.md`.
+
+        Feature ideas that are not already in the product intent belong in discussion with the maintainer, not as a ticket.
+
+        Do not paste secrets, customer names, or other client material.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Package version or commit that printed the claim.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it is written
+      options:
+        - Report (gate, finding, coverage)
+        - Remediation work order
+        - SARIF
+        - Standards mapping
+        - README or docs
+    validations:
+      required: true
+  - type: textarea
+    id: quote
+    attributes:
+      label: What it says
+      description: Paste the sentence or field. One claim per issue.
+    validations:
+      required: true
+  - type: textarea
+    id: truth
+    attributes:
+      label: What is actually true
+      description: Code path, standard, or tree fact that contradicts it.
+    validations:
+      required: true

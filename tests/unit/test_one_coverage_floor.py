@@ -168,8 +168,10 @@ def test_the_invocation_detector_finds_the_real_ones_only():
     assert _INVOCATION.search("  pytest tests/unit/x.py")
     assert not _INVOCATION.search("python -m build -o cache_dir=.pytest-cache-ci")
 
+    # Three since each test runs once per pipeline run: the pull request's one
+    # test job, the release's Python matrix, and the release build.
     total = sum(len(_pytest_commands(w)) for w in _workflow_files())
-    assert total >= 5, f"expected at least 5 pytest invocations across CI, found {total}"
+    assert total >= 3, f"expected at least 3 pytest invocations across CI, found {total}"
 
 
 @pytest.mark.parametrize("workflow", _workflow_files(), ids=lambda p: p.name)

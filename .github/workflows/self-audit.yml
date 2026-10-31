@@ -1,0 +1,74 @@
+name: Self-audit
+
+# On every merge to main: the repository's own required-coverage audit, and
+# its SARIF uploaded to code scanning, so the Security tab describes main.
+# No tests run here; the pull request ran them (ci.yml) and a merge does not
+# repeat them.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Required scanner coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install the scanner floor
+        uses: ./.github/actions/install-floor
+
+      - name: Verify the required scanner toolchain resolves
+        run: secure-code-agent --config secure-code-agent.json --preflight
+
+      - name: Run required security coverage
+        run: >-
+          secure-code-agent
+          --config secure-code-agent.json
+          --fail-on-gate
+          --output secure-code-report.md
+          --json-output secure-code-report.json
+          --sarif-output secure-code.sarif
+          --code-scanning-sarif-output secure-code.code-scanning.sarif
+          --prompt-output secure-code-remediation-prompt.md
+          --comment-output secure-code-pr-comment.md
+
+      - name: Upload SARIF to code scanning
+        if: ${{ !cancelled() && hashFiles('secure-code.code-scanning.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4
+        with:
+          sarif_file: secure-code.code-scanning.sarif
+          category: secure-code-agent-self-audit
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: secure-code-agent-audit
+          if-no-files-found: error
+          path: |
+            secure-code-report.md
+            secure-code-report.json
+            secure-code.sarif
+            secure-code.code-scanning.sarif
+            secure-code-remediation-prompt.md
+            secure-code-pr-comment.md
