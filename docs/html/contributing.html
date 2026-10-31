@@ -148,6 +148,9 @@ replaced by three criteria keyed to <strong>mechanism</strong> rather than licen
 <h2 id="releasing">Releasing</h2>
 <p>In the release commit, alongside the version bump:</p>
 <ul>
+<li>Stamp the new version into every document that states it with
+  <code>python tools/stamp_version.py --root .</code>: each <code>docs/</code> status line and the
+  Action pins in the README and the example workflow.</li>
 <li>Regenerate the published example report. Audit this repository at the new
   version, then render the Markdown report with
   <code>python tools/render_example_report.py secure-code-report.md</code>, which writes

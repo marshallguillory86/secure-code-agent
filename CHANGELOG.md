@@ -4,6 +4,19 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## Unreleased
+
+### Project
+
+- Community files: `CODE_OF_CONDUCT.md`, `ACCESSIBILITY.md`, a pull-request
+  template, bug and incorrect-claim issue templates (with security reports
+  routed to a private advisory), and a sponsor link.
+  `tests/unit/test_accessibility_statement_holds.py` holds each claim the
+  accessibility statement makes about the outputs.
+- `tools/stamp_version.py` writes the release version into every document
+  that states it, and refuses a document that no longer matches rather than
+  skipping it.
+
 ## 0.13.3 — 2026-10-30
 
 **An audit could end on a directory that was never part of the audit.**

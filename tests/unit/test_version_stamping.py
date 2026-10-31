@@ -58,6 +58,7 @@ def _copy_release_claims(tmp_path: Path) -> Path:
     target = copy / source.relative_to(ROOT)
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
+    (copy / "tools").mkdir(parents=True, exist_ok=True)
     shutil.copy2(TOOL, copy / "tools" / "stamp_version.py")
     return copy
 

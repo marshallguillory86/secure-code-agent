@@ -1,0 +1,58 @@
+name: Bug
+description: The tool did the wrong thing, crashed, or a gate fired when it should not have.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is a local CLI and GitHub Action, not a website. Browser and phone fields do not help.
+
+        Do not paste secrets, customer names, or other client material. Scrub the tree and the report first.
+
+        A security issue belongs in a [private advisory](https://github.com/marshallguillory86/secure-code-agent/security/advisories/new), not here.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `secure-code-agent --version` (or the Action ref you used).
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - CLI
+        - CI / GitHub Action
+        - SARIF in GitHub code scanning
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: What you saw. Quote the gate, finding, coverage status, exit code, or refusal if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened
+      description: Point at the document if you can (`docs/product-intent.md`, `docs/scanners.md`, the report itself).
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Commands or Action inputs. A small public tree is better than a private one.
+      placeholder: |
+        secure-code-agent --config secure-code-agent.json --fail-on-gate
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Config and coverage (optional)
+      description: Relevant `secure-code-agent.json` keys and which scanners ran (the report's scanner table). No secrets, no customer trees.

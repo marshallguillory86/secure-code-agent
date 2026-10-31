@@ -141,6 +141,9 @@ Conventional Commits:
 
 In the release commit, alongside the version bump:
 
+- Stamp the new version into every document that states it with
+  `python tools/stamp_version.py --root .`: each `docs/` status line and the
+  Action pins in the README and the example workflow.
 - Regenerate the published example report. Audit this repository at the new
   version, then render the Markdown report with
   `python tools/render_example_report.py secure-code-report.md`, which writes

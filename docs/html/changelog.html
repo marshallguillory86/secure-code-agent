@@ -5,6 +5,10 @@
 <div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
 <div class="layout"><aside><p class="label">On this page</p><div class="toc">
 <ul>
+<li><a href="#unreleased">Unreleased</a><ul>
+<li><a href="#project">Project</a></li>
+</ul>
+</li>
 <li><a href="#0133-2026-10-30">0.13.3 — 2026-10-30</a><ul>
 <li><a href="#fixed-a-walk-of-the-audited-tree-never-enters-git">Fixed — a walk of the audited tree never enters .git</a></li>
 </ul>
@@ -190,6 +194,18 @@
 <main><div class="meta">History</div><h1>Changelog</h1><p>All notable changes to <code>secure-code-agent</code> are documented here. Format follows
 <a href="https://keepachangelog.com/">Keep a Changelog</a>. Semver pre-1.0 — config
 schema may evolve.</p>
+<h2 id="unreleased">Unreleased</h2>
+<h3 id="project">Project</h3>
+<ul>
+<li>Community files: <code>CODE_OF_CONDUCT.md</code>, <code>ACCESSIBILITY.md</code>, a pull-request
+  template, bug and incorrect-claim issue templates (with security reports
+  routed to a private advisory), and a sponsor link.
+  <code>tests/unit/test_accessibility_statement_holds.py</code> holds each claim the
+  accessibility statement makes about the outputs.</li>
+<li><code>tools/stamp_version.py</code> writes the release version into every document
+  that states it, and refuses a document that no longer matches rather than
+  skipping it.</li>
+</ul>
 <h2 id="0133-2026-10-30">0.13.3 — 2026-10-30</h2>
 <p><strong>An audit could end on a directory that was never part of the audit.</strong></p>
 <h3 id="fixed-a-walk-of-the-audited-tree-never-enters-git">Fixed — a walk of the audited tree never enters <code>.git</code></h3>
