@@ -4,7 +4,18 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
-## Unreleased
+## 0.13.4 — 2026-10-31
+
+**The project's own pipeline, brought to standard.** No change to what the
+tool reports; this release carries the README and pipeline work since 0.13.3
+to PyPI.
+
+### Docs
+
+- The README's status badge reads the self-audit, which runs on every merge
+  to `main`; it read the pull-request workflow, whose main-branch badge had
+  stopped updating. A test holds every main-branch badge to a workflow that
+  runs on `main`.
 
 ### Project
 

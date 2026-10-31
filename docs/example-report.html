@@ -59,7 +59,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent</a>
 <nav><a href="html/index.html">Documentation</a></nav></div></div>
 <main class="single"><div class="meta">Example report: secure-code-agent auditing its own repository</div>
-<h1>secure-code-agent report</h1><p>Generated: 2026-10-31T02:29:46Z  ·  agent v0.13.3</p>
+<h1>secure-code-agent report</h1><p>Generated: 2026-10-31T21:11:30Z  ·  agent v0.13.4</p>
 <h2>Summary</h2>
 <ul>
 <li><strong>Scanner coverage:</strong> COMPLETE</li>
@@ -73,7 +73,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><code>fail_on_new</code> — 50 finding(s), and no baseline exists yet — on a first run everything is new because there is nothing to compare against. Work the order, then re-run with --bump-baseline to accept what is left and gate on regressions from there.</li>
 </ul>
 </li>
-<li><strong>LOC scanned:</strong> 15,913</li>
+<li><strong>LOC scanned:</strong> 16,695</li>
 </ul>
 <h2>Categories</h2>
 <div class="table-wrap"><table>
@@ -175,9 +175,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 </table></div>
 <h2>Test tree</h2>
 <ul>
-<li><strong>Lines:</strong> 16,256</li>
-<li><strong>Findings:</strong> 2176 — reported, not scored</li>
-<li><strong>By severity:</strong> high: 29, medium: 6, low: 2141</li>
+<li><strong>Lines:</strong> 17,084</li>
+<li><strong>Findings:</strong> 2329 — reported, not scored</li>
+<li><strong>By severity:</strong> high: 29, medium: 6, low: 2294</li>
 <li>Reported, not scored. A project graded on its test fixtures is graded on the wrong thing. Secrets found here are still gated when the configuration names the category, because nothing static separates a live credential from a test certificate.</li>
 </ul>
 <h2>Documentation</h2>
@@ -220,7 +220,7 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <tr>
 <td><code>builtin_rules</code></td>
 <td><code>completed</code></td>
-<td>builtin/0.13.3</td>
+<td>builtin/0.13.4</td>
 <td><code>—</code></td>
 <td>—</td>
 </tr>
@@ -4463,6 +4463,145 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_accessibility_statement_holds.py:31-44</code></li>
+</ul>
+<pre><code>30     root = _tree(tmp_path)
+31     assert (
+32         main(
+33             [
+34                 str(root),
+35                 &quot;--only-scanners&quot;,
+36                 &quot;builtin_rules&quot;,
+37                 &quot;--output&quot;,
+38                 str(tmp_path / &quot;report.md&quot;),
+39                 &quot;--prompt-output&quot;,
+40                 str(tmp_path / &quot;prompt.md&quot;),
+41             ]
+42         )
+43         == 0
+44     )
+45
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_accessibility_statement_holds.py:47</code></li>
+</ul>
+<pre><code>46     captured = capsys.readouterr()
+47     assert captured.out or captured.err
+48     assert &quot;\x1b[&quot; not in captured.out + captured.err
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_accessibility_statement_holds.py:48</code></li>
+</ul>
+<pre><code>47     assert captured.out or captured.err
+48     assert &quot;\x1b[&quot; not in captured.out + captured.err
+49
+</code></pre>
+<h4><code>B404</code> — Consider possible security implications associated with the subprocess module. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_accessibility_statement_holds.py:52</code></li>
+</ul>
+<pre><code>51 def test_scanner_version_strips_ansi_codes(monkeypatch: pytest.MonkeyPatch) -&gt; None:
+52     import subprocess
+53
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_accessibility_statement_holds.py:70</code></li>
+</ul>
+<pre><code>69 
+70     assert probe.binary_version() == &quot;probe 1.2.3&quot;
+71
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_accessibility_statement_holds.py:77</code></li>
+</ul>
+<pre><code>76 
+77         assert '&lt;html lang=&quot;en&quot;' in html
+78         assert not re.search(r&quot;&lt;script\b[^&gt;]+\bsrc\s*=&quot;, html, re.IGNORECASE)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_accessibility_statement_holds.py:78</code></li>
+</ul>
+<pre><code>77         assert '&lt;html lang=&quot;en&quot;' in html
+78         assert not re.search(r&quot;&lt;script\b[^&gt;]+\bsrc\s*=&quot;, html, re.IGNORECASE)
+79         assert not re.search(r&quot;&lt;link\b[^&gt;]+\brel\s*=\s*[\&quot;']stylesheet[\&quot;']&quot;, html, re.IGNORECASE)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_accessibility_statement_holds.py:79</code></li>
+</ul>
+<pre><code>78         assert not re.search(r&quot;&lt;script\b[^&gt;]+\bsrc\s*=&quot;, html, re.IGNORECASE)
+79         assert not re.search(r&quot;&lt;link\b[^&gt;]+\brel\s*=\s*[\&quot;']stylesheet[\&quot;']&quot;, html, re.IGNORECASE)
+80
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_accessibility_statement_holds.py:81</code></li>
+</ul>
+<pre><code>80 
+81     assert &quot;&lt;th&quot; in (ROOT / &quot;docs/example-report.html&quot;).read_text(encoding=&quot;utf-8&quot;)
+82
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_accessibility_statement_holds.py:88-94</code></li>
+</ul>
+<pre><code>87     row = next(line for line in readme.splitlines() if &quot;](README.&quot; in line)
+88     assert set(re.findall(r&quot;\]\(README\.([A-Za-z-]+)\.md\)&quot;, row)) == {
+89         &quot;es&quot;,
+90         &quot;de&quot;,
+91         &quot;fr&quot;,
+92         &quot;hi&quot;,
+93         &quot;zh-CN&quot;,
+94     }
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
 <li><strong>Location:</strong> <code>tests/unit/test_agent_guidance.py:83</code></li>
 </ul>
 <pre><code>82 
@@ -4794,6 +4933,656 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 </ul>
 <pre><code>75     assert &quot;gosec&quot; not in text
 76     assert not payload.get(&quot;unread_languages&quot;)
+</code></pre>
+<h4><code>B404</code> — Consider possible security implications associated with the subprocess module. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:6</code></li>
+</ul>
+<pre><code>5 import os
+6 import subprocess
+7 from collections.abc import Callable
+</code></pre>
+<h4><code>B607</code> — Starting a process with a partial executable path 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:28-36</code></li>
+</ul>
+<pre><code>27 ) -&gt; subprocess.CompletedProcess[str]:
+28     return subprocess.run(
+29         [&quot;git&quot;, *args],
+30         cwd=repo,
+31         env=env,
+32         text=True,
+33         capture_output=True,
+34         check=False,
+35         timeout=60,
+36     )
+37
+</code></pre>
+<h4><code>B603</code> — subprocess call - check for execution of untrusted input. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:28-36</code></li>
+</ul>
+<pre><code>27 ) -&gt; subprocess.CompletedProcess[str]:
+28     return subprocess.run(
+29         [&quot;git&quot;, *args],
+30         cwd=repo,
+31         env=env,
+32         text=True,
+33         capture_output=True,
+34         check=False,
+35         timeout=60,
+36     )
+37
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:41</code></li>
+</ul>
+<pre><code>40     result = _git(repo, *args, env=env)
+41     assert result.returncode == 0, result.stderr
+42     return result.stdout.strip()
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:52</code></li>
+</ul>
+<pre><code>51     }
+52     assert scripts.keys() == STEP_NAMES
+53     return scripts
+</code></pre>
+<h4><code>B607</code> — Starting a process with a partial executable path 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:64-72</code></li>
+</ul>
+<pre><code>63     )
+64     return subprocess.run(
+65         [&quot;bash&quot;, &quot;-c&quot;, script],
+66         cwd=repo,
+67         env={**os.environ, &quot;PRIVATE_NAMES&quot;: private_names},
+68         text=True,
+69         capture_output=True,
+70         check=False,
+71         timeout=60,
+72     )
+73
+</code></pre>
+<h4><code>B603</code> — subprocess call - check for execution of untrusted input. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:64-72</code></li>
+</ul>
+<pre><code>63     )
+64     return subprocess.run(
+65         [&quot;bash&quot;, &quot;-c&quot;, script],
+66         cwd=repo,
+67         env={**os.environ, &quot;PRIVATE_NAMES&quot;: private_names},
+68         text=True,
+69         capture_output=True,
+70         check=False,
+71         timeout=60,
+72     )
+73
+</code></pre>
+<h4><code>B607</code> — Starting a process with a partial executable path 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:83-89</code></li>
+</ul>
+<pre><code>82     key = tmp_path / &quot;signing_key&quot;
+83     subprocess.run(
+84         [&quot;ssh-keygen&quot;, &quot;-q&quot;, &quot;-t&quot;, &quot;ed25519&quot;, &quot;-N&quot;, &quot;&quot;, &quot;-f&quot;, str(key)],
+85         check=True,
+86         timeout=60,
+87         capture_output=True,
+88         text=True,
+89     )
+90     _git_output(repo, &quot;config&quot;, &quot;gpg.format&quot;, &quot;ssh&quot;)
+</code></pre>
+<h4><code>B603</code> — subprocess call - check for execution of untrusted input. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:83-89</code></li>
+</ul>
+<pre><code>82     key = tmp_path / &quot;signing_key&quot;
+83     subprocess.run(
+84         [&quot;ssh-keygen&quot;, &quot;-q&quot;, &quot;-t&quot;, &quot;ed25519&quot;, &quot;-N&quot;, &quot;&quot;, &quot;-f&quot;, str(key)],
+85         check=True,
+86         timeout=60,
+87         capture_output=True,
+88         text=True,
+89     )
+90     _git_output(repo, &quot;config&quot;, &quot;gpg.format&quot;, &quot;ssh&quot;)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:132</code></li>
+</ul>
+<pre><code>131         )
+132         assert result.returncode == 0, result.stderr
+133         return _git_output(repo, &quot;rev-parse&quot;, &quot;HEAD&quot;)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:141</code></li>
+</ul>
+<pre><code>140     trigger = document.get(&quot;on&quot;, document.get(True))
+141     assert trigger == {&quot;pull_request&quot;: None}
+142     assert len(document[&quot;jobs&quot;]) == 1
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:142</code></li>
+</ul>
+<pre><code>141     assert trigger == {&quot;pull_request&quot;: None}
+142     assert len(document[&quot;jobs&quot;]) == 1
+143     job = next(iter(document[&quot;jobs&quot;].values()))
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:144</code></li>
+</ul>
+<pre><code>143     job = next(iter(document[&quot;jobs&quot;].values()))
+144     assert job[&quot;name&quot;] == &quot;Commit identity and signatures&quot;
+145     assert job[&quot;steps&quot;][0][&quot;with&quot;][&quot;ref&quot;] == &quot;${{ github.event.pull_request.head.sha }}&quot;
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:145</code></li>
+</ul>
+<pre><code>144     assert job[&quot;name&quot;] == &quot;Commit identity and signatures&quot;
+145     assert job[&quot;steps&quot;][0][&quot;with&quot;][&quot;ref&quot;] == &quot;${{ github.event.pull_request.head.sha }}&quot;
+146     assert job[&quot;steps&quot;][0][&quot;with&quot;][&quot;fetch-depth&quot;] == 0
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:146</code></li>
+</ul>
+<pre><code>145     assert job[&quot;steps&quot;][0][&quot;with&quot;][&quot;ref&quot;] == &quot;${{ github.event.pull_request.head.sha }}&quot;
+146     assert job[&quot;steps&quot;][0][&quot;with&quot;][&quot;fetch-depth&quot;] == 0
+147     text = &quot;\n&quot;.join(step.get(&quot;run&quot;, &quot;&quot;) for step in job[&quot;steps&quot;])
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:148</code></li>
+</ul>
+<pre><code>147     text = &quot;\n&quot;.join(step.get(&quot;run&quot;, &quot;&quot;) for step in job[&quot;steps&quot;])
+148     assert COMMIT_IDENTITY in text
+149     assert &quot;git config gpg.ssh.allowedSignersFile .github/allowed_signers&quot; in text
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:149</code></li>
+</ul>
+<pre><code>148     assert COMMIT_IDENTITY in text
+149     assert &quot;git config gpg.ssh.allowedSignersFile .github/allowed_signers&quot; in text
+150     assert &quot;grep -o -E&quot; in text and 'grep -v -x -F &quot;$allowed&quot;' in text
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:150</code></li>
+</ul>
+<pre><code>149     assert &quot;git config gpg.ssh.allowedSignersFile .github/allowed_signers&quot; in text
+150     assert &quot;grep -o -E&quot; in text and 'grep -v -x -F &quot;$allowed&quot;' in text
+151     assert &quot;python3 tools/check_private_names.py --no-default-file&quot; in text
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:151</code></li>
+</ul>
+<pre><code>150     assert &quot;grep -o -E&quot; in text and 'grep -v -x -F &quot;$allowed&quot;' in text
+151     assert &quot;python3 tools/check_private_names.py --no-default-file&quot; in text
+152     assert &quot;PRIVATE_NAMES: ${{ secrets.PRIVATE_NAMES }}&quot; in yaml.safe_dump(job)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:152</code></li>
+</ul>
+<pre><code>151     assert &quot;python3 tools/check_private_names.py --no-default-file&quot; in text
+152     assert &quot;PRIVATE_NAMES: ${{ secrets.PRIVATE_NAMES }}&quot; in yaml.safe_dump(job)
+153
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:160</code></li>
+</ul>
+<pre><code>159         result = _run_gate(repo, name)
+160         assert result.returncode == 0, f&quot;{name}: {result.stdout}\n{result.stderr}&quot;
+161
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:167</code></li>
+</ul>
+<pre><code>166         result = _run_gate(repo, name)
+167         assert result.returncode == 1, name
+168         assert &quot;this check proved nothing&quot; in result.stdout
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:168</code></li>
+</ul>
+<pre><code>167         assert result.returncode == 1, name
+168         assert &quot;this check proved nothing&quot; in result.stdout
+169
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:177</code></li>
+</ul>
+<pre><code>176     result = _run_gate(repo, &quot;Each commit carries the repository's commit identity&quot;)
+177     assert result.returncode == 1
+178     assert &quot;committer: wrong@example.com&quot; in result.stdout
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:178</code></li>
+</ul>
+<pre><code>177     assert result.returncode == 1
+178     assert &quot;committer: wrong@example.com&quot; in result.stdout
+179
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:187</code></li>
+</ul>
+<pre><code>186     result = _run_gate(repo, &quot;Each commit is signed&quot;)
+187     assert result.returncode == 1
+188     assert &quot;unsigned&quot; in result.stdout
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:188</code></li>
+</ul>
+<pre><code>187     assert result.returncode == 1
+188     assert &quot;unsigned&quot; in result.stdout
+189
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:197</code></li>
+</ul>
+<pre><code>196     result = _run_gate(repo, &quot;Commit messages name only the commit identity&quot;)
+197     assert result.returncode == 1
+198     assert &quot;names an address other than the commit identity&quot; in result.stdout
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:198</code></li>
+</ul>
+<pre><code>197     assert result.returncode == 1
+198     assert &quot;names an address other than the commit identity&quot; in result.stdout
+199
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:208</code></li>
+</ul>
+<pre><code>207     ]
+208     assert entries, &quot;no signer is allowed&quot;
+209     assert {identity for identity, _key in entries} == {COMMIT_IDENTITY}
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:209</code></li>
+</ul>
+<pre><code>208     assert entries, &quot;no signer is allowed&quot;
+209     assert {identity for identity, _key in entries} == {COMMIT_IDENTITY}
+210     public_key = Path.home() / &quot;.ssh&quot; / &quot;id_ed25519_signing.pub&quot;
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:213</code></li>
+</ul>
+<pre><code>212         local = public_key.read_text(encoding=&quot;utf-8&quot;).split()[:2]
+213         assert local in [key.split()[:2] for _identity, key in entries]
+214
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:231</code></li>
+</ul>
+<pre><code>230     )
+231     assert result.returncode == 0, result.stderr
+232     if not result.stdout.strip():
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:234</code></li>
+</ul>
+<pre><code>233         pytest.skip(&quot;no commits beyond origin/main to verify&quot;)
+234     assert all(state == &quot;G&quot; for state in result.stdout.split())
+235
+</code></pre>
+<h4><code>B607</code> — Starting a process with a partial executable path 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:243-250</code></li>
+</ul>
+<pre><code>242     _git_output(tree, &quot;add&quot;, &quot;.&quot;)
+243     result = subprocess.run(
+244         [&quot;python3&quot;, str(TOOL), &quot;--root&quot;, str(tree), &quot;--no-default-file&quot;],
+245         env={**os.environ, &quot;PRIVATE_NAMES&quot;: &quot;zebra-quokka&quot;},
+246         text=True,
+247         capture_output=True,
+248         check=False,
+249         timeout=60,
+250     )
+251     assert result.returncode == 1
+</code></pre>
+<h4><code>B603</code> — subprocess call - check for execution of untrusted input. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:243-250</code></li>
+</ul>
+<pre><code>242     _git_output(tree, &quot;add&quot;, &quot;.&quot;)
+243     result = subprocess.run(
+244         [&quot;python3&quot;, str(TOOL), &quot;--root&quot;, str(tree), &quot;--no-default-file&quot;],
+245         env={**os.environ, &quot;PRIVATE_NAMES&quot;: &quot;zebra-quokka&quot;},
+246         text=True,
+247         capture_output=True,
+248         check=False,
+249         timeout=60,
+250     )
+251     assert result.returncode == 1
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:251</code></li>
+</ul>
+<pre><code>250     )
+251     assert result.returncode == 1
+252     assert &quot;zebra-quokka&quot; not in result.stdout + result.stderr
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:252</code></li>
+</ul>
+<pre><code>251     assert result.returncode == 1
+252     assert &quot;zebra-quokka&quot; not in result.stdout + result.stderr
+253
+</code></pre>
+<h4><code>B607</code> — Starting a process with a partial executable path 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:261-268</code></li>
+</ul>
+<pre><code>260     _git_output(tree, &quot;add&quot;, &quot;.&quot;)
+261     result = subprocess.run(
+262         [&quot;python3&quot;, str(TOOL), &quot;--root&quot;, str(tree), &quot;--no-default-file&quot;],
+263         env={**os.environ, &quot;PRIVATE_NAMES&quot;: &quot;zebra-quokka&quot;},
+264         text=True,
+265         capture_output=True,
+266         check=False,
+267         timeout=60,
+268     )
+269     assert result.returncode == 0
+</code></pre>
+<h4><code>B603</code> — subprocess call - check for execution of untrusted input. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:261-268</code></li>
+</ul>
+<pre><code>260     _git_output(tree, &quot;add&quot;, &quot;.&quot;)
+261     result = subprocess.run(
+262         [&quot;python3&quot;, str(TOOL), &quot;--root&quot;, str(tree), &quot;--no-default-file&quot;],
+263         env={**os.environ, &quot;PRIVATE_NAMES&quot;: &quot;zebra-quokka&quot;},
+264         text=True,
+265         capture_output=True,
+266         check=False,
+267         timeout=60,
+268     )
+269     assert result.returncode == 0
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:269</code></li>
+</ul>
+<pre><code>268     )
+269     assert result.returncode == 0
+270     assert &quot;none in tree&quot; in result.stdout
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:270</code></li>
+</ul>
+<pre><code>269     assert result.returncode == 0
+270     assert &quot;none in tree&quot; in result.stdout
+271
+</code></pre>
+<h4><code>B607</code> — Starting a process with a partial executable path 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:277-284</code></li>
+</ul>
+<pre><code>276     _git_output(tree, &quot;init&quot;)
+277     result = subprocess.run(
+278         [&quot;python3&quot;, str(TOOL), &quot;--root&quot;, str(tree), &quot;--no-default-file&quot;],
+279         env={**os.environ, &quot;PRIVATE_NAMES&quot;: &quot;&quot;, &quot;FORBIDDEN_TERMS&quot;: &quot;&quot;},
+280         text=True,
+281         capture_output=True,
+282         check=False,
+283         timeout=60,
+284     )
+285     assert result.returncode == 2
+</code></pre>
+<h4><code>B603</code> — subprocess call - check for execution of untrusted input. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:277-284</code></li>
+</ul>
+<pre><code>276     _git_output(tree, &quot;init&quot;)
+277     result = subprocess.run(
+278         [&quot;python3&quot;, str(TOOL), &quot;--root&quot;, str(tree), &quot;--no-default-file&quot;],
+279         env={**os.environ, &quot;PRIVATE_NAMES&quot;: &quot;&quot;, &quot;FORBIDDEN_TERMS&quot;: &quot;&quot;},
+280         text=True,
+281         capture_output=True,
+282         check=False,
+283         timeout=60,
+284     )
+285     assert result.returncode == 2
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:285</code></li>
+</ul>
+<pre><code>284     )
+285     assert result.returncode == 2
+286     assert &quot;this check proved nothing&quot; in result.stderr
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_authorship_gates.py:286</code></li>
+</ul>
+<pre><code>285     assert result.returncode == 2
+286     assert &quot;this check proved nothing&quot; in result.stderr
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -11733,6 +12522,298 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <pre><code>244 
 245     assert any(&quot;/repo&quot; in a for a in argv), argv
 </code></pre>
+<h4><code>B404</code> — Consider possible security implications associated with the subprocess module. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:6</code></li>
+</ul>
+<pre><code>5 import importlib.util
+6 import subprocess
+7 from pathlib import Path
+</code></pre>
+<h4><code>B607</code> — Starting a process with a partial executable path 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:15-22</code></li>
+</ul>
+<pre><code>14 def _git(repo: Path, *args: str) -&gt; str:
+15     result = subprocess.run(
+16         [&quot;git&quot;, *args],
+17         cwd=repo,
+18         check=True,
+19         capture_output=True,
+20         text=True,
+21         timeout=10,
+22     )
+23     return result.stdout.strip()
+</code></pre>
+<h4><code>B603</code> — subprocess call - check for execution of untrusted input. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:15-22</code></li>
+</ul>
+<pre><code>14 def _git(repo: Path, *args: str) -&gt; str:
+15     result = subprocess.run(
+16         [&quot;git&quot;, *args],
+17         cwd=repo,
+18         check=True,
+19         capture_output=True,
+20         text=True,
+21         timeout=10,
+22     )
+23     return result.stdout.strip()
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:82</code></li>
+</ul>
+<pre><code>81 
+82     assert result == 0
+83     assert &quot;tests/test_demo.py::test_new_behaviour&quot; in output
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:83</code></li>
+</ul>
+<pre><code>82     assert result == 0
+83     assert &quot;tests/test_demo.py::test_new_behaviour&quot; in output
+84     assert &quot;proven&quot; in output
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:84</code></li>
+</ul>
+<pre><code>83     assert &quot;tests/test_demo.py::test_new_behaviour&quot; in output
+84     assert &quot;proven&quot; in output
+85
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:98</code></li>
+</ul>
+<pre><code>97 
+98     assert result == 1
+99     assert &quot;tests/test_new.py::test_already_true&quot; in output
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:99</code></li>
+</ul>
+<pre><code>98     assert result == 1
+99     assert &quot;tests/test_new.py::test_already_true&quot; in output
+100     assert &quot;passes without its change&quot; in output
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:100</code></li>
+</ul>
+<pre><code>99     assert &quot;tests/test_new.py::test_already_true&quot; in output
+100     assert &quot;passes without its change&quot; in output
+101
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:116</code></li>
+</ul>
+<pre><code>115 
+116     assert result == 1
+117     assert &quot;tests/test_demo.py::test_added_to_existing_file&quot; in output
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:117</code></li>
+</ul>
+<pre><code>116     assert result == 1
+117     assert &quot;tests/test_demo.py::test_added_to_existing_file&quot; in output
+118     assert &quot;passes without its change&quot; in output
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:118</code></li>
+</ul>
+<pre><code>117     assert &quot;tests/test_demo.py::test_added_to_existing_file&quot; in output
+118     assert &quot;passes without its change&quot; in output
+119
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:134</code></li>
+</ul>
+<pre><code>133 
+134     assert result == 0
+135     assert &quot;nothing to prove&quot; in output
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:135</code></li>
+</ul>
+<pre><code>134     assert result == 0
+135     assert &quot;nothing to prove&quot; in output
+136
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:151</code></li>
+</ul>
+<pre><code>150 
+151     assert result == 0
+152     assert &quot;tests/test_new.py::test_characterisation&quot; in output
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:152</code></li>
+</ul>
+<pre><code>151     assert result == 0
+152     assert &quot;tests/test_new.py::test_characterisation&quot; in output
+153     assert &quot;exempt&quot; in output
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:153</code></li>
+</ul>
+<pre><code>152     assert &quot;tests/test_new.py::test_characterisation&quot; in output
+153     assert &quot;exempt&quot; in output
+154
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:169</code></li>
+</ul>
+<pre><code>168 
+169     assert result == 0
+170     assert &quot;tests/test_new.py::test_new_api&quot; in output
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:170</code></li>
+</ul>
+<pre><code>169     assert result == 0
+170     assert &quot;tests/test_new.py::test_new_api&quot; in output
+171     assert &quot;import&quot; in output.lower()
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:171</code></li>
+</ul>
+<pre><code>170     assert &quot;tests/test_new.py::test_new_api&quot; in output
+171     assert &quot;import&quot; in output.lower()
+172
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:186</code></li>
+</ul>
+<pre><code>185 
+186     assert result == 0
+187     worktrees = _git(repo, &quot;worktree&quot;, &quot;list&quot;, &quot;--porcelain&quot;).splitlines()
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:188</code></li>
+</ul>
+<pre><code>187     worktrees = _git(repo, &quot;worktree&quot;, &quot;list&quot;, &quot;--porcelain&quot;).splitlines()
+188     assert sum(line.startswith(&quot;worktree &quot;) for line in worktrees) == 1
+189     assert worktrees[0] == f&quot;worktree {repo}&quot;
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_falsifiers_are_proven.py:189</code></li>
+</ul>
+<pre><code>188     assert sum(line.startswith(&quot;worktree &quot;) for line in worktrees) == 1
+189     assert worktrees[0] == f&quot;worktree {repo}&quot;
+</code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
 <li><strong>Severity:</strong> low (high confidence)</li>
@@ -16589,11 +17670,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:172</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:174</code></li>
 </ul>
-<pre><code>171     total = sum(len(_pytest_commands(w)) for w in _workflow_files())
-172     assert total &gt;= 5, f&quot;expected at least 5 pytest invocations across CI, found {total}&quot;
-173
+<pre><code>173     total = sum(len(_pytest_commands(w)) for w in _workflow_files())
+174     assert total &gt;= 3, f&quot;expected at least 3 pytest invocations across CI, found {total}&quot;
+175
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -16601,15 +17682,15 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:194-198</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:196-200</code></li>
 </ul>
-<pre><code>193     ]
-194     assert silent == [], (
-195         f&quot;{workflow.relative_to(REPO)} has pytest invocations that say nothing &quot;
-196         f&quot;about coverage: {silent}. Add --no-cov if the step is not the one &quot;
-197         &quot;measuring it, or --cov if it is.&quot;
-198     )
-199
+<pre><code>195     ]
+196     assert silent == [], (
+197         f&quot;{workflow.relative_to(REPO)} has pytest invocations that say nothing &quot;
+198         f&quot;about coverage: {silent}. Add --no-cov if the step is not the one &quot;
+199         &quot;measuring it, or --cov if it is.&quot;
+200     )
+201
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -16617,11 +17698,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:227</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:229</code></li>
 </ul>
-<pre><code>226     addopts = _addopts()
-227     assert &quot;--cov=&quot; in addopts, f&quot;addopts does not enable coverage at all: {addopts!r}&quot;
-228     assert _writes_a_consumable_artifact(addopts), (
+<pre><code>228     addopts = _addopts()
+229     assert &quot;--cov=&quot; in addopts, f&quot;addopts does not enable coverage at all: {addopts!r}&quot;
+230     assert _writes_a_consumable_artifact(addopts), (
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -16629,15 +17710,15 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:228-232</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:230-234</code></li>
 </ul>
-<pre><code>227     assert &quot;--cov=&quot; in addopts, f&quot;addopts does not enable coverage at all: {addopts!r}&quot;
-228     assert _writes_a_consumable_artifact(addopts), (
-229         f&quot;addopts reports coverage but writes no artifact a consumer reads: &quot;
-230         f&quot;{addopts!r}. One of {CONSUMED_ARTIFACTS} must be produced; &quot;
-231         &quot;--cov-report=term alone is invisible to every tool.&quot;
-232     )
-233
+<pre><code>229     assert &quot;--cov=&quot; in addopts, f&quot;addopts does not enable coverage at all: {addopts!r}&quot;
+230     assert _writes_a_consumable_artifact(addopts), (
+231         f&quot;addopts reports coverage but writes no artifact a consumer reads: &quot;
+232         f&quot;{addopts!r}. One of {CONSUMED_ARTIFACTS} must be produced; &quot;
+233         &quot;--cov-report=term alone is invisible to every tool.&quot;
+234     )
+235
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -16645,11 +17726,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:245</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:247</code></li>
 </ul>
-<pre><code>244     ignored = (REPO / &quot;.gitignore&quot;).read_text(encoding=&quot;utf-8&quot;)
-245     assert &quot;coverage.xml&quot; in ignored, &quot;coverage.xml is written by every run and must be gitignored&quot;
-246
+<pre><code>246     ignored = (REPO / &quot;.gitignore&quot;).read_text(encoding=&quot;utf-8&quot;)
+247     assert &quot;coverage.xml&quot; in ignored, &quot;coverage.xml is written by every run and must be gitignored&quot;
+248
 </code></pre>
 <h4><code>B607</code> — Starting a process with a partial executable path 🆕</h4>
 <ul>
@@ -16658,18 +17739,18 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
 <li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
-<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:247-254</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:249-256</code></li>
 </ul>
-<pre><code>246 
-247     tracked = subprocess.run(
-248         [&quot;git&quot;, &quot;ls-files&quot;, &quot;coverage.xml&quot;, &quot;lcov.info&quot;, &quot;coverage/lcov.info&quot;],
-249         cwd=REPO,
-250         check=True,
-251         capture_output=True,
-252         text=True,
-253         timeout=120,
-254     ).stdout.split()
-255     assert tracked == [], f&quot;a coverage artifact is tracked in git: {tracked}&quot;
+<pre><code>248 
+249     tracked = subprocess.run(
+250         [&quot;git&quot;, &quot;ls-files&quot;, &quot;coverage.xml&quot;, &quot;lcov.info&quot;, &quot;coverage/lcov.info&quot;],
+251         cwd=REPO,
+252         check=True,
+253         capture_output=True,
+254         text=True,
+255         timeout=120,
+256     ).stdout.split()
+257     assert tracked == [], f&quot;a coverage artifact is tracked in git: {tracked}&quot;
 </code></pre>
 <h4><code>B603</code> — subprocess call - check for execution of untrusted input. 🆕</h4>
 <ul>
@@ -16678,18 +17759,18 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
 <li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
-<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:247-254</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:249-256</code></li>
 </ul>
-<pre><code>246 
-247     tracked = subprocess.run(
-248         [&quot;git&quot;, &quot;ls-files&quot;, &quot;coverage.xml&quot;, &quot;lcov.info&quot;, &quot;coverage/lcov.info&quot;],
-249         cwd=REPO,
-250         check=True,
-251         capture_output=True,
-252         text=True,
-253         timeout=120,
-254     ).stdout.split()
-255     assert tracked == [], f&quot;a coverage artifact is tracked in git: {tracked}&quot;
+<pre><code>248 
+249     tracked = subprocess.run(
+250         [&quot;git&quot;, &quot;ls-files&quot;, &quot;coverage.xml&quot;, &quot;lcov.info&quot;, &quot;coverage/lcov.info&quot;],
+251         cwd=REPO,
+252         check=True,
+253         capture_output=True,
+254         text=True,
+255         timeout=120,
+256     ).stdout.split()
+257     assert tracked == [], f&quot;a coverage artifact is tracked in git: {tracked}&quot;
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -16697,10 +17778,10 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:255</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_one_coverage_floor.py:257</code></li>
 </ul>
-<pre><code>254     ).stdout.split()
-255     assert tracked == [], f&quot;a coverage artifact is tracked in git: {tracked}&quot;
+<pre><code>256     ).stdout.split()
+257     assert tracked == [], f&quot;a coverage artifact is tracked in git: {tracked}&quot;
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -18784,23 +19865,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:33</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:34</code></li>
 </ul>
-<pre><code>32 def test_the_readme_links_exactly_the_expected_languages() -&gt; None:
-33     assert set(_language_row(README)) == LANGUAGES
-34
-</code></pre>
-<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
-<ul>
-<li><strong>Severity:</strong> low (high confidence)</li>
-<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
-<li><strong>Scanner:</strong> <code>bandit</code></li>
-<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:40</code></li>
-</ul>
-<pre><code>39 
-40     assert text.startswith(NOTICE)
-41     assert &quot;](README.md)&quot; in text
+<pre><code>33 def test_the_readme_links_exactly_the_expected_languages() -&gt; None:
+34     assert set(_language_row(README)) == LANGUAGES
+35
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -18810,9 +19879,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
 <li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:41</code></li>
 </ul>
-<pre><code>40     assert text.startswith(NOTICE)
-41     assert &quot;](README.md)&quot; in text
-42     assert &quot;pip install secure-code-agent&quot; in text
+<pre><code>40 
+41     assert text.startswith(NOTICE)
+42     assert &quot;](README.md)&quot; in text
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -18822,9 +19891,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
 <li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:42</code></li>
 </ul>
-<pre><code>41     assert &quot;](README.md)&quot; in text
-42     assert &quot;pip install secure-code-agent&quot; in text
-43     assert not re.search(r&quot;\b\d+\.\d+\.\d+\b&quot;, text), &quot;a version number goes stale&quot;
+<pre><code>41     assert text.startswith(NOTICE)
+42     assert &quot;](README.md)&quot; in text
+43     assert &quot;pip install secure-code-agent&quot; in text
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -18834,9 +19903,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
 <li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:43</code></li>
 </ul>
-<pre><code>42     assert &quot;pip install secure-code-agent&quot; in text
-43     assert not re.search(r&quot;\b\d+\.\d+\.\d+\b&quot;, text), &quot;a version number goes stale&quot;
-44     assert len(text.split()) &lt; 400 or code == &quot;zh-CN&quot; and len(text) &lt; 2000
+<pre><code>42     assert &quot;](README.md)&quot; in text
+43     assert &quot;pip install secure-code-agent&quot; in text
+44     assert not re.search(r&quot;\b\d+\.\d+\.\d+\b&quot;, text), &quot;a version number goes stale&quot;
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -18846,9 +19915,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
 <li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:44</code></li>
 </ul>
-<pre><code>43     assert not re.search(r&quot;\b\d+\.\d+\.\d+\b&quot;, text), &quot;a version number goes stale&quot;
-44     assert len(text.split()) &lt; 400 or code == &quot;zh-CN&quot; and len(text) &lt; 2000
-45     assert set(_language_row(text)) == LANGUAGES - {code}
+<pre><code>43     assert &quot;pip install secure-code-agent&quot; in text
+44     assert not re.search(r&quot;\b\d+\.\d+\.\d+\b&quot;, text), &quot;a version number goes stale&quot;
+45     assert len(text.split()) &lt; 400 or code == &quot;zh-CN&quot; and len(text) &lt; 2000
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -18858,9 +19927,9 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
 <li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:45</code></li>
 </ul>
-<pre><code>44     assert len(text.split()) &lt; 400 or code == &quot;zh-CN&quot; and len(text) &lt; 2000
-45     assert set(_language_row(text)) == LANGUAGES - {code}
-46
+<pre><code>44     assert not re.search(r&quot;\b\d+\.\d+\.\d+\b&quot;, text), &quot;a version number goes stale&quot;
+45     assert len(text.split()) &lt; 400 or code == &quot;zh-CN&quot; and len(text) &lt; 2000
+46     assert set(_language_row(text)) == LANGUAGES - {code}
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -18868,11 +19937,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:55</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:46</code></li>
 </ul>
-<pre><code>54     badges = _badges(README)
-55     assert len(badges) &gt;= 4
-56
+<pre><code>45     assert len(text.split()) &lt; 400 or code == &quot;zh-CN&quot; and len(text) &lt; 2000
+46     assert set(_language_row(text)) == LANGUAGES - {code}
+47
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -18880,11 +19949,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:58</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:56</code></li>
 </ul>
-<pre><code>57     for image, link in badges:
-58         assert &quot;outcomes360&quot; not in image + link
-59         if &quot;/pypi/&quot; in image:
+<pre><code>55     badges = _badges(README)
+56     assert len(badges) &gt;= 4
+57
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -18892,11 +19961,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:60</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:59</code></li>
 </ul>
-<pre><code>59         if &quot;/pypi/&quot; in image:
-60             assert image.split(&quot;/pypi/&quot;)[1].split(&quot;/&quot;)[1].split(&quot;?&quot;)[0] == &quot;secure-code-agent&quot;
-61         if &quot;/github/&quot; in image:
+<pre><code>58     for image, link in badges:
+59         assert &quot;outcomes360&quot; not in image + link
+60         if &quot;/pypi/&quot; in image:
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -18904,11 +19973,11 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:62</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:61</code></li>
 </ul>
-<pre><code>61         if &quot;/github/&quot; in image:
-62             assert &quot;marshallguillory86/secure-code-agent&quot; in image
-63         for workflow in re.findall(r&quot;workflows/([\w.-]+\.yml)&quot;, image + link):
+<pre><code>60         if &quot;/pypi/&quot; in image:
+61             assert image.split(&quot;/pypi/&quot;)[1].split(&quot;/&quot;)[1].split(&quot;?&quot;)[0] == &quot;secure-code-agent&quot;
+62         if &quot;/github/&quot; in image:
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -18916,10 +19985,827 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 <li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
 <li><strong>Scanner:</strong> <code>bandit</code></li>
 <li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
-<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:64</code></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:63</code></li>
 </ul>
-<pre><code>63         for workflow in re.findall(r&quot;workflows/([\w.-]+\.yml)&quot;, image + link):
-64             assert (ROOT / &quot;.github&quot; / &quot;workflows&quot; / workflow).is_file(), workflow
+<pre><code>62         if &quot;/github/&quot; in image:
+63             assert &quot;marshallguillory86/secure-code-agent&quot; in image
+64         for workflow in re.findall(r&quot;workflows/([\w.-]+\.yml)&quot;, image + link):
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:65</code></li>
+</ul>
+<pre><code>64         for workflow in re.findall(r&quot;workflows/([\w.-]+\.yml)&quot;, image + link):
+65             assert (ROOT / &quot;.github&quot; / &quot;workflows&quot; / workflow).is_file(), workflow
+66
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:74</code></li>
+</ul>
+<pre><code>73     ]
+74     assert badges, &quot;README has no main-branch workflow status badge&quot;
+75
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:78</code></li>
+</ul>
+<pre><code>77         match = re.search(r&quot;/([^/?#]+\.ya?ml)(?:[?/#]|$)&quot;, image)
+78         assert match, f&quot;could not find a workflow file name in badge URL: {image}&quot;
+79         workflow = match.group(1)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:84</code></li>
+</ul>
+<pre><code>83         triggers = document.get(&quot;on&quot;, document.get(True, {}))
+84         assert isinstance(triggers, dict), f&quot;{workflow} has no workflow triggers&quot;
+85         push = triggers.get(&quot;push&quot;)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:86</code></li>
+</ul>
+<pre><code>85         push = triggers.get(&quot;push&quot;)
+86         assert isinstance(push, dict), f&quot;{workflow} does not trigger on push&quot;
+87         assert &quot;main&quot; in push.get(&quot;branches&quot;, []), f&quot;{workflow} does not trigger on push to main&quot;
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_readme_translations.py:87</code></li>
+</ul>
+<pre><code>86         assert isinstance(push, dict), f&quot;{workflow} does not trigger on push&quot;
+87         assert &quot;main&quot; in push.get(&quot;branches&quot;, []), f&quot;{workflow} does not trigger on push to main&quot;
+</code></pre>
+<h4><code>B404</code> — Consider possible security implications associated with the subprocess module. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:6</code></li>
+</ul>
+<pre><code>5 import os
+6 import subprocess
+7 from pathlib import Path
+</code></pre>
+<h4><code>B603</code> — subprocess call - check for execution of untrusted input. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/78.html">CWE-78</a> (Top 25)</li>
+<li><strong>OWASP Top 10:</strong> A03:2021-Injection</li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:22-30</code></li>
+</ul>
+<pre><code>21 ) -&gt; subprocess.CompletedProcess[str]:
+22     return subprocess.run(
+23         command,
+24         cwd=cwd,
+25         env=env,
+26         capture_output=True,
+27         text=True,
+28         check=check,
+29         timeout=TIMEOUT,
+30     )
+31
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:89</code></li>
+</ul>
+<pre><code>88     workflow_path = ROOT / &quot;.github&quot; / &quot;workflows&quot; / &quot;cut-release.yml&quot;
+89     assert workflow_path.is_file()
+90     workflow_text = workflow_path.read_text(encoding=&quot;utf-8&quot;)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:94</code></li>
+</ul>
+<pre><code>93 
+94     assert set(triggers) == {&quot;push&quot;}
+95     assert triggers[&quot;push&quot;] == {&quot;branches&quot;: [&quot;main&quot;]}
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:95</code></li>
+</ul>
+<pre><code>94     assert set(triggers) == {&quot;push&quot;}
+95     assert triggers[&quot;push&quot;] == {&quot;branches&quot;: [&quot;main&quot;]}
+96     assert &quot;pull_request&quot; not in triggers
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:96</code></li>
+</ul>
+<pre><code>95     assert triggers[&quot;push&quot;] == {&quot;branches&quot;: [&quot;main&quot;]}
+96     assert &quot;pull_request&quot; not in triggers
+97     assert &quot;tags&quot; not in triggers[&quot;push&quot;]
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:97</code></li>
+</ul>
+<pre><code>96     assert &quot;pull_request&quot; not in triggers
+97     assert &quot;tags&quot; not in triggers[&quot;push&quot;]
+98     assert &quot;pytest&quot; not in workflow_text.lower()
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:98</code></li>
+</ul>
+<pre><code>97     assert &quot;tags&quot; not in triggers[&quot;push&quot;]
+98     assert &quot;pytest&quot; not in workflow_text.lower()
+99
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:100</code></li>
+</ul>
+<pre><code>99 
+100     assert len(workflow[&quot;jobs&quot;]) == 1
+101     job = next(iter(workflow[&quot;jobs&quot;].values()))
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:102</code></li>
+</ul>
+<pre><code>101     job = next(iter(workflow[&quot;jobs&quot;].values()))
+102     assert job[&quot;permissions&quot;] == {&quot;contents&quot;: &quot;read&quot;, &quot;actions&quot;: &quot;write&quot;}
+103     scripts = &quot;\n&quot;.join(step.get(&quot;run&quot;, &quot;&quot;) for step in job[&quot;steps&quot;])
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:104</code></li>
+</ul>
+<pre><code>103     scripts = &quot;\n&quot;.join(step.get(&quot;run&quot;, &quot;&quot;) for step in job[&quot;steps&quot;])
+104     assert &quot;__version__&quot; in scripts
+105     assert &quot;gh workflow run release.yaml --ref main&quot; in scripts
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:105</code></li>
+</ul>
+<pre><code>104     assert &quot;__version__&quot; in scripts
+105     assert &quot;gh workflow run release.yaml --ref main&quot; in scripts
+106     assert &quot;git tag&quot; not in workflow_text
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:106</code></li>
+</ul>
+<pre><code>105     assert &quot;gh workflow run release.yaml --ref main&quot; in scripts
+106     assert &quot;git tag&quot; not in workflow_text
+107     assert &quot;git push&quot; not in workflow_text
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:107</code></li>
+</ul>
+<pre><code>106     assert &quot;git tag&quot; not in workflow_text
+107     assert &quot;git push&quot; not in workflow_text
+108     assert &quot;pytest&quot; not in workflow_text.lower()
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:108</code></li>
+</ul>
+<pre><code>107     assert &quot;git push&quot; not in workflow_text
+108     assert &quot;pytest&quot; not in workflow_text.lower()
+109
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:116</code></li>
+</ul>
+<pre><code>115     )
+116     assert decision.get(&quot;shell&quot;) == &quot;bash&quot;
+117     assert &quot;tag=v&quot; in decision[&quot;run&quot;]
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:117</code></li>
+</ul>
+<pre><code>116     assert decision.get(&quot;shell&quot;) == &quot;bash&quot;
+117     assert &quot;tag=v&quot; in decision[&quot;run&quot;]
+118     assert &quot;release=true&quot; in decision[&quot;run&quot;]
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:118</code></li>
+</ul>
+<pre><code>117     assert &quot;tag=v&quot; in decision[&quot;run&quot;]
+118     assert &quot;release=true&quot; in decision[&quot;run&quot;]
+119     assert &quot;release=false&quot; in decision[&quot;run&quot;]
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:119</code></li>
+</ul>
+<pre><code>118     assert &quot;release=true&quot; in decision[&quot;run&quot;]
+119     assert &quot;release=false&quot; in decision[&quot;run&quot;]
+120     assert '&quot;$GITHUB_OUTPUT&quot;' in decision[&quot;run&quot;]
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:120</code></li>
+</ul>
+<pre><code>119     assert &quot;release=false&quot; in decision[&quot;run&quot;]
+120     assert '&quot;$GITHUB_OUTPUT&quot;' in decision[&quot;run&quot;]
+121
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:127</code></li>
+</ul>
+<pre><code>126     result = _run_decision(decision, tagged_repo, tagged_output)
+127     assert result.returncode == 0, result.stderr
+128     assert &quot;release=false&quot; in tagged_output.read_text(encoding=&quot;utf-8&quot;)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:128</code></li>
+</ul>
+<pre><code>127     assert result.returncode == 0, result.stderr
+128     assert &quot;release=false&quot; in tagged_output.read_text(encoding=&quot;utf-8&quot;)
+129     assert _git(tagged_repo, &quot;tag&quot;, &quot;--list&quot;).stdout == before_local_tags
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:129</code></li>
+</ul>
+<pre><code>128     assert &quot;release=false&quot; in tagged_output.read_text(encoding=&quot;utf-8&quot;)
+129     assert _git(tagged_repo, &quot;tag&quot;, &quot;--list&quot;).stdout == before_local_tags
+130     assert _git(tagged_repo, &quot;ls-remote&quot;, &quot;--tags&quot;, &quot;origin&quot;).stdout == before_remote_tags
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:130</code></li>
+</ul>
+<pre><code>129     assert _git(tagged_repo, &quot;tag&quot;, &quot;--list&quot;).stdout == before_local_tags
+130     assert _git(tagged_repo, &quot;ls-remote&quot;, &quot;--tags&quot;, &quot;origin&quot;).stdout == before_remote_tags
+131
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:135</code></li>
+</ul>
+<pre><code>134     result = _run_decision(decision, untagged_repo, untagged_output)
+135     assert result.returncode == 0, result.stderr
+136     assert &quot;release=true&quot; in untagged_output.read_text(encoding=&quot;utf-8&quot;)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:136</code></li>
+</ul>
+<pre><code>135     assert result.returncode == 0, result.stderr
+136     assert &quot;release=true&quot; in untagged_output.read_text(encoding=&quot;utf-8&quot;)
+137
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:167</code></li>
+</ul>
+<pre><code>166     triggers = workflow[&quot;on&quot;]
+167     assert &quot;workflow_dispatch&quot; in triggers
+168     assert triggers[&quot;push&quot;] == {&quot;tags&quot;: [&quot;v*&quot;]}
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:168</code></li>
+</ul>
+<pre><code>167     assert &quot;workflow_dispatch&quot; in triggers
+168     assert triggers[&quot;push&quot;] == {&quot;tags&quot;: [&quot;v*&quot;]}
+169     assert &quot;branches&quot; not in triggers[&quot;push&quot;]
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:169</code></li>
+</ul>
+<pre><code>168     assert triggers[&quot;push&quot;] == {&quot;tags&quot;: [&quot;v*&quot;]}
+169     assert &quot;branches&quot; not in triggers[&quot;push&quot;]
+170
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:172</code></li>
+</ul>
+<pre><code>171     decide = workflow[&quot;jobs&quot;][&quot;decide&quot;]
+172     assert &quot;needs&quot; not in decide
+173     assert decide[&quot;permissions&quot;] == {&quot;contents&quot;: &quot;read&quot;}
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:173</code></li>
+</ul>
+<pre><code>172     assert &quot;needs&quot; not in decide
+173     assert decide[&quot;permissions&quot;] == {&quot;contents&quot;: &quot;read&quot;}
+174     assert decide[&quot;outputs&quot;][&quot;version&quot;] == &quot;${{ steps.version.outputs.version }}&quot;
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:174</code></li>
+</ul>
+<pre><code>173     assert decide[&quot;permissions&quot;] == {&quot;contents&quot;: &quot;read&quot;}
+174     assert decide[&quot;outputs&quot;][&quot;version&quot;] == &quot;${{ steps.version.outputs.version }}&quot;
+175     assert workflow[&quot;jobs&quot;][&quot;python-versions&quot;][&quot;needs&quot;] == &quot;decide&quot;
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:175</code></li>
+</ul>
+<pre><code>174     assert decide[&quot;outputs&quot;][&quot;version&quot;] == &quot;${{ steps.version.outputs.version }}&quot;
+175     assert workflow[&quot;jobs&quot;][&quot;python-versions&quot;][&quot;needs&quot;] == &quot;decide&quot;
+176
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:180</code></li>
+</ul>
+<pre><code>179     build_needs = build_needs if isinstance(build_needs, list) else [build_needs]
+180     assert &quot;decide&quot; in build_needs
+181     assert &quot;python-versions&quot; in build_needs
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:181</code></li>
+</ul>
+<pre><code>180     assert &quot;decide&quot; in build_needs
+181     assert &quot;python-versions&quot; in build_needs
+182     assert all(
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:182-186</code></li>
+</ul>
+<pre><code>181     assert &quot;python-versions&quot; in build_needs
+182     assert all(
+183         step.get(&quot;name&quot;)
+184         not in {&quot;The tagged commit is on main&quot;, &quot;The version is new or matches its tag&quot;}
+185         for step in build[&quot;steps&quot;]
+186     )
+187
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:194</code></li>
+</ul>
+<pre><code>193     )
+194     assert decide_steps[checkout_index][&quot;with&quot;][&quot;fetch-depth&quot;] == 0
+195     guard = decide_steps[checkout_index + 1]
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:196</code></li>
+</ul>
+<pre><code>195     guard = decide_steps[checkout_index + 1]
+196     assert guard[&quot;name&quot;] == &quot;The tagged commit is on main&quot;
+197
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:202</code></li>
+</ul>
+<pre><code>201     result = _run([&quot;bash&quot;, &quot;-c&quot;, guard[&quot;run&quot;]], cwd=repo, env=environment, check=False)
+202     assert result.returncode == 0, result.stderr
+203
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:206</code></li>
+</ul>
+<pre><code>205     result = _run([&quot;bash&quot;, &quot;-c&quot;, guard[&quot;run&quot;]], cwd=repo, env=environment, check=False)
+206     assert result.returncode != 0
+207
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:214</code></li>
+</ul>
+<pre><code>213 
+214     assert &quot;needs&quot; not in decide
+215     assert decide[&quot;permissions&quot;] == {&quot;contents&quot;: &quot;read&quot;}
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:215</code></li>
+</ul>
+<pre><code>214     assert &quot;needs&quot; not in decide
+215     assert decide[&quot;permissions&quot;] == {&quot;contents&quot;: &quot;read&quot;}
+216     assert decide[&quot;outputs&quot;][&quot;version&quot;] == &quot;${{ steps.version.outputs.version }}&quot;
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:216</code></li>
+</ul>
+<pre><code>215     assert decide[&quot;permissions&quot;] == {&quot;contents&quot;: &quot;read&quot;}
+216     assert decide[&quot;outputs&quot;][&quot;version&quot;] == &quot;${{ steps.version.outputs.version }}&quot;
+217
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:234</code></li>
+</ul>
+<pre><code>233     )
+234     assert result.returncode == 0, result.stderr
+235     assert &quot;version=9.9.9&quot; in output.read_text(encoding=&quot;utf-8&quot;)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:235</code></li>
+</ul>
+<pre><code>234     assert result.returncode == 0, result.stderr
+235     assert &quot;version=9.9.9&quot; in output.read_text(encoding=&quot;utf-8&quot;)
+236
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:245</code></li>
+</ul>
+<pre><code>244     )
+245     assert result.returncode != 0
+246
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:260</code></li>
+</ul>
+<pre><code>259     )
+260     assert result.returncode == 0, result.stderr
+261
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:269</code></li>
+</ul>
+<pre><code>268     )
+269     assert result.returncode != 0
+270
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:278</code></li>
+</ul>
+<pre><code>277 
+278     assert publish_pypi[&quot;environment&quot;][&quot;name&quot;] == &quot;pypi&quot;
+279     assert publish_pypi[&quot;permissions&quot;] == {&quot;id-token&quot;: &quot;write&quot;}
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:279</code></li>
+</ul>
+<pre><code>278     assert publish_pypi[&quot;environment&quot;][&quot;name&quot;] == &quot;pypi&quot;
+279     assert publish_pypi[&quot;permissions&quot;] == {&quot;id-token&quot;: &quot;write&quot;}
+280     tag_needs = tag[&quot;needs&quot;]
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:281</code></li>
+</ul>
+<pre><code>280     tag_needs = tag[&quot;needs&quot;]
+281     assert &quot;publish-pypi&quot; in (tag_needs if isinstance(tag_needs, list) else [tag_needs])
+282     assert &quot;decide&quot; in (tag_needs if isinstance(tag_needs, list) else [tag_needs])
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:282</code></li>
+</ul>
+<pre><code>281     assert &quot;publish-pypi&quot; in (tag_needs if isinstance(tag_needs, list) else [tag_needs])
+282     assert &quot;decide&quot; in (tag_needs if isinstance(tag_needs, list) else [tag_needs])
+283     assert tag[&quot;permissions&quot;] == {&quot;contents&quot;: &quot;write&quot;}
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:283</code></li>
+</ul>
+<pre><code>282     assert &quot;decide&quot; in (tag_needs if isinstance(tag_needs, list) else [tag_needs])
+283     assert tag[&quot;permissions&quot;] == {&quot;contents&quot;: &quot;write&quot;}
+284     tag_scripts = &quot;\n&quot;.join(step.get(&quot;run&quot;, &quot;&quot;) for step in tag[&quot;steps&quot;])
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:291</code></li>
+</ul>
+<pre><code>290     )
+291     assert &quot;git tag&quot; in tag_scripts
+292     assert &quot;git push&quot; in tag_scripts
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:292</code></li>
+</ul>
+<pre><code>291     assert &quot;git tag&quot; in tag_scripts
+292     assert &quot;git push&quot; in tag_scripts
+293     assert &quot;GITHUB_REF_TYPE&quot; in tag_scripts
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:293</code></li>
+</ul>
+<pre><code>292     assert &quot;git push&quot; in tag_scripts
+293     assert &quot;GITHUB_REF_TYPE&quot; in tag_scripts
+294     assert &quot;needs.decide.outputs.version&quot; in tag_env
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:294</code></li>
+</ul>
+<pre><code>293     assert &quot;GITHUB_REF_TYPE&quot; in tag_scripts
+294     assert &quot;needs.decide.outputs.version&quot; in tag_env
+295     needs = publish_github[&quot;needs&quot;]
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:296</code></li>
+</ul>
+<pre><code>295     needs = publish_github[&quot;needs&quot;]
+296     assert &quot;publish-pypi&quot; in (needs if isinstance(needs, list) else [needs])
+297     assert &quot;tag&quot; in (needs if isinstance(needs, list) else [needs])
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:297</code></li>
+</ul>
+<pre><code>296     assert &quot;publish-pypi&quot; in (needs if isinstance(needs, list) else [needs])
+297     assert &quot;tag&quot; in (needs if isinstance(needs, list) else [needs])
+298     assert &quot;decide&quot; in (needs if isinstance(needs, list) else [needs])
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:298</code></li>
+</ul>
+<pre><code>297     assert &quot;tag&quot; in (needs if isinstance(needs, list) else [needs])
+298     assert &quot;decide&quot; in (needs if isinstance(needs, list) else [needs])
+299     github_env = &quot;\n&quot;.join(
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_release_from_main.py:305</code></li>
+</ul>
+<pre><code>304     )
+305     assert &quot;needs.decide.outputs.version&quot; in github_env
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>
@@ -27672,6 +29558,101 @@ footer{color:var(--muted);font-size:12.5px;margin-top:60px;padding-top:16px;bord
 </ul>
 <pre><code>338     assert v.introduced == ()
 339     assert v.regressed
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_version_stamping.py:27</code></li>
+</ul>
+<pre><code>26 def _load_tool():
+27     assert TOOL.is_file(), f&quot;missing version-stamping tool: {TOOL}&quot;
+28     spec = importlib.util.spec_from_file_location(&quot;stamp_version&quot;, TOOL)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_version_stamping.py:29</code></li>
+</ul>
+<pre><code>28     spec = importlib.util.spec_from_file_location(&quot;stamp_version&quot;, TOOL)
+29     assert spec is not None and spec.loader is not None
+30     module = importlib.util.module_from_spec(spec)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_version_stamping.py:75</code></li>
+</ul>
+<pre><code>74             versions = re.findall(r&quot;&gt; Status: \*\*v([0-9]+\.[0-9]+\.[0-9]+)&quot;, text)
+75             assert versions == [VERSION], path
+76         else:
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_version_stamping.py:78</code></li>
+</ul>
+<pre><code>77             versions = re.findall(r&quot;secure-code-agent@v([0-9]+\.[0-9]+\.[0-9]+)&quot;, text)
+78             assert versions == [VERSION], path
+79
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_version_stamping.py:85</code></li>
+</ul>
+<pre><code>84 
+85     assert tool.main([&quot;--root&quot;, str(copy)]) == 0
+86
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_version_stamping.py:94</code></li>
+</ul>
+<pre><code>93 
+94     assert tool.main([&quot;--root&quot;, str(ROOT)]) == 0
+95     assert _claims(ROOT) == before
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_version_stamping.py:95</code></li>
+</ul>
+<pre><code>94     assert tool.main([&quot;--root&quot;, str(ROOT)]) == 0
+95     assert _claims(ROOT) == before
+96     _assert_current_claims(ROOT)
+</code></pre>
+<h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
+<ul>
+<li><strong>Severity:</strong> low (high confidence)</li>
+<li><strong>Category:</strong> <code>code_vulnerabilities</code></li>
+<li><strong>Scanner:</strong> <code>bandit</code></li>
+<li><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/703.html">CWE-703</a></li>
+<li><strong>Location:</strong> <code>tests/unit/test_version_stamping.py:112</code></li>
+</ul>
+<pre><code>111 
+112     assert tool.main([&quot;--root&quot;, str(copy)]) != 0
 </code></pre>
 <h4><code>B101</code> — Use of assert detected. The enclosed code will be removed when compiling to optimised byte code. 🆕</h4>
 <ul>

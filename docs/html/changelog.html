@@ -5,7 +5,8 @@
 <div class="top"><div class="top-inner"><a class="brand" href="index.html">secure-code-agent docs</a><nav><a href="index.html#start-here">Start here</a><a href="index.html#product-and-intent">Product and intent</a><a href="index.html#security-and-standards">Security and standards</a><a href="index.html#scoring-and-calibration">Scoring and calibration</a><a href="index.html#decisions-and-architecture">Decisions and architecture</a><a href="index.html#work-orders-and-remediation">Work orders and remediation</a><a href="index.html#history">History</a><a href="index.html#agent-instructions">Agent instructions</a><a href="index.html#reference">Reference</a></nav></div></div>
 <div class="layout"><aside><p class="label">On this page</p><div class="toc">
 <ul>
-<li><a href="#unreleased">Unreleased</a><ul>
+<li><a href="#0134-2026-10-31">0.13.4 — 2026-10-31</a><ul>
+<li><a href="#docs">Docs</a></li>
 <li><a href="#project">Project</a></li>
 </ul>
 </li>
@@ -14,12 +15,12 @@
 </ul>
 </li>
 <li><a href="#0132-2026-10-30">0.13.2 — 2026-10-30</a><ul>
-<li><a href="#docs">Docs</a></li>
+<li><a href="#docs_1">Docs</a></li>
 </ul>
 </li>
 <li><a href="#0131-2026-10-30">0.13.1 — 2026-10-30</a><ul>
 <li><a href="#fixed-sarif-executionsuccessful-is-the-run-not-the-coverage">Fixed — SARIF executionSuccessful is the run, not the coverage</a></li>
-<li><a href="#docs_1">Docs</a></li>
+<li><a href="#docs_2">Docs</a></li>
 </ul>
 </li>
 <li><a href="#0130-2026-10-05">0.13.0 — 2026-10-05</a><ul>
@@ -194,7 +195,17 @@
 <main><div class="meta">History</div><h1>Changelog</h1><p>All notable changes to <code>secure-code-agent</code> are documented here. Format follows
 <a href="https://keepachangelog.com/">Keep a Changelog</a>. Semver pre-1.0 — config
 schema may evolve.</p>
-<h2 id="unreleased">Unreleased</h2>
+<h2 id="0134-2026-10-31">0.13.4 — 2026-10-31</h2>
+<p><strong>The project's own pipeline, brought to standard.</strong> No change to what the
+tool reports; this release carries the README and pipeline work since 0.13.3
+to PyPI.</p>
+<h3 id="docs">Docs</h3>
+<ul>
+<li>The README's status badge reads the self-audit, which runs on every merge
+  to <code>main</code>; it read the pull-request workflow, whose main-branch badge had
+  stopped updating. A test holds every main-branch badge to a workflow that
+  runs on <code>main</code>.</li>
+</ul>
 <h3 id="project">Project</h3>
 <ul>
 <li>
@@ -256,7 +267,7 @@ schema may evolve.</p>
 <li>Nothing in the audit needed <code>.git</code>: history scanners read it through <code>git</code>.</li>
 </ul>
 <h2 id="0132-2026-10-30">0.13.2 — 2026-10-30</h2>
-<h3 id="docs">Docs</h3>
+<h3 id="docs_1">Docs</h3>
 <ul>
 <li>The README carries a language row and a badge row (PyPI version, Python
   versions, licence, CI on <code>main</code>, downloads). Short machine-translated pages in
@@ -288,7 +299,7 @@ schema may evolve.</p>
   reads, and for a scanner that is not required and did not complete, which
   until now made coverage <code>PARTIAL</code> without a word in the SARIF.</li>
 </ul>
-<h3 id="docs_1">Docs</h3>
+<h3 id="docs_2">Docs</h3>
 <ul>
 <li>The README opens with the project's cover image (<code>docs/brand/sca.png</code>).</li>
 </ul>
