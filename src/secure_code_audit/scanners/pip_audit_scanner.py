@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from secure_code_audit._walk import walk
 from secure_code_audit.config import Config, ScannerConfig
 from secure_code_audit.findings import Category, Finding, Severity
 from secure_code_audit.git_tools import is_excluded
@@ -164,7 +165,7 @@ class PipAuditScanner(Scanner):
     def _discover_requirements(target: Path, excludes: tuple[str, ...]) -> list[Path]:
         return sorted(
             path
-            for path in target.rglob("requirements*.txt")
+            for path in walk(target, "requirements*.txt")
             if path.is_file() and not is_excluded(path, target, excludes)
         )
 
@@ -172,7 +173,7 @@ class PipAuditScanner(Scanner):
     def _discover_projects(target: Path, excludes: tuple[str, ...]) -> list[Path]:
         return sorted(
             path
-            for path in target.rglob("pyproject.toml")
+            for path in walk(target, "pyproject.toml")
             if path.is_file() and not is_excluded(path, target, excludes)
         )
 

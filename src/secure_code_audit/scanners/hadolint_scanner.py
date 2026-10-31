@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from secure_code_audit._walk import walk
 from secure_code_audit.config import Config
 from secure_code_audit.findings import Category, Confidence, Finding, Severity
 from secure_code_audit.git_tools import is_excluded
@@ -82,7 +83,7 @@ class HadolintScanner(Scanner):
 
     def _find_dockerfiles(self, target: Path, excludes) -> list[Path]:
         out: list[Path] = []
-        for path in target.rglob("Dockerfile*"):
+        for path in walk(target, "Dockerfile*"):
             if not path.is_file():
                 continue
             if is_excluded(path, target, excludes):

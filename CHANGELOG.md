@@ -4,6 +4,37 @@ All notable changes to `secure-code-agent` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/). Semver pre-1.0 — config
 schema may evolve.
 
+## 0.13.3 — 2026-10-30
+
+**An audit could end on a directory that was never part of the audit.**
+
+### Fixed — a walk of the audited tree never enters `.git`
+
+- Nine walks of the audited tree used `Path.rglob`, which descends into
+  `.git`. On Python 3.11 it raises `FileNotFoundError` when a directory it
+  listed is gone by the time it opens it, and git adds and removes worktrees
+  under `.git/worktrees` while it works, so an audit running beside git could
+  end on a directory it was never meant to read. Python 3.12 swallows the
+  error but still walked `.git`.
+- Every walk now goes through one walker (`secure_code_audit._walk.walk`): it
+  never enters `.git`, never follows a symlinked directory out of the tree,
+  and treats a directory it cannot open as empty. A structural test refuses
+  `rglob` anywhere else in the package, and a full-audit test records every
+  directory opened and fails if any is inside `.git`, on every Python version.
+- Nothing in the audit needed `.git`: history scanners read it through `git`.
+
+## 0.13.2 — 2026-10-30
+
+### Docs
+
+- The README carries a language row and a badge row (PyPI version, Python
+  versions, licence, CI on `main`, downloads). Short machine-translated pages in
+  Spanish, German, French, Hindi and Simplified Chinese point back to the
+  English README as the only complete copy (D36).
+- The project site is published at <https://secure-code-agent.techportfolio.monster/>:
+  a landing page, the tool's own report on this repository as a live example,
+  and the rendered documentation.
+
 ## 0.13.1 — 2026-10-30
 
 **Coverage was reported to code scanning as a failed run.**
@@ -31,18 +62,6 @@ schema may evolve.
 ### Docs
 
 - The README opens with the project's cover image (`docs/brand/sca.png`).
-
-## 0.13.2 — 2026-10-30
-
-### Docs
-
-- The README carries a language row and a badge row (PyPI version, Python
-  versions, licence, CI on `main`, downloads). Short machine-translated pages in
-  Spanish, German, French, Hindi and Simplified Chinese point back to the
-  English README as the only complete copy (D36).
-- The project site is published at <https://secure-code-agent.techportfolio.monster/>:
-  a landing page, the tool's own report on this repository as a live example,
-  and the rendered documentation.
 
 ## 0.13.0 — 2026-10-05
 

@@ -6,6 +6,8 @@ import fnmatch
 from collections.abc import Iterable
 from pathlib import Path
 
+from secure_code_audit._walk import walk
+
 
 def find_repo_root(start: Path) -> Path:
     """Walk up from `start` until a .git directory is found.
@@ -205,7 +207,7 @@ def loc_under(
     # lines — and a zero denominator is not normalised at all, so the grade
     # became the raw subtotal. Auditing one file is supported; it should be
     # measured against that file.
-    candidates = root.rglob("*") if root.is_dir() else [root]
+    candidates = walk(root) if root.is_dir() else [root]
     for path in candidates:
         if not path.is_file():
             continue
@@ -252,7 +254,7 @@ def extensions_under(
     skip = {path.resolve() for path in skip}
     found: set[str] = set()
     # `rglob` on a file yields nothing, the same case `loc_under` documents.
-    candidates = root.rglob("*") if root.is_dir() else [root]
+    candidates = walk(root) if root.is_dir() else [root]
     for path in candidates:
         if not path.is_file():
             continue
